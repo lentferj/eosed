@@ -202,6 +202,29 @@ def test_save_and_load_last_ports_roundtrip(tmp_path):
     assert bridge_mod.load_last_ports(path) == ("Out Port", "In Port")
 
 
+def test_load_compact_view_missing_file_returns_none(tmp_path):
+    assert bridge_mod.load_compact_view(str(tmp_path / "does-not-exist.toml")) is None
+
+
+def test_save_and_load_compact_view_roundtrip(tmp_path):
+    path = str(tmp_path / "config.toml")
+    bridge_mod.save_compact_view(False, path)
+    assert bridge_mod.load_compact_view(path) is False
+    bridge_mod.save_compact_view(True, path)
+    assert bridge_mod.load_compact_view(path) is True
+
+
+def test_port_cache_and_view_preference_coexist_in_the_same_file(tmp_path):
+    # Regression guard: config.toml holds more than one independent setting
+    # now -- saving one must not clobber the other (read-modify-write, not a
+    # blind overwrite).
+    path = str(tmp_path / "config.toml")
+    bridge_mod.save_last_ports("Out Port", "In Port", path)
+    bridge_mod.save_compact_view(False, path)
+    assert bridge_mod.load_last_ports(path) == ("Out Port", "In Port")
+    assert bridge_mod.load_compact_view(path) is False
+
+
 def test_load_last_ports_malformed_returns_none(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text("this is not [valid toml")
@@ -404,6 +427,68 @@ def test_memory_queries():
     bridge = _bridge_with(handler)
     assert bridge.preset_memory().free_kb == 1000
     assert bridge.sample_memory().total_mb == 32
+
+
+def test_preset_num_voices_subtracts_one_from_the_wire_value():
+    # Live-hardware finding (docs/RESOLUTION_NOTES.md §11): confirmed on two
+    # different presets by cross-checking each preset's own dump file
+    # (whose embedded voice-count field is a plain, direct count with no
+    # offset) -- the wire value is (real count + 1).
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_NUM_VOICES_REQUEST:
+            return m.PresetNumVoicesResponse(num_voices=3).encode()  # 2 real voices
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.preset_num_voices(0) == 2
+
+
+def test_preset_num_links_is_a_plain_count_unlike_its_sibling():
+    # Live-hardware finding (docs/RESOLUTION_NOTES.md §11): a first fix
+    # assumed this sibling of preset_num_voices shared the same "+1" wire
+    # offset (same command family, same wire shape) -- wrong. Confirmed
+    # live against preset 0 ("Test Preset"), whose own dump file
+    # independently shows exactly 1 real link: the raw wire value was 1,
+    # matching directly with no correction at all.
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_NUM_LINKS_REQUEST:
+            return m.PresetNumLinksResponse(num_links=1).encode()  # 1 real link
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.preset_num_links(0) == 1
+
+
+def test_preset_num_szones_returns_the_raw_unverified_value():
+    # Not called anywhere in this codebase and not independently tested at
+    # all (docs/RESOLUTION_NOTES.md §11) -- given its two siblings above
+    # disagree with each other, this deliberately applies no correction
+    # rather than guessing one.
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_NUM_SZONES_REQUEST:
+            return m.PresetNumSZonesResponse(num_szones=4).encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.preset_num_szones(0) == 4
+
+
+def test_voice_num_szones_returns_the_raw_unreliable_value():
+    # Deliberately NOT corrected (docs/RESOLUTION_NOTES.md §11): confirmed
+    # live to disagree with the real zone count in a preset/voice-dependent
+    # way with no consistent formula (one voice needed +1, another +3) --
+    # eosremote.app._voice_sample_info does not use this method at all.
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.VOICE_NUM_SZONES_REQUEST:
+            return m.VoiceNumSZonesResponse(num_szones=1).encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.voice_num_szones(0, 1) == 1
 
 
 def test_catalog_presets_skips_timeouts_and_cancels():

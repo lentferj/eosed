@@ -64,7 +64,10 @@ TUI), not a screen mirror.
   name, global parms, links, voices), using the spec's ACK/NAK/WAIT/EOF
   handshake.
 
-`eosremote` (Textual TUI) — four panes, left to right:
+`eosremote` (Textual TUI) — `v` toggles between a compact 2-pane view
+(Preset | Parameters, the default on a fresh install) and the full 4-pane
+layout below; the choice is remembered across restarts (against real
+hardware — `--demo` never touches local state). Four panes, left to right:
 - **Preset** — a paged, on-demand catalog scan (page size adapts to how tall
   the pane is).
 - **Voice** — every voice of the selected preset, with a single/multisample

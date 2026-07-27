@@ -64,6 +64,40 @@ DEFAULT_DEVICE_ID = m.DEFAULT_DEVICE_ID
 DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's BridgeConfig convention
 
 
+# --- config.toml: a flat, local, gitignored key/value store -----------------
+# Shared by the port cache below and eosremote.app's view-mode preference.
+# Read-modify-write (not a blind overwrite) so unrelated keys survive each
+# other's saves — this file holds more than one independent setting.
+
+def _read_config_dict(path: str) -> dict:
+    import os
+    import tomllib
+
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "rb") as handle:
+            return tomllib.load(handle)
+    except Exception:
+        return {}
+
+
+def _write_config_dict(data: dict, path: str) -> None:
+    lines = ["# eosremote local config — gitignored, safe to delete."]
+    for key, value in data.items():
+        if isinstance(value, bool):
+            lines.append(f"{key} = {'true' if value else 'false'}")
+        elif isinstance(value, str):
+            lines.append(f'{key} = "{value}"')
+        else:
+            lines.append(f"{key} = {value}")
+    try:
+        with open(path, "w") as handle:
+            handle.write("\n".join(lines) + "\n")
+    except OSError:
+        pass  # the cache is a convenience, not required for correctness
+
+
 # --- last-known-good port cache ---------------------------------------------
 # A full autodetect sweep tries every output port (up to ~1s each while a
 # port doesn't answer) — on a host with two dozen MIDI ports that's tens of
@@ -73,16 +107,7 @@ DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's Bridge
 # replugging an interface).
 
 def load_last_ports(path: str = DEFAULT_CONFIG_PATH) -> Optional[Tuple[str, str]]:
-    import os
-    import tomllib
-
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "rb") as handle:
-            data = tomllib.load(handle)
-    except Exception:
-        return None
+    data = _read_config_dict(path)
     send_port = data.get("send_port")
     recv_port = data.get("recv_port")
     if isinstance(send_port, str) and isinstance(recv_port, str):
@@ -91,17 +116,25 @@ def load_last_ports(path: str = DEFAULT_CONFIG_PATH) -> Optional[Tuple[str, str]
 
 
 def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_PATH) -> None:
-    lines = [
-        "# eosremote MIDI port cache — last successful autodetect result.",
-        "# Tried first on the next connection before falling back to a full scan.",
-        f'send_port = "{send_port}"',
-        f'recv_port = "{recv_port}"',
-    ]
-    try:
-        with open(path, "w") as handle:
-            handle.write("\n".join(lines) + "\n")
-    except OSError:
-        pass  # the cache is a convenience, not required for correctness
+    data = _read_config_dict(path)
+    data["send_port"] = send_port
+    data["recv_port"] = recv_port
+    _write_config_dict(data, path)
+
+
+# --- remembered TUI view mode ------------------------------------------------
+# eosremote.app.EosRemoteApp's compact-vs-extended pane layout, persisted so
+# the choice survives a restart (see docs/RESOLUTION_NOTES.md).
+
+def load_compact_view(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
+    value = _read_config_dict(path).get("compact_view")
+    return value if isinstance(value, bool) else None
+
+
+def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
+    data = _read_config_dict(path)
+    data["compact_view"] = compact
+    _write_config_dict(data, path)
 
 
 def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[bytes]:
@@ -563,10 +596,26 @@ class EosBridge:
         return m.ExtendedConfigurationResponse.decode(
             self.send_and_receive(req.encode(), timeout=timeout))
 
+    # The "Preset Num Of X" siblings (0x16-0x1B: voices/links/preset-zones)
+    # do NOT all behave alike despite sharing a command family, byte range,
+    # and wire shape — each needed its own independent live check rather
+    # than extrapolating from the others (see docs/RESOLUTION_NOTES.md §11
+    # for the full story, including a first fix that assumed they'd all
+    # match and got links wrong as a result):
+    # - preset_num_voices: wire value is (real count + 1) -- confirmed live
+    #   on two different presets by cross-checking each one's own dump file.
+    # - preset_num_links: wire value IS the plain, direct count -- confirmed
+    #   live against preset 0 ("Test Preset"), whose own dump file
+    #   independently shows exactly 1 real link, matching the raw wire
+    #   value of 1 exactly (no offset).
+    # - preset_num_szones: not called anywhere in this codebase and not
+    #   independently tested at all -- given the two confirmed siblings
+    #   above disagree with each other, do NOT assume either formula (or no
+    #   correction) applies here without its own live check first.
     def preset_num_voices(self, preset: int, *, timeout: Optional[float] = None) -> int:
         req = m.PresetNumVoicesRequest(preset=preset, device_id=self.device_id)
         return m.PresetNumVoicesResponse.decode(
-            self.send_and_receive(req.encode(), timeout=timeout)).num_voices
+            self.send_and_receive(req.encode(), timeout=timeout)).num_voices - 1
 
     def preset_num_links(self, preset: int, *, timeout: Optional[float] = None) -> int:
         req = m.PresetNumLinksRequest(preset=preset, device_id=self.device_id)
@@ -580,6 +629,20 @@ class EosBridge:
 
     def voice_num_szones(self, preset: int, voice: int, *,
                         timeout: Optional[float] = None) -> int:
+        """Raw wire value — **do not trust this as a zone count.**
+
+        Unlike the "Preset Num Of X" trio above, this one isn't off by a
+        fixed constant: confirmed live to disagree with the real zone count
+        in a preset/voice-dependent way with no consistent formula (one
+        voice needed +1, another needed +3 — see docs/RESOLUTION_NOTES.md
+        §11). The sibling mpc2emu project independently found the analogous
+        on-disk "n_zones" field equally unreliable/redundant for this same
+        device family. ``eosremote.app._voice_sample_info`` does not use
+        this method at all — it detects "is this voice a multisample" from
+        the spec-documented 3FFFh sentinel on the voice's own
+        ``E4_GEN_SAMPLE`` instead, then walks zones until one reads 0.
+        Kept here only for API completeness / a future recalibration.
+        """
         req = m.VoiceNumSZonesRequest(preset=preset, voice=voice, device_id=self.device_id)
         return m.VoiceNumSZonesResponse.decode(
             self.send_and_receive(req.encode(), timeout=timeout)).num_szones

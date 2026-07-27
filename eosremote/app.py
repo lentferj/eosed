@@ -94,34 +94,50 @@ E4XT_THEME = Theme(
 
 _PRESET_SELECT = p.lookup("PRESET_SELECT").id
 _VOICE_SELECT = p.lookup("VOICE_SELECT").id
+_LINK_SELECT = p.lookup("LINK_SELECT").id
 _SAMPLE_ZONE_SELECT = p.lookup("SAMPLE_ZONE_SELECT").id
 _GEN_SAMPLE = p.lookup("E4_GEN_SAMPLE").id
 
 
 def _group_param_ids(group: str) -> List[int]:
-    prefix = {"voice": "voice.", "global": "global"}[group]
+    prefix = {"voice": "voice.", "global": "global", "link": "link"}[group]
     return sorted(pid for pid, param in p.PARAMETERS.items() if param.group.startswith(prefix))
+
+
+_MULTISAMPLE_SENTINEL = 0x3FFF  # spec: voice-level E4_GEN_SAMPLE == this means multisample
+_MAX_ZONE_SCAN = 32  # safety cap only — see the docstring below
 
 
 def _voice_sample_info(bridge, preset: int, voice: int) -> Tuple[int, List[int]]:
     """Best-effort: (zone count, [raw sample number(s)]) for one voice.
 
-    ``voice_num_szones`` is a standalone request (no SELECT context needed).
-    Reading which sample(s) a voice actually plays does need VOICE_SELECT
-    (and, for a multisample voice, SAMPLE_ZONE_SELECT per zone) set first —
-    a single-sample voice's own E4_GEN_SAMPLE is the answer directly; a
-    multisample voice's top-level E4_GEN_SAMPLE instead reads the spec's
-    3FFFh sentinel, and the real numbers live one zone at a time.
+    Deliberately does NOT use ``EosBridge.voice_num_szones`` — confirmed live
+    (docs/RESOLUTION_NOTES.md §11) to disagree with the real zone count in a
+    preset/voice-dependent way with no consistent formula, echoing the
+    sibling mpc2emu project's independent finding that this device family's
+    analogous on-disk "n_zones" field is equally unreliable/redundant.
+
+    Instead: a single-sample voice's own (VOICE_SELECT-scoped) E4_GEN_SAMPLE
+    is the real sample number directly; a multisample voice's reads the
+    spec's 3FFFh sentinel instead, which is the reliable signal used here to
+    decide whether to walk zones at all. Zones are then read one at a time
+    (SAMPLE_ZONE_SELECT) starting at 0 until one reads E4_GEN_SAMPLE=0 —
+    empirically the clean, consistent signature of "past the real zones"
+    (as opposed to garbage) in every case tested — capped at
+    _MAX_ZONE_SCAN as a safety bound, not a trusted count.
     """
-    zones = bridge.voice_num_szones(preset, voice)
     bridge.set_parameter(_VOICE_SELECT, voice)
-    if zones <= 1:
-        return zones, [bridge.get_parameter(_GEN_SAMPLE)]
+    voice_level_sample = bridge.get_parameter(_GEN_SAMPLE)
+    if voice_level_sample != _MULTISAMPLE_SENTINEL:
+        return 1, [voice_level_sample]
     numbers = []
-    for zone in range(zones):
+    for zone in range(_MAX_ZONE_SCAN):
         bridge.set_parameter(_SAMPLE_ZONE_SELECT, zone)
-        numbers.append(bridge.get_parameter(_GEN_SAMPLE))
-    return zones, numbers
+        sample = bridge.get_parameter(_GEN_SAMPLE)
+        if sample == 0:
+            break
+        numbers.append(sample)
+    return len(numbers), numbers
 
 
 # --- modal screens ----------------------------------------------------------
@@ -334,6 +350,13 @@ class EosRemoteApp(App):
     #params  { width: 40%; height: 1fr; }
     #samples { width: 25%; height: 1fr; }
     #status { height: 1; background: $panel; color: $text; padding: 0 1; }
+
+    /* Compact view (see action_toggle_view): hide Voice/Samples, giving
+       their space back to Preset/Parameters -- the original 2-pane layout. */
+    #tables.compact #voices { display: none; }
+    #tables.compact #samples { display: none; }
+    #tables.compact #presets { width: 40%; }
+    #tables.compact #params { width: 60%; }
     """
 
     BINDINGS = [
@@ -342,7 +365,10 @@ class EosRemoteApp(App):
         Binding("r", "refresh", "Refresh"),
         Binding("enter", "edit_value", "Edit value", show=False),
         Binding("o", "rename_preset", "Rename"),
-        Binding("escape", "back_to_preset", "Back to preset", show=False),
+        Binding("v", "browse_voices", "Voices"),
+        Binding("l", "browse_links", "Links"),
+        Binding("e", "toggle_view", "Extended view"),
+        Binding("escape", "back_to_preset", "Back to preset"),
         Binding("m", "master_menu", "Master"),
     ]
 
@@ -357,8 +383,20 @@ class EosRemoteApp(App):
         self._connect_kwargs = connect_kwargs or {}
         self._bridge_lock = threading.Lock()
 
+        # Remembered across restarts in config.toml (see eos.bridge.load_
+        # compact_view/save_compact_view) — but not for --demo, matching the
+        # project's "demo touches no real local state" convention (also
+        # avoids the exact test-pollution bug docs/RESOLUTION_NOTES.md §7
+        # already caught once for the MIDI port cache in this same file).
+        # Fresh install / no config yet -> defaults to the compact 2-pane
+        # view.
+        self._view_config_path = self._connect_kwargs.get("config_path", bridge_mod.DEFAULT_CONFIG_PATH)
+        stored_view = None if self.demo else bridge_mod.load_compact_view(self._view_config_path)
+        self.compact_view: bool = True if stored_view is None else stored_view
+
         self.current_preset: Optional[int] = None
         self.current_voice: Optional[int] = None
+        self.current_link: Optional[int] = None
 
         self.preset_window_start = 0
         self.browser_window = BROWSER_MIN_WINDOW
@@ -374,6 +412,16 @@ class EosRemoteApp(App):
         self._current_param_ids: List[int] = []
         self._current_param_label: str = "global"
 
+        # Cached result of the last _load_preset_overview fetch (one preset
+        # of "walk every voice/zone" work) — reused when navigating back
+        # from a voice/link to the *same* preset instead of re-walking every
+        # voice/zone over MIDI again for data that hasn't changed. Cleared
+        # by anything that could actually invalidate it: a parameter write
+        # (could change which sample a zone points at) or a Master action.
+        self._preset_overview_cache: Optional[
+            Tuple[int, int, Dict[int, int], List[int], Dict[int, int],
+                 List[Tuple[int, str, str]]]] = None
+
         self.last_status: str = ""  # exposed for tests
 
     # -- layout ---------------------------------------------------------
@@ -385,9 +433,21 @@ class EosRemoteApp(App):
             _FillWidthDataTable(id="params"),
             _FillWidthDataTable(id="samples"),
             id="tables",
+            classes="compact" if self.compact_view else "",
         )
         yield Static("", id="status")
         yield Footer()
+
+    def action_toggle_view(self) -> None:
+        self.compact_view = not self.compact_view
+        tables = self.query_one("#tables")
+        if self.compact_view:
+            tables.add_class("compact")
+        else:
+            tables.remove_class("compact")
+        if not self.demo:
+            bridge_mod.save_compact_view(self.compact_view, self._view_config_path)
+        self.set_status(f"view: {'compact' if self.compact_view else 'extended'}")
 
     def on_mount(self) -> None:
         self.title = "eosremote"
@@ -576,6 +636,8 @@ class EosRemoteApp(App):
         if self.current_preset is not None:
             if self.current_voice is not None:
                 self._load_voice_detail(self.current_preset, self.current_voice)
+            elif self.current_link is not None:
+                self._load_link_detail(self.current_preset, self.current_link)
             else:
                 self._load_preset_overview(self.current_preset)
 
@@ -583,6 +645,7 @@ class EosRemoteApp(App):
     def select_preset(self, preset: int) -> None:
         self.current_preset = preset
         self.current_voice = None
+        self.current_link = None
         self._load_preset_overview(preset)
 
     @work(thread=True)
@@ -604,6 +667,8 @@ class EosRemoteApp(App):
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
+        self._preset_overview_cache = (preset, voice_count, zone_counts,
+                                       global_ids, global_values, sample_rows)
         self.call_from_thread(self._show_preset_overview, preset, voice_count, zone_counts,
                               global_ids, global_values, sample_rows)
 
@@ -624,9 +689,45 @@ class EosRemoteApp(App):
             table.add_row(f"V{voice + 1}", zones_label, key=str(voice))
         table.call_after_refresh(table._stretch_last_column)
 
+    def action_browse_voices(self) -> None:
+        if self.current_preset is None:
+            self.set_status("select a preset first")
+            return
+        self._start_browse_voices()
+
+    @work(thread=True)
+    def _start_browse_voices(self) -> None:
+        try:
+            with self._bridge_lock:
+                count = self.bridge.preset_num_voices(self.current_preset)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        if count <= 0:
+            self.call_from_thread(self.set_status, "this preset has no voices")
+            return
+        self.call_from_thread(self._prompt_voice_index, count)
+
+    def _prompt_voice_index(self, count: int) -> None:
+        # The front panel numbers voices from 1 (V1..Vn) — confirmed on
+        # hardware. Ask/display 1-based, store 0-based internally (that's
+        # VOICE_SELECT's actual wire range).
+        if count == 1:
+            # Nothing to pick between — a prompt whose only valid answer is
+            # "1" is just an extra keypress, not a real choice.
+            self.select_voice(0)
+            return
+
+        def on_result(displayed: Optional[int]) -> None:
+            if displayed is None:
+                return
+            self.select_voice(displayed - 1)
+        self.push_screen(GotoScreen("Voice (as shown on the front panel, V1-Vn)", 1, count), on_result)
+
     # -- voice selection: voice params + that voice's samples ---------------
     def select_voice(self, voice: int) -> None:
         self.current_voice = voice
+        self.current_link = None
         self._load_voice_detail(self.current_preset, voice)
 
     @work(thread=True)
@@ -636,6 +737,13 @@ class EosRemoteApp(App):
             with self._bridge_lock:
                 self.bridge.set_parameter(_PRESET_SELECT, preset)
                 _zones, numbers = _voice_sample_info(self.bridge, preset, voice)
+                # _voice_sample_info leaves SAMPLE_ZONE_SELECT pointed at the
+                # last zone it read; re-selecting the voice resets that (spec:
+                # zone selection "will get reset if you select a new Voice")
+                # so the group read below is the voice's own scope, not one
+                # zone's — otherwise voice-only fields (CTUNE, XPOSE, RT_*)
+                # come back as the spec's -1/"not applicable" sentinel.
+                self.bridge.set_parameter(_VOICE_SELECT, voice)
                 voice_ids = _group_param_ids("voice")
                 voice_values = self.bridge.get_parameters(voice_ids)
                 sample_rows = self._resolve_sample_rows({voice: numbers})
@@ -651,20 +759,88 @@ class EosRemoteApp(App):
         self.set_status(f"preset {self.current_preset}: voice V{voice + 1}, "
                         f"{len(sample_rows)} sample(s) used")
 
+    def action_browse_links(self) -> None:
+        if self.current_preset is None:
+            self.set_status("select a preset first")
+            return
+        self._start_browse_links()
+
+    @work(thread=True)
+    def _start_browse_links(self) -> None:
+        try:
+            with self._bridge_lock:
+                count = self.bridge.preset_num_links(self.current_preset)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        if count <= 0:
+            self.call_from_thread(self.set_status, "this preset has no links")
+            return
+        self.call_from_thread(self._prompt_link_index, count)
+
+    def _prompt_link_index(self, count: int) -> None:
+        # Assumed 1-based to match the front panel's voice numbering
+        # (V1..Vn, confirmed on hardware) — NOT independently confirmed for
+        # links specifically. Correct this if the panel shows links as L0..
+        if count == 1:
+            self.select_link(0)
+            return
+
+        def on_result(displayed: Optional[int]) -> None:
+            if displayed is None:
+                return
+            self.select_link(displayed - 1)
+        self.push_screen(GotoScreen("Link (assumed 1-based like voices)", 1, count), on_result)
+
+    # -- link selection: link params (no Samples-pane concept for links) ----
+    def select_link(self, link: int) -> None:
+        self.current_voice = None
+        self.current_link = link
+        self._load_link_detail(self.current_preset, link)
+
+    @work(thread=True)
+    def _load_link_detail(self, preset: int, link: int) -> None:
+        self.call_from_thread(self.set_status, f"loading link L{link + 1} ...")
+        try:
+            with self._bridge_lock:
+                self.bridge.set_parameter(_PRESET_SELECT, preset)
+                self.bridge.set_parameter(_LINK_SELECT, link)
+                link_ids = _group_param_ids("link")
+                link_values = self.bridge.get_parameters(link_ids)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        self.call_from_thread(self._show_link_detail, link, link_ids, link_values)
+
+    def _show_link_detail(self, link: int, ids: List[int], values: Dict[int, int]) -> None:
+        self._show_params(ids, values, f"link L{link + 1}")
+
     def action_back_to_preset(self) -> None:
-        if self.current_preset is None or self.current_voice is None:
+        if self.current_preset is None or (self.current_voice is None and self.current_link is None):
             return
         self.current_voice = None
-        self._load_preset_overview(self.current_preset)
+        self.current_link = None
+        cache = self._preset_overview_cache
+        if cache is not None and cache[0] == self.current_preset:
+            # Nothing about drilling into a voice/link changes what the
+            # preset-level view would recompute — reuse it instead of
+            # re-walking every voice/zone over MIDI again.
+            self._show_preset_overview(*cache)
+        else:
+            self._load_preset_overview(self.current_preset)
 
     # -- samples pane: resolve raw sample numbers to names -------------------
     def _resolve_sample_rows(self, by_voice: Dict[int, List[int]]) -> List[Tuple[int, str, str]]:
         # Assumes self._bridge_lock is already held (called from within the
         # same worker/lock scope as the voice/param reads above).
-        users: Dict[int, List[int]] = {}
+        # A set, not a list: a voice with several zones that happen to share
+        # one underlying sample (a very normal pattern -- different key
+        # ranges reusing the same recording) must list that voice once, not
+        # once per zone.
+        users: Dict[int, set] = {}
         for voice, numbers in by_voice.items():
             for number in numbers:
-                users.setdefault(number, []).append(voice)
+                users.setdefault(number, set()).add(voice)
         rows = []
         for number in sorted(users):
             try:
@@ -743,6 +919,10 @@ class EosRemoteApp(App):
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
+        # A write could change which sample a zone points at (E4_GEN_SAMPLE
+        # itself, or anything else) — the cached preset overview can no
+        # longer be trusted as unchanged.
+        self._preset_overview_cache = None
         self.call_from_thread(self._show_params, ids, values, self._current_param_label)
         self.call_from_thread(self.set_status, f"set id {param_id} = {value}")
 
@@ -772,6 +952,10 @@ class EosRemoteApp(App):
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
+        # A rename only touches the name, not voice/zone/sample data, but
+        # every write invalidates the cache uniformly on principle — safer
+        # than reasoning out which specific writes are "safe" to leave it be.
+        self._preset_overview_cache = None
         # One combined UI update, not two racing ones — see _show_presets.
         self.call_from_thread(self._show_presets, start, window, names,
                               f"renamed preset {preset} to {name!r}")
@@ -806,6 +990,7 @@ class EosRemoteApp(App):
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
+        self._preset_overview_cache = None  # destructive — nothing cached can be trusted now
         # One combined UI update, not two racing ones — see _show_presets.
         self.call_from_thread(self._show_presets, start, window, names, f"fired: {action}")
 

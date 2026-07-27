@@ -48,11 +48,17 @@ async def _select_preset(pilot, app, row: int = 0) -> None:
 
 
 async def _select_voice(pilot, app, row: int = 0) -> None:
-    voices = app.query_one("#voices")
-    await _wait_for(pilot, lambda: voices.row_count)
-    await pilot.click("#voices")
-    voices.move_cursor(row=row)
-    await pilot.press("enter")
+    # 'v' either opens a modal voice-select prompt (front-panel 1-based
+    # numbering) or, with only one voice (DemoBridge always has exactly
+    # one), jumps straight there -- works in either view mode, unlike
+    # clicking the Voice pane directly (hidden in compact view).
+    await pilot.press("v")
+    await pilot.pause()
+    if len(app.screen_stack) > 1:
+        await pilot.click("#value")
+        for ch in str(row + 1):
+            await pilot.press(ch)
+        await pilot.press("enter")
     await _wait_for(pilot, lambda: app.current_voice is not None)
 
 
@@ -128,6 +134,68 @@ async def test_escape_returns_to_preset_level_view():
         assert app._current_param_label == "global"
 
 
+def _count_preset_overview_fetches(app):
+    # preset_num_voices isn't a clean signal on its own -- the voice-browsing
+    # modal also calls it (to know the valid range), independent of a full
+    # preset-overview fetch. Count _load_preset_overview itself instead.
+    calls = []
+    original = app._load_preset_overview
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    app._load_preset_overview = counting
+    return calls
+
+
+async def test_back_to_preset_reuses_cached_overview_no_refetch():
+    # Regression test: going voice/link -> back to the *same* preset used
+    # to re-walk every voice/zone over MIDI again for data that hadn't
+    # changed, making "back" noticeably slow against real hardware.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        calls = _count_preset_overview_fetches(app)
+        await _select_voice(pilot, app)
+
+        await pilot.press("escape")
+        assert await _wait_for(pilot, lambda: app.current_voice is None)
+        assert calls == []  # reused the cache, no re-fetch
+
+        await pilot.press("r")  # an explicit refresh still forces one
+        await pilot.pause()
+        assert calls == [1]
+
+
+async def test_editing_a_parameter_invalidates_the_cached_overview():
+    # A write could change which sample a zone points at -- the cached
+    # preset overview (voice/zone/sample data) can no longer be trusted
+    # unchanged after one, unlike plain read-only navigation.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        calls = _count_preset_overview_fetches(app)
+        await _select_voice(pilot, app)
+
+        params = app.query_one("#params")
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        value_input = app.screen_stack[-1].query_one("#value")
+        value_input.value = ""
+        await pilot.click("#value")
+        for ch in "5":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: "set id" in app.last_status)
+
+        await pilot.press("escape")
+        assert await _wait_for(pilot, lambda: app.current_voice is None)
+        assert calls == [1]  # the edit invalidated the cache -> re-fetched
+
+
 async def test_edit_value_writes_through_and_refreshes_table():
     app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -193,6 +261,8 @@ async def test_rename_preset():
 
         assert await _wait_for(pilot, lambda: "renamed" in app.last_status)
         assert app.bridge.get_preset_name(0).strip() == "New Name"
+        # every write invalidates the cached preset overview, on principle
+        assert app._preset_overview_cache is None
 
 
 async def test_master_menu_delete_preset_requires_arm_then_fire():
@@ -362,24 +432,31 @@ async def test_browser_window_grows_and_shrinks_with_terminal_height():
 
 async def test_samples_pane_aggregates_across_voices_and_dedups():
     # A fake bridge with 3 voices: two single-sample voices sharing sample 7,
-    # and one multisample voice with 2 zones split across samples 7 and 9 —
-    # exercises the dedup + "used by" aggregation in
-    # EosRemoteApp._resolve_sample_rows independent of DemoBridge's simplicity
-    # (which only ever has one voice/one zone).
+    # and one multisample voice (flagged via the spec's 0x3FFF voice-level
+    # sentinel, not a count field — see EosRemoteApp._voice_sample_info /
+    # RESOLUTION_NOTES §11) with 3 zones: samples 7, 9, and 9 again (the
+    # same voice hitting the same sample from two different zones -- a very
+    # normal pattern, e.g. two key ranges sharing one recording) -- exercises
+    # both the cross-voice dedup AND the same-voice-multiple-zones dedup in
+    # EosRemoteApp._resolve_sample_rows independent of DemoBridge's
+    # simplicity (which only ever has one voice/one zone).
     class FakeBridge(DemoBridge):
         def preset_num_voices(self, preset, *, timeout=None):
             return 3
 
-        def voice_num_szones(self, preset, voice, *, timeout=None):
-            return 2 if voice == 2 else 1
-
         def get_parameter(self, param_id, *, timeout=None):
-            # E4_GEN_SAMPLE id is looked up dynamically in app.py; identify
-            # it via the demo's own zone-select bookkeeping instead of a
-            # hardcoded id so this test doesn't need to import it directly.
-            if getattr(self, "_zone", None) is not None:
-                return {0: 7, 1: 9}[self._zone]
-            return {0: 7, 1: 7, 2: 7}.get(getattr(self, "_voice", None), 7)
+            from eos import params as p
+            if param_id != p.lookup("E4_GEN_SAMPLE").id:
+                return 0
+            voice = getattr(self, "_voice", None)
+            zone = getattr(self, "_zone", None)
+            if voice in (0, 1):
+                return 7  # single-sample voices, both using sample 7
+            if voice == 2:
+                if zone is None:
+                    return 0x3FFF  # multisample sentinel at voice level
+                return {0: 7, 1: 9, 2: 9}.get(zone, 0)  # zone 3 reads 0 -> ends the scan
+            return 0
 
         def set_parameter(self, param_id, value):
             from eos import params as p
@@ -398,13 +475,167 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
 
         voices = app.query_one("#voices")
         assert await _wait_for(pilot, lambda: voices.row_count == 3)
-        assert voices.get_row_at(2) == ["V3", "multi (2)"]
+        assert voices.get_row_at(2) == ["V3", "multi (3)"]
 
         samples = app.query_one("#samples")
         assert await _wait_for(pilot, lambda: samples.row_count == 2)
         rows = {samples.get_row_at(i)[0]: samples.get_row_at(i) for i in range(samples.row_count)}
         assert rows["7"] == ["7", "Shared Kick", "V1,V2,V3"]
         assert rows["9"] == ["9", "Extra Snare", "V3"]
+
+
+async def test_view_defaults_to_compact_with_no_stored_preference():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.compact_view is True
+        assert "compact" in app.query_one("#tables").classes
+        assert app.query_one("#voices").display is False
+        assert app.query_one("#samples").display is False
+
+
+async def test_toggle_view_shows_and_hides_voice_and_samples_panes():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        voices = app.query_one("#voices")
+        samples = app.query_one("#samples")
+
+        await pilot.press("e")
+        await pilot.pause()
+        assert app.compact_view is False
+        assert voices.display is True
+        assert samples.display is True
+
+        await pilot.press("e")
+        await pilot.pause()
+        assert app.compact_view is True
+        assert voices.display is False
+        assert samples.display is False
+
+
+async def test_view_preference_persists_across_restarts(tmp_path):
+    config_path = str(tmp_path / "config.toml")
+    # demo=False (with a DemoBridge instance standing in for a real one)
+    # exercises the actual persistence wiring in isolation, without needing
+    # real hardware — demo=True deliberately skips it (see next test).
+    app1 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                        connect_kwargs={"config_path": config_path})
+    async with app1.run_test() as pilot:
+        await pilot.pause()
+        assert app1.compact_view is True  # nothing stored yet -> default
+        await pilot.press("e")
+        await pilot.pause()
+        assert app1.compact_view is False
+
+    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                        connect_kwargs={"config_path": config_path})
+    async with app2.run_test() as pilot:
+        await pilot.pause()
+        assert app2.compact_view is False  # remembered from app1
+
+
+async def test_demo_mode_does_not_touch_config_toml_for_view_preference(monkeypatch):
+    # Regression guard for the same class of bug docs/RESOLUTION_NOTES.md §7
+    # already caught for the MIDI port cache: --demo must never read/write
+    # real local config.toml.
+    from eos import bridge as bridge_mod
+
+    calls = []
+    monkeypatch.setattr(bridge_mod, "load_compact_view",
+                        lambda *a, **k: calls.append("load"))
+    monkeypatch.setattr(bridge_mod, "save_compact_view",
+                        lambda *a, **k: calls.append("save"))
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+    assert calls == []
+
+
+async def test_browse_voices_with_exactly_one_skips_the_prompt():
+    # A prompt whose only valid answer is "1" is just an extra keypress —
+    # 'v' should jump straight there instead. DemoBridge always has exactly
+    # one voice, so this is the path _select_voice takes in every other test.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+
+        await pilot.press("v")
+        await pilot.pause()
+
+        assert len(app.screen_stack) == 1  # no modal opened
+        assert app.current_voice == 0
+
+
+async def test_browse_voices_modal_works_in_compact_view():
+    # Regression test: 'v' used to only work by clicking the Voice pane
+    # directly, which is hidden in the (now-default) compact view. The
+    # modal prompt must work regardless of which pane layout is showing.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.compact_view is True
+        await _select_preset(pilot, app)
+        await _select_voice(pilot, app)
+
+        assert app.compact_view is True  # browsing a voice doesn't change the view
+        assert app.current_voice == 0
+        params = app.query_one("#params")
+        assert await _wait_for(pilot, lambda: params.row_count > 22)
+        assert app._current_param_label == "voice V1"
+
+
+async def test_browse_links_with_exactly_one_skips_the_prompt():
+    # A prompt whose only valid answer is "1" is just an extra keypress —
+    # 'l' should jump straight there instead.
+    class FakeBridge(DemoBridge):
+        def preset_num_links(self, preset, *, timeout=None):
+            return 1
+
+        def get_parameters(self, param_ids, *, timeout=None):
+            return {pid: 0 for pid in param_ids}
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+
+        await pilot.press("l")
+        await pilot.pause()
+
+        assert len(app.screen_stack) == 1  # no modal opened
+        assert await _wait_for(pilot, lambda: app.current_link == 0)
+        assert app.current_voice is None
+        assert app._current_param_label == "link L1"
+        params = app.query_one("#params")
+        assert await _wait_for(pilot, lambda: params.row_count > 0)
+
+        await pilot.press("escape")
+        assert await _wait_for(pilot, lambda: app.current_link is None)
+        assert app._current_param_label == "global"
+
+
+async def test_browse_links_with_several_prompts_for_which_one():
+    class FakeBridge(DemoBridge):
+        def preset_num_links(self, preset, *, timeout=None):
+            return 2
+
+        def get_parameters(self, param_ids, *, timeout=None):
+            return {pid: 0 for pid in param_ids}
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+
+        await pilot.press("l")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        await pilot.click("#value")
+        await pilot.press("2")  # front-panel 1-based, like voices
+        await pilot.press("enter")
+
+        assert await _wait_for(pilot, lambda: app.current_link == 1)
+        assert app._current_param_label == "link L2"
 
 
 async def test_demo_never_touches_rtmidi(monkeypatch):

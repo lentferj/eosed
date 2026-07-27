@@ -459,3 +459,142 @@ in hand. Growing beyond the cached range still fetches, same as before.
 session pattern as §7): resizing the terminal now visibly changes how many
 presets are fetched/shown, debounced growth triggered exactly one
 `catalog_presets()` call, and shrinking back down triggered zero.
+
+## §11 — "Number Of X" commands (0x16-0x1D) are not plain counts (resolved, verified live)
+
+First live use of `preset_num_voices`/`preset_num_links`/`preset_num_szones`/
+`voice_num_szones` (the `extended_view` branch's Voice/Samples panes),
+against preset 0 ("Test Preset", the same preset captured in §7's saved dump
+at `docs/samples/e4xt_ultra_preset0_old_format.bin`). Reported
+live: a preset the front panel shows as 2 voices (V1 single-sample, V2
+multisample with 2 zones/samples) rendered in the TUI as **3 voices**, with
+the 2nd and 3rd showing empty/garbage sample data.
+
+**Root cause, confirmed two independent ways:**
+
+1. **Cross-checked against the saved dump file**, bypassing the live command
+   entirely: the OLD-format dump's own `<Voices>` section starts with a
+   plain, direct voice-count word (`{<NUMBER>,<NAME>,<Global Parms>,<Links>,
+   <Voices>}`, dump grammar, no off-by-one language anywhere in that part of
+   the spec). Manually decoding that file (name+globals = 62 bytes, link
+   count = 1 at offset 62-63, one 26-byte OLD-format link, so the voice
+   count word sits at offset 90-91) gives **2** — not 3.
+2. **A live, read-only probe** (`preset_num_voices` called 3x in a row: always
+   3, ruling out a one-off glitch) walked all three voice indices `0..2`
+   the live command claimed existed:
+   - voice 0: `voice_num_szones` → 0, voice-level `E4_GEN_SAMPLE` = 1 (a real
+     sample id) — a genuine single-sample voice.
+   - voice 1: `voice_num_szones` → 1, voice-level `E4_GEN_SAMPLE` = 16383
+     (the spec's multisample sentinel — **contradicts** "1 zone = not
+     multisample" if 1 were the literal zone count) — with a settled
+     300ms-per-step per-zone read, zones 0 and 1 both resolved to *different,
+     real, non-garbage* sample data.
+   - voice 2: `voice_num_szones` → 16, but every one of those 16 "zones"
+     read back an identical, unchanging `E4_GEN_SAMPLE=0`/`KEY_LOW=16`/etc.
+     regardless of which zone was selected — the signature of a voice index
+     that doesn't actually exist on the device.
+
+Both independent findings agree the device's real voice count is 2 while
+`preset_num_voices`'s raw wire value is 3; separately, `voice_num_szones`'s
+raw wire value for the confirmed 2-zone multisample voice was 1, not 2.
+
+**These two commands disagree in *direction*, and a first attempt at the fix
+got it backwards** — worth recording so the mistake isn't repeated. Reading
+"raw values are off by one either way" and pattern-matching too quickly, the
+first fix applied `+1` to *all four* siblings. That's right for
+`voice_num_szones` (0→1 real for a single-zone voice, 1→2 real for the
+confirmed multisample one) but wrong for the "Preset Num Of X" trio: applying
+`+1` to `preset_num_voices`'s raw `3` produced `4`, moving *away* from the
+dump file's ground truth of `2`, which is what the live re-test after the
+first fix actually showed (preset 0 rendered as 4 voices, not 2). The
+arithmetic, done properly against the same two data points: raw `3`, real
+`2` ⇒ real = raw **− 1**, not raw + 1. `eos.bridge.EosBridge.preset_num_voices`
+subtracts 1 from the raw wire value. Confirmed live specifically, on two
+different presets (0 and 1), both cross-checked against their own dump
+files.
+
+**A third round of the same mistake, worth recording just as plainly:**
+the fix above still extrapolated the `-1` correction to `preset_num_links`
+and `preset_num_szones` too, reasoning "same command family, same wire
+shape, same naming pattern" — exactly the reasoning already shown wrong
+once for `voice_num_szones` above. Live-testing the TUI's restored Link
+browsing (`l`) against preset 0 — independently known, from its own saved
+dump file, to have exactly 1 real link — silently reported "no links".
+Probing `preset_num_links(0)` directly found the raw wire value is `1`:
+already the plain, direct count, needing **no correction at all** — not
+`+1` like its `preset_num_voices` sibling, not any other offset. **Lesson,
+now demonstrated three separate times in this one section** (`voice_num_
+szones` being fundamentally unreliable rather than off by a constant;
+`preset_num_voices` needing `-1` where a first guess said `+1`; now
+`preset_num_links` needing nothing where a first guess said `-1`): sharing
+a command family, byte range, or name is *no evidence at all* about how a
+"Number Of X" command actually behaves — each one needs its own
+independent live check, every time, no matter how similar it looks to a
+sibling already confirmed. `preset_num_szones` (the one remaining sibling)
+is not called anywhere in this codebase and remains completely unverified
+— `eos.bridge.EosBridge.preset_num_szones` now applies no correction
+either, deliberately, rather than guessing a third formula with zero
+evidence behind it.
+
+At the same time, the first fix also applied `+1` to `voice_num_szones` (a
+different family, "Voice Num Of X"), based on it matching exactly one
+data point (preset 0's multisample voice: raw `1` → real `2`). **That did
+not hold up on a second preset.** Re-testing against preset 1 ("Brazz
+Intense", front panel: 2 voices, both multisample, sharing samples S005/
+S006/S007) surfaced a direct, unambiguous contradiction: voice 0's
+`voice_num_szones` raw value was `0` (⇒ "single" under the `+1` fix), yet
+that same voice's own voice-level `E4_GEN_SAMPLE` read the spec's `16383`
+multisample sentinel — a single-zone voice cannot legitimately show that
+value. Walking zones 0-7 anyway (ignoring the count field) found 3 real,
+distinct samples (`5`, `7`, `6` — exactly S005/S007/S006) before zone 3
+cleanly read `0`. So this voice's real zone count is 3, needing "+3" over
+its raw `0` — while preset 0's voice 1 needed only "+1" over its raw `1`.
+**No single additive constant reconciles both** — `voice_num_szones` isn't
+off by a fixed offset at all, it's simply not a trustworthy count, in a
+preset/voice-dependent way with no formula. (The sibling mpc2emu project
+independently reached the identical conclusion about this device family's
+analogous on-disk `n_zones` field: "Redundant/display-only... can only be
+trusted from [a structural derivation], not the count field" — see
+`../mpc2emu/docs/E4B_FORMAT.md` §4.1/4.5. Different format, same lesson.)
+
+**Final fix:** stopped calling `voice_num_szones` for this purpose
+entirely. `eos.bridge.EosBridge.voice_num_szones` now returns the plain raw
+wire value with a docstring warning not to trust it as a count, kept only
+for API completeness. `eosremote.app._voice_sample_info` instead uses the
+spec-documented, reliable signal: read the voice-level `E4_GEN_SAMPLE`
+first — if it's not the `0x3FFF` sentinel, the voice is single-sample and
+that value *is* the real sample number, no zone walk needed; if it *is*
+the sentinel, walk zones from 0 (`SAMPLE_ZONE_SELECT`) until one reads
+`E4_GEN_SAMPLE == 0`, which was the clean, consistent signature of "past
+the real zones" in every case tested (never garbage), capped at
+`_MAX_ZONE_SCAN = 32` as a safety bound rather than a trusted count.
+Verified live against both presets: preset 0 now shows 2 voices (V1
+single/real sample, V2 multi(2)/2 real samples); preset 1 shows 2 voices,
+both correctly multi, with the 3 real distinct samples resolved and named
+for each.
+
+**Separate, also-real bug found and fixed alongside this** (not a wire/count
+issue): `eosremote.app.EosRemoteApp._load_voice_detail` read a voice's own
+general parameter group for display *after* walking that voice's sample
+zones — but zone-walking leaves `SAMPLE_ZONE_SELECT` pointed at the last
+zone it visited, and the spec only resets zone selection on a fresh
+Voice/Preset selection, not automatically. The trailing parameter read was
+therefore happening in "zone" scope, not "voice" scope, which is exactly
+why voice-only fields (`E4_GEN_CTUNE`/`XPOSE`/`RT_LOW`/`RT_LOWFADE`/
+`RT_HIGH`/`RT_HIGHFADE`) came back as the spec's `-1`/"not applicable"
+sentinel (`16383`, 14-bit two's complement) in the same screenshot that
+surfaced the count bug above. Fixed by re-selecting the voice (which resets
+zone selection per spec) between the zone walk and the voice-level
+parameter read.
+
+**What zone-select rate does *not* explain, ruled out live:** `set_parameter`
+is fire-and-forget (no ack), so a first hypothesis was that the existing
+50ms `SEND_GAP` (see module docstring, itself an unverified guess) might be
+too tight for the device to apply a `SAMPLE_ZONE_SELECT` edit before the
+very next parameter read landed, causing stale/repeated reads. A read-only
+probe with the gap widened to 300ms per step got the exact same (correct,
+per-zone-distinct) results as the default 50ms gap — the "all zones read
+identical data" symptom in the original bug report was fully explained by
+the count-off-by-one (reading a voice index that doesn't exist) rather than
+a timing race. `SEND_GAP` itself remains unverified for anything beyond
+this specific call pattern.

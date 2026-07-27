@@ -44,15 +44,21 @@ method to fill in the rest (display-frame encoding, full button-code table,
 wheel encoding). Not started; requires live hardware + a browser running
 Ray Bellis's e-remote as the traffic source to capture against.
 
-## Editor TUI (Phase 2 of the plan) — built, unverified on real hardware
+## Editor TUI (Phase 2 of the plan) — built, read paths verified live
 
 **This branch (`extended_view`) reworked the TUI from a 2-pane (Preset |
-Parameters) to a 4-pane layout: Preset | Voice | Parameters | Samples.**
-It was built and demo-tested autonomously (see commit for the session
-context) while `--allow-write` live-hardware trials were paused — **nothing
-in this branch has been tried against the real E4XT yet**, unlike the
-resize/paging work on `main` below, which was. Treat everything in this
-section as demo-verified only until stated otherwise.
+Parameters) to a 4-pane layout: Preset | Voice | Parameters | Samples**,
+with a `v` key to toggle between that and the original compact 2-pane view
+(default: compact; remembered across restarts against real hardware, see
+below). Built autonomously, then live-tested against the real E4XT Ultra —
+**a real, two-stage bug was found and fixed in the process** (see
+RESOLUTION_NOTES §11): the live `preset_num_voices`/`voice_num_szones`
+commands do not answer with plain counts, and only careful cross-checking
+(a real preset's own dump file, plus a parallel finding in the sibling
+mpc2emu project about the analogous on-disk field) got the fix right after
+a first attempt got the direction backwards. Verified correct against two
+different real presets, one single-voice-style and one where both voices
+are multisample sharing the same 3 samples.
 
 `eosremote/app.py`, four `DataTable`s in one `Horizontal`:
 - **Preset** (`#presets`) — unchanged from `main`: paged, on-demand catalog
@@ -60,8 +66,9 @@ section as demo-verified only until stated otherwise.
   `g` to goto, `o` to rename, `m` for the Master menu.
 - **Voice** (`#voices`) — every voice of the selected preset (`V1`..`Vn`,
   1-based display / 0-based `VOICE_SELECT`), with a "single"/"multi (N)"
-  zone-count hint. Not paged (a preset's voice count is expected to be
-  small; unverified against a real multi-voice preset).
+  zone hint derived by actually walking zones (see below), not by trusting
+  a count field. Not paged (a preset's voice count is expected to be
+  small; untested against a preset with a very large number of voices).
 - **Parameters** (`#params`) — the selected voice's full `voice.*` group
   (146 params) if a voice is selected, else the preset's GLOBAL group (22
   params). Selecting/deselecting a voice (click a voice row, or `escape` to
@@ -77,37 +84,118 @@ section as demo-verified only until stated otherwise.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 239 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). 256 tests pass
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
-  only ever has 1 voice/1 zone, too simple to exercise dedup).
+  only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
+  the view-toggle's default/persistence behavior.
+
+**How "is this voice a multisample, and how many zones" is actually
+determined** (not from `voice_num_szones` — see RESOLUTION_NOTES §11 for
+why that field can't be trusted at all): a voice's own `E4_GEN_SAMPLE`
+(no zone selected) reads the spec's `0x3FFF` sentinel if and only if it's
+genuinely multisample; if so, zones are walked from 0 (`SAMPLE_ZONE_SELECT`)
+until one reads `E4_GEN_SAMPLE == 0`, empirically the clean, consistent
+signature of "past the real data" in every case tested — capped at 32 zones
+as a safety bound, not a trusted count.
 
 **Known perf caveat, not yet tuned:** selecting a preset walks *every* voice
-sequentially (`voice_num_szones` + a `VOICE_SELECT`/`SAMPLE_ZONE_SELECT`
-context switch + a parameter read per zone) to populate the Voice and
-Samples panes together in one pass. Fine for the handful of voices in
-typical presets; untested against a preset with many voices/zones (a big
-multisample drum kit, say) — could be slow (each step is a sequential MIDI
-round-trip, same caution as the preset catalog scan) and may need a cap or
-lazy-per-voice loading if that turns out to matter live.
+sequentially (a `VOICE_SELECT`/`SAMPLE_ZONE_SELECT` context switch + a
+parameter read per zone) to populate the Voice and Samples panes together
+in one pass. Fine for the handful of voices in the two real presets tested
+so far; untested against a preset with many voices/zones (a big multisample
+drum kit, say) — could be slow (each step is a sequential MIDI round-trip,
+same caution as the preset catalog scan) and may need a cap or lazy-per-voice
+loading if that turns out to matter.
+
+**That walk is now cached, live-caught as a real slowness bug:** going
+voice/link → `escape` back to the preset-level view used to re-run the
+*entire* walk above from scratch, even though nothing about a voice/link
+drill-down changes what it would recompute — noticeably slow in practice
+against real hardware for anything but a trivial preset. Fixed:
+`EosRemoteApp._preset_overview_cache` holds the last `_load_preset_overview`
+result, reused by `action_back_to_preset` when it's for the same preset (no
+MIDI at all); invalidated by every real write, uniformly and on principle
+rather than reasoning out which specific ones are "safe" to leave alone —
+a parameter edit (`_apply_edit`), a Master action (`_fire_master_action`,
+destructive), and a rename (`_apply_rename`, even though a rename only
+touches the name, not voice/zone/sample data). An explicit `r` refresh
+always bypasses the cache regardless, and the parameter-edit dialog's
+starting value is always a fresh `get_parameter` read, never taken from
+this (or any) cached display — editing was never at risk of acting on
+stale data even before this cache existed. Selecting a *different* preset
+always still does a full fetch — this only memoizes "the same preset, no
+time elapsed, nothing written."
 
 **Deliberately dropped from `main`'s 2-pane version, not carried into this
 layout:** the `p`/`s` Preset/Sample **bank**-switch and sample rename
 (superseded here — "Samples" is now a used-by view, not a second browsable
 catalog; reachable again by checking out `main` if the old bank-browsing
-behavior is wanted back), and Link browsing (no pane for it in this cut;
-the previous modal `v`/`l`/`z` drill-down flow is gone in favor of clicking
-directly into the Voice pane, but there's no equivalent persistent Link
-pane yet — could be a 5th pane later).
+behavior is wanted back). Link browsing came back after initially being cut
+— see below.
+
+**View toggle is `e` (Extended view), not `v`** — after the first pass
+reused `v` for the view toggle (displacing "browse voices"), live testing
+showed that regressed a real, previously-working flow: with no persistent
+Voice pane visible in the (now-default) compact view, there was no way to
+select a voice at all. Fixed by moving the toggle to `e` and restoring `v`
+as a modal voice-select prompt (`action_browse_voices`, same front-panel
+1-based numbering as before, reusing the same `select_voice` the Voice pane
+itself calls) — works in *either* view mode, not just extended. `l`
+(browse Links) came back the same way, symmetric with `v`: a modal prompt
+into `select_link`/`_load_link_detail`, showing that link's parameter group
+in the Parameters pane; `escape` clears either a selected voice or link
+back to the preset-level GLOBAL view. There is still no persistent Link
+*pane* (no "used by" or samples concept applies to a Link) — just the modal,
+matching how Links worked before this branch existed. The `escape` binding
+is now visible in the footer (was `show=False`) — hiding it was itself a
+live-caught discoverability bug: there was no on-screen hint for how to
+back out of a selected voice/link at all. Both the Voice and Link prompts
+also now skip straight to the only entry when there's exactly one (e.g.
+DemoBridge's single voice) instead of asking a question with one possible
+answer — read-only navigation, so no downside to it being wrong compared
+to the prompt it replaces (which offered the same single choice anyway).
+
+**`preset_num_links` needed its own live check, not the same fix as its
+`preset_num_voices` sibling** — restoring `l` surfaced this immediately:
+pressing it against preset 0 (independently known, from its own saved dump
+file, to have exactly 1 real link) reported "no links". The bridge method
+had inherited a `-1` correction extrapolated from `preset_num_voices`
+(same command family, same wire shape) with no independent test of its
+own — turns out `preset_num_links`'s raw wire value is already the plain,
+direct count (confirmed: raw `1`, matching the known real answer of 1
+exactly). Fixed by dropping the correction for that method specifically;
+see RESOLUTION_NOTES §11 for why this is now the *third* time in this
+section that "same family as an already-confirmed sibling" turned out not
+to be evidence of anything.
+
+**"Used by" in the Samples pane used to list a voice once per zone, not
+once per voice** — also caught live (preset 0, voice V2, 16 real zones):
+a voice with several zones sharing one underlying sample (a normal
+pattern) showed that voice repeated once per matching zone
+(`V2,V2,V2,V2,V2`) instead of once. Fixed in
+`EosRemoteApp._resolve_sample_rows` (a set instead of a list per sample
+number).
+
+**View toggle (`e`) and its persistence:** `EosRemoteApp.compact_view`
+defaults to `True` (compact 2-pane: Preset | Parameters) on a fresh install
+with no config yet; toggling is remembered in `config.toml` (see
+`eos.bridge.load_compact_view`/`save_compact_view`, sharing that
+already-gitignored file with the MIDI port cache via a proper read-modify-
+write so the two settings can't clobber each other) so it survives a
+restart — but **only against real hardware**. `--demo` deliberately never
+reads or writes that file at all, matching the project's "demo touches no
+real local state" convention and avoiding the exact test-pollution bug
+docs/RESOLUTION_NOTES.md §7 already caught once for the port cache.
 
 **Write actions (edit/rename/Master) default to disabled against real
 hardware** — `--allow-write` is required to enable them (always on for
-`--demo`). This mirrors the dump-reading caution above: no write path has
-been exercised live yet, and this branch's *read* paths (Voice/Samples
-panes) haven't either. Once dump reading is fully solid, try `--allow-write`
-live in this order: a single low-stakes parameter edit + read-back first,
-then rename, then (with real caution and a fresh backup) a Master action —
-never start with a Master action.
+`--demo`). No write path has been exercised live yet, on either branch;
+the *read* paths above (Voice/Samples panes, the count-field fix) have now
+been verified live. Once ready to try `--allow-write` live, go in this
+order: a single low-stakes parameter edit + read-back first, then rename,
+then (with real caution and a fresh backup) a Master action — never start
+with a Master action.
 
 Not built: NEW-format dump/restore, and anything from the panel/mirror
 protocol (see the section above — that's out of scope for this TUI
