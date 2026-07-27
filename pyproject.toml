@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eosremote"
+version = "0.1.0"
+description = "Terminal remote/editor for the E-mu EOS sampler family (E4/E4XT) over MIDI SysEx"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-2.0-or-later" }
+authors = [{ name = "Jan Lentfer", email = "jan.lentfer@web.de" }]
+dependencies = [
+    "textual>=0.80",
+    "python-rtmidi>=1.5",
+    "attrs>=23",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+eosremote = "eosremote.app:main"
+eoscli = "eosremote.cli:main"
+
+[tool.setuptools]
+packages = ["eos", "eosremote"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

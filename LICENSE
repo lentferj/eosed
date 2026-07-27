@@ -1,0 +1,47 @@
+eosremote — Terminal remote/editor for the E-mu EOS sampler family (E4/E4XT)
+Copyright (C) 2026  eosremote contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+-------------------------------------------------------------------------------
+Third-party references and their licenses
+-------------------------------------------------------------------------------
+
+eos/messages.py, eos/params.py
+  The SysEx frame layout, command set, and parameter ID tables are transcribed
+  from the manufacturer's own protocol specification:
+    "Remote Preset Editing via MIDI SysEx", Draft #30, EOS 4.00
+    Brian Clark, E-mu Systems, 17 February 1999
+  No source code is derived from this document (it contains none); only the
+  wire-protocol facts (command bytes, parameter ids, ranges, display-conversion
+  formulas) are used, as data. Released under GPL-2.0-or-later.
+
+eosremote/midi_bridge.py
+  The throttled-output queue, the MultiIn merged-input facade, ALSA-client
+  leak fix, and port-enumeration helpers are ported from the sibling
+  k2kremote project (k2kremote/midi_bridge.py), which itself ports them from:
+    mpc2emu (tests/re_banks/krz_sysex_live.py)
+    Copyright (C) 2025-2026  mpc2emu contributors
+    License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+  Both k2kremote and mpc2emu are sibling projects by the same author, also
+  released under GPL-2.0-or-later.
+
+All other files (eos/bridge.py, eosremote/app.py, eosremote/refresh.py, tests)
+  Original work. Released under GPL-2.0-or-later.
+
+-------------------------------------------------------------------------------
+Trademarks
+-------------------------------------------------------------------------------
+E-mu, Emulator, EOS are trademarks of Creative Technology Ltd.
+All other trademarks are property of their respective owners.
