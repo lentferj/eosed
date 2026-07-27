@@ -64,9 +64,17 @@ TUI), not a screen mirror.
   name, global parms, links, voices), using the spec's ACK/NAK/WAIT/EOF
   handshake.
 
-`eosremote` (Textual TUI):
-- Browses presets (a paged, on-demand catalog scan), shows the selected
-  preset's GLOBAL parameters, and drills down into a specific voice or link.
+`eosremote` (Textual TUI) — four panes, left to right:
+- **Preset** — a paged, on-demand catalog scan (page size adapts to how tall
+  the pane is).
+- **Voice** — every voice of the selected preset, with a single/multisample
+  hint.
+- **Parameters** — the selected voice's parameters, or the preset's GLOBAL
+  parameters if no voice is selected.
+- **Samples** — a *derived* view, not a separate browsable bank: which raw
+  sample(s) the selection actually plays (the whole preset's if no voice is
+  selected, just that voice's otherwise), resolved from the voice's Sample
+  Zone fields down to a sample number + name.
 - Edits a parameter's value in place (device-fetched min/max/default shown),
   renames a preset, and a modal arm-then-fire Master screen for the
   destructive utilities (Delete Preset, Erase RAM Bank/Presets/Samples —
@@ -79,8 +87,11 @@ TUI), not a screen mirror.
 `--demo` on both entry points: exercises the same code paths against a
 canned in-memory device, no MIDI port opened, no hardware required.
 
-Not yet implemented: NEW-format dump/restore, sample-zone drill-down in the
-TUI, and anything touching the panel/mirror protocol. See [TODO.md](TODO.md).
+Not yet implemented: NEW-format dump/restore, editing a raw sample's own
+properties (loop points, root key, sample rate — this protocol has no
+generic parameter access to those; see `docs/RESOLUTION_NOTES.md` §10), Link
+browsing in this 4-pane layout, and anything touching the panel/mirror
+protocol. See [TODO.md](TODO.md).
 
 ---
 

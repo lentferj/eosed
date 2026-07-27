@@ -46,20 +46,65 @@ Ray Bellis's e-remote as the traffic source to capture against.
 
 ## Editor TUI (Phase 2 of the plan) — built, unverified on real hardware
 
-`eosremote/app.py`: preset browser (paged, on-demand catalog scan), a
-parameter table for the selected preset's GLOBAL group with drill-down into
-a specific voice/link (setting `PRESET_SELECT`/`VOICE_SELECT`/`LINK_SELECT`
-context first), in-place value editing with device-fetched min/max/default,
-whole-name preset rename, and a modal arm-then-fire Master screen (Delete
-Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
-never bound to a single keypress). All MIDI I/O runs off the UI thread,
-serialized by a lock (`EosBridge` is not thread-safe). 198 tests pass,
-including the write paths, against `--demo`/`DemoBridge`.
+**This branch (`extended_view`) reworked the TUI from a 2-pane (Preset |
+Parameters) to a 4-pane layout: Preset | Voice | Parameters | Samples.**
+It was built and demo-tested autonomously (see commit for the session
+context) while `--allow-write` live-hardware trials were paused — **nothing
+in this branch has been tried against the real E4XT yet**, unlike the
+resize/paging work on `main` below, which was. Treat everything in this
+section as demo-verified only until stated otherwise.
+
+`eosremote/app.py`, four `DataTable`s in one `Horizontal`:
+- **Preset** (`#presets`) — unchanged from `main`: paged, on-demand catalog
+  scan, page size dynamic to the pane's height (see `main`'s entry below),
+  `g` to goto, `o` to rename, `m` for the Master menu.
+- **Voice** (`#voices`) — every voice of the selected preset (`V1`..`Vn`,
+  1-based display / 0-based `VOICE_SELECT`), with a "single"/"multi (N)"
+  zone-count hint. Not paged (a preset's voice count is expected to be
+  small; unverified against a real multi-voice preset).
+- **Parameters** (`#params`) — the selected voice's full `voice.*` group
+  (146 params) if a voice is selected, else the preset's GLOBAL group (22
+  params). Selecting/deselecting a voice (click a voice row, or `escape` to
+  go back) swaps this automatically.
+- **Samples** (`#samples`) — **derived, not a browsable bank**: resolves
+  whichever voice(s) are in scope down to the raw sample number(s) they
+  play and looks up each one's name (`EosRemoteApp._resolve_sample_rows`,
+  `_voice_sample_info`). Whole preset in scope (no voice selected) sums
+  across every voice, deduped by sample number with a "used by" column
+  listing which voice(s) (e.g. `V1,V3`); one voice in scope narrows to just
+  that voice's zone(s). Read-only — no rename/edit from this pane.
+- Edits a parameter's value in place (device-fetched min/max/default shown),
+  renames a preset, and a modal arm-then-fire Master screen (Delete
+  Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
+  never bound to a single keypress). All MIDI I/O runs off the UI thread,
+  serialized by a lock (`EosBridge` is not thread-safe). 239 tests pass
+  against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
+  the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
+  only ever has 1 voice/1 zone, too simple to exercise dedup).
+
+**Known perf caveat, not yet tuned:** selecting a preset walks *every* voice
+sequentially (`voice_num_szones` + a `VOICE_SELECT`/`SAMPLE_ZONE_SELECT`
+context switch + a parameter read per zone) to populate the Voice and
+Samples panes together in one pass. Fine for the handful of voices in
+typical presets; untested against a preset with many voices/zones (a big
+multisample drum kit, say) — could be slow (each step is a sequential MIDI
+round-trip, same caution as the preset catalog scan) and may need a cap or
+lazy-per-voice loading if that turns out to matter live.
+
+**Deliberately dropped from `main`'s 2-pane version, not carried into this
+layout:** the `p`/`s` Preset/Sample **bank**-switch and sample rename
+(superseded here — "Samples" is now a used-by view, not a second browsable
+catalog; reachable again by checking out `main` if the old bank-browsing
+behavior is wanted back), and Link browsing (no pane for it in this cut;
+the previous modal `v`/`l`/`z` drill-down flow is gone in favor of clicking
+directly into the Voice pane, but there's no equivalent persistent Link
+pane yet — could be a 5th pane later).
 
 **Write actions (edit/rename/Master) default to disabled against real
 hardware** — `--allow-write` is required to enable them (always on for
 `--demo`). This mirrors the dump-reading caution above: no write path has
-been exercised live yet. Once dump reading is fully solid, try `--allow-write`
+been exercised live yet, and this branch's *read* paths (Voice/Samples
+panes) haven't either. Once dump reading is fully solid, try `--allow-write`
 live in this order: a single low-stakes parameter edit + read-back first,
 then rename, then (with real caution and a fresh backup) a Master action —
 never start with a Master action.
@@ -68,25 +113,18 @@ Not built: NEW-format dump/restore, and anything from the panel/mirror
 protocol (see the section above — that's out of scope for this TUI
 entirely).
 
-**Presets/params pane resizing — fixed, verified live.** The two panes
-weren't following terminal resizes consistently (presets looked frozen at a
-fixed page size while params looked like it scaled) — root cause and fix in
-RESOLUTION_NOTES §10. Confirmed live against the E4XT Ultra: resizing the
-terminal now visibly changes how many presets are fetched/shown per page,
-and shrinking back down doesn't re-hit the device for names it already has.
-
-**Preset/Sample bank switch + sample-zone drill-down — built, demo-tested,
-not yet tried live.** `p`/`s` switch the left browser pane between the
-Preset and Sample catalogs (same dynamic paging as before, one bookmark +
-cache per bank — see `EosRemoteApp._bank_state`/`_switch_bank`); rename
-(`o`) works against whichever bank is active. Within a preset's voice
-(`v`), `z` drills one level further into that voice's Sample Zone
-(`SAMPLE_ZONE_SELECT`), showing the 13-parameter subset the spec calls out
-as zone-scoped rather than voice-wide (`eos.params.SAMPLE_ZONE_PARAM_IDS`).
-**Deliberately out of scope**, per the spec (no generic parameter access
-exists for it in this protocol): a raw sample's own loop points, root key,
-sample rate, playback direction — that would need the separate MIDI Sample
-Dump Standard, not yet investigated at all.
+**On `main` (not this branch): presets/params pane resizing — fixed,
+verified live.** The two panes weren't following terminal resizes
+consistently (presets looked frozen at a fixed page size while params
+looked like it scaled) — root cause and fix in RESOLUTION_NOTES §10.
+Confirmed live against the E4XT Ultra: resizing the terminal now visibly
+changes how many presets are fetched/shown per page, and shrinking back
+down doesn't re-hit the device for names it already has. This branch
+carries the same dynamic-window/resize-debounce/shrink-cache-reuse logic
+for the Preset pane (`BROWSER_MIN_WINDOW`/`BROWSER_FETCH_MULTIPLIER`/
+`BROWSER_RESIZE_SETTLE`, `_desired_browser_window`, `_settle_browser_resize`)
+unchanged — only demo/pytest-verified again here, not re-tried live, since
+this branch's work happened without hardware access.
 
 ## Dump field order vs. E4B_FORMAT.md — partially verified
 
