@@ -64,23 +64,42 @@ TUI), not a screen mirror.
   name, global parms, links, voices), using the spec's ACK/NAK/WAIT/EOF
   handshake.
 
-`eosremote` (Textual TUI) — `v` toggles between a compact 2-pane view
+`eosremote` (Textual TUI) — `e` toggles between a compact 2-pane view
 (Preset | Parameters, the default on a fresh install) and the full 4-pane
 layout below; the choice is remembered across restarts (against real
 hardware — `--demo` never touches local state). Four panes, left to right:
 - **Preset** — a paged, on-demand catalog scan (page size adapts to how tall
-  the pane is).
+  the pane is). `p`/`s` switch this pane between the Preset and the raw
+  Sample bank (browse/rename either); `g` goto and `o` rename are
+  bank-aware. A raw sample has no per-sample properties in this protocol
+  (no generic parameter access to loop points, root key, or sample rate —
+  only its number and name); selecting one shows just that, plus `u` for an
+  opt-in reverse lookup ("which presets use this sample"). This is a full
+  preset-range sweep — not automatic, shows live progress, cancellable with
+  `escape` — so on the **first** run it can take several minutes (up to
+  ~5-10 on a fully-populated bank); every later lookup (any sample, not
+  just the one you first searched for) is then instant, no MIDI at all,
+  until something is actually written. By default it stops early after 10
+  consecutive presets with nothing in them (a heuristic, not a guarantee —
+  a bank with an unusually large deliberate gap could have a real preset
+  sitting past the stop point that this would then miss); set
+  `sample_usage_early_stop = "fullscan"` in `config.toml` to always sweep
+  the complete range instead, or to a specific number to change the
+  threshold. The status line names the exact preset it stopped at, and `c`
+  clears the cached result on demand to force a fresh sweep.
 - **Voice** — every voice of the selected preset, with a single/multisample
-  hint.
-- **Parameters** — the selected voice's parameters, or the preset's GLOBAL
-  parameters if no voice is selected.
-- **Samples** — a *derived* view, not a separate browsable bank: which raw
+  hint. `v` (from either bank) also opens a modal voice picker.
+- **Parameters** — the selected voice's parameters, the parameters of a
+  selected Link (`l`), or the preset's GLOBAL parameters if neither is
+  selected; `escape` goes back.
+- **Samples** — a *derived* view, not the Sample bank above: which raw
   sample(s) the selection actually plays (the whole preset's if no voice is
   selected, just that voice's otherwise), resolved from the voice's Sample
-  Zone fields down to a sample number + name.
+  Zone fields down to a sample number + name. Orthogonal to which bank the
+  Preset pane is browsing.
 - Edits a parameter's value in place (device-fetched min/max/default shown),
-  renames a preset, and a modal arm-then-fire Master screen for the
-  destructive utilities (Delete Preset, Erase RAM Bank/Presets/Samples —
+  renames a preset or sample, and a modal arm-then-fire Master screen for
+  the destructive utilities (Delete Preset, Erase RAM Bank/Presets/Samples —
   never bound to a single keypress).
 - **Writes (edit/rename/Master) are disabled by default against real
   hardware** — pass `--allow-write` to enable them; always on for `--demo`.

@@ -137,6 +137,24 @@ def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
     _write_config_dict(data, path)
 
 
+# --- sample-usage reverse-lookup early-stop threshold ------------------------
+# eosremote.app.EosRemoteApp's "which presets use this sample" scan
+# (action_find_sample_usage) bails out after this many consecutive
+# no-voices presets, since a full 0-999 sweep can take several minutes.
+# User-edited in config.toml, not written by the app itself: either an int
+# (the threshold) or the literal string "fullscan" to disable early-stop
+# and always sweep the complete range.
+
+def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
+    """Returns an int threshold, the string "fullscan", or None if unset/invalid."""
+    value = _read_config_dict(path).get("sample_usage_early_stop")
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() == "fullscan":
+        return "fullscan"
+    return None
+
+
 def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[bytes]:
     """Probe exactly one send/receive port pair for an E-mu Device Inquiry
     reply. Returns the raw reply bytes, or None if either port no longer
@@ -600,22 +618,32 @@ class EosBridge:
     # do NOT all behave alike despite sharing a command family, byte range,
     # and wire shape — each needed its own independent live check rather
     # than extrapolating from the others (see docs/RESOLUTION_NOTES.md §11
-    # for the full story, including a first fix that assumed they'd all
-    # match and got links wrong as a result):
-    # - preset_num_voices: wire value is (real count + 1) -- confirmed live
-    #   on two different presets by cross-checking each one's own dump file.
+    # for the links story; §12 for preset_num_voices itself turning out to
+    # be unreliable too, the same way voice_num_szones already was):
+    # - preset_num_voices: **do not trust this as a voice count at all** —
+    #   confirmed correct (raw - 1) for one preset on two different bank
+    #   states, then directly contradicted live by two more real presets on
+    #   a third bank (both front-panel-confirmed to have 1 real voice each,
+    #   both playing audible sound, both reading raw=1 -- which the "-1"
+    #   fix would report as 0 real voices). Not a fixed offset at all, same
+    #   failure mode as voice_num_szones. eosremote.app never uses this
+    #   method's return value to bound a loop; it walks voice indices
+    #   directly instead (see _voice_sample_info's docstring). Kept here,
+    #   uncorrected (raw passthrough), only for API completeness.
     # - preset_num_links: wire value IS the plain, direct count -- confirmed
     #   live against preset 0 ("Test Preset"), whose own dump file
     #   independently shows exactly 1 real link, matching the raw wire
-    #   value of 1 exactly (no offset).
+    #   value of 1 exactly (no offset). Only one data point, though, and
+    #   preset_num_voices' own history is now a specific warning against
+    #   trusting a single confirmation — treat this as provisional too.
     # - preset_num_szones: not called anywhere in this codebase and not
-    #   independently tested at all -- given the two confirmed siblings
-    #   above disagree with each other, do NOT assume either formula (or no
+    #   independently tested at all -- given confirmed siblings above
+    #   disagree with each other, do NOT assume any formula (or no
     #   correction) applies here without its own live check first.
     def preset_num_voices(self, preset: int, *, timeout: Optional[float] = None) -> int:
         req = m.PresetNumVoicesRequest(preset=preset, device_id=self.device_id)
         return m.PresetNumVoicesResponse.decode(
-            self.send_and_receive(req.encode(), timeout=timeout)).num_voices - 1
+            self.send_and_receive(req.encode(), timeout=timeout)).num_voices
 
     def preset_num_links(self, preset: int, *, timeout: Optional[float] = None) -> int:
         req = m.PresetNumLinksRequest(preset=preset, device_id=self.device_id)

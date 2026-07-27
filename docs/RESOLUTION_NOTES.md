@@ -598,3 +598,71 @@ identical data" symptom in the original bug report was fully explained by
 the count-off-by-one (reading a voice index that doesn't exist) rather than
 a timing race. `SEND_GAP` itself remains unverified for anything beyond
 this specific call pattern.
+
+## §12 — `preset_num_voices`'s "-1" correction was also wrong (resolved, verified live)
+
+§11's fix for `preset_num_voices` (subtract 1 from the raw wire value) was
+confirmed against two dump-file cross-checks (preset 0 and preset 1, two
+different bank states) and shipped. Live use of the sample-usage reverse
+lookup (`u`) against the user's actual working bank (270 consecutive
+presets, P000-P269) surfaced a scan that stopped early, apparently at a
+genuine content gap around preset 81. Front-panel spot checks disproved
+that outright:
+
+- **P075 "a bass preset"**: front panel shows 1 voice, 2 samples, and it audibly
+  plays sound on Audition. `preset_num_voices(75)` raw value is `1`; the
+  `-1` correction gives `0` — "no voices", directly contradicting the
+  front panel and the fact that it plays.
+- **P080 "another bass preset"**: front panel shows 1 voice, 5 samples, also audible.
+  Same raw value `1`, same false "no voices" after correction.
+
+So the `-1` fix, despite passing both dump-file cross-checks that motivated
+it, is **not a constant offset** — exactly the failure mode already found
+for `voice_num_szones` in §11, just one level up (presets instead of
+voices/zones). The two dump-file checks that "confirmed" it were preset 0
+on two different occasions; neither is proof of a general formula, the same
+lesson §11 already spent three paragraphs on and evidently still needed a
+fourth demonstration to fully absorb.
+
+**Two competing hypotheses, both checked before picking a fix:**
+
+1. *Timing/race in the scan's rapid sequential `PRESET_SELECT` +
+   `preset_num_voices` calls.* Ruled out with a targeted 4-variant probe
+   across presets 65-100: with/without explicitly re-setting
+   `PRESET_SELECT` immediately before the count read, with/without an
+   added 150ms settle delay, each combination run twice. All four variants
+   agreed exactly, preset by preset — not a timing bug.
+2. *The count field itself is unreliable, like `voice_num_szones`.*
+   Confirmed by probing voice 0's own voice-level `E4_GEN_SAMPLE` directly
+   for presets 75 and 80 (bypassing `preset_num_voices` entirely): both
+   read back real, non-sentinel sample ids at voice 0 — a genuine voice —
+   while voices 1-3 all read back a consistent `16382` (`0x3FFE`), clearly
+   distinct from the `16383` (`0x3FFF`) multisample sentinel already known
+   from §11. `0x3FFE` behaves exactly like the "past the real zones"
+   `E4_GEN_SAMPLE == 0` signal in §11's zone walk, but one level up: the
+   device's own, consistent "this voice index does not exist" marker.
+
+**Final fix, mirroring §11's zone-walk architecture exactly:** stopped
+calling `preset_num_voices` for this purpose entirely.
+`eos.bridge.EosBridge.preset_num_voices` now returns the plain raw wire
+value (the `-1` removed), kept only for API completeness with a docstring
+warning not to trust it as a count — same treatment as `voice_num_szones`.
+`eosremote.app._voice_sample_info` walks voice indices from 0, reading each
+voice's own `E4_GEN_SAMPLE` first: `0x3FFE` means the voice doesn't exist
+and the walk stops (returns `None`); otherwise the existing §11 logic
+applies unchanged (non-`0x3FFF` ⇒ single-sample voice, sample id is the
+value itself; `0x3FFF` ⇒ multisample, walk zones as before). Capped at
+`_MAX_VOICE_SCAN = 64` as a safety bound, not a trusted count — same
+pattern as `_MAX_ZONE_SCAN`. All three call sites that previously trusted
+`preset_num_voices` (`_load_preset_overview`, `_start_browse_voices`, the
+`u` reverse-lookup scan's per-preset voice walk) now use this walk
+instead. `eosremote.demo.DemoBridge` was updated to simulate the same
+`0x3FFE` marker for any `VOICE_SELECT` other than 0, since every demo
+preset has exactly one real voice — without this, the walk-based logic
+would have made every demo preset appear to have `_MAX_VOICE_SCAN` voices
+instead of 1.
+
+This also explains the sample-usage scan's false early-stop: presets in
+the 75-90 range that genuinely have voices were being reported as having
+none, manufacturing a run of consecutive "empty" presets that never
+actually existed on the device.

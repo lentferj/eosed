@@ -84,7 +84,7 @@ are multisample sharing the same 3 samples.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 256 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). 268 tests pass
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
   only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
@@ -127,12 +127,123 @@ stale data even before this cache existed. Selecting a *different* preset
 always still does a full fetch — this only memoizes "the same preset, no
 time elapsed, nothing written."
 
-**Deliberately dropped from `main`'s 2-pane version, not carried into this
-layout:** the `p`/`s` Preset/Sample **bank**-switch and sample rename
-(superseded here — "Samples" is now a used-by view, not a second browsable
-catalog; reachable again by checking out `main` if the old bank-browsing
-behavior is wanted back). Link browsing came back after initially being cut
-— see below.
+**`p`/`s` Preset/Sample bank-switch is back, reconciled with the 4-pane
+layout** — it was cut when the 4-pane rework first landed (reasoning at the
+time: "Samples" is now a used-by view, not a second browsable catalog, so
+the two seemed redundant), but cherry-picking that rework onto `main`
+(which had the bank-switch) surfaced that this quietly deleted a whole
+working feature rather than superseding it — they're not actually the same
+thing: the bank-switch lets you browse/rename the *raw sample bank*
+(names, independent of any preset), while the Samples pane shows *what a
+preset/voice uses*. Both now coexist: `self.bank` ("preset"/"sample")
+governs only what the `#presets` pane itself browses. `current_preset`/
+`current_voice`/`current_link` are never cleared by a bank switch (so
+switching back restores exactly what was showing, reusing
+`_preset_overview_cache` when possible — no re-fetch), but the *display*
+of the Voice/Parameters/Samples-used-by panes clears immediately on
+switching to the Sample bank (live-caught: leaving stale preset data
+visible while browsing an unrelated catalog read as a bug, not as
+"nothing to do with this view yet"). `o` (rename) and `g` (goto) are
+bank-aware, same as before the rework. No dedicated tests existed for this
+feature even before it was cut (only smoke-tested manually) — added proper
+coverage for it now.
+
+**Selecting a sample now shows what little info exists for it, instead of
+stale data or a refusal-sounding message.** `select_sample` used to leave
+the Parameters pane showing whichever preset/voice was last viewed and set
+a status message ("no directly-editable parameters...") that read like an
+edit request had been declined — selecting a sample isn't a request to
+edit it. Confirmed by re-checking the spec text directly (searched again
+for length/rate/stereo-mono/loop, found nothing) that a sample's number
+and name really is the ceiling for this protocol; anything else (loop
+points, root key, sample rate) needs the separate, unimplemented MIDI
+Sample Dump Standard. Now clears the pane and shows those two fields as
+plain, non-editable rows; `action_edit_value` guards against a `ValueError`
+from these rows' non-numeric keys instead of risking a crash if Enter is
+pressed on one.
+
+**`u` — opt-in reverse lookup, "which presets use this sample."** Symmetric
+with the Samples pane's forward direction, but far more expensive: a full
+preset-range sweep, each preset needing at least a per-voice (and, for
+multisample voices, per-zone) sample read — the same walk
+`_load_preset_overview` already does for one preset, repeated across the
+whole range. Deliberately not automatic; shows live
+progress in the status bar and is cancellable via `escape`
+(`_sample_scan_active`/`_cancel_sample_scan`). Scans
+`SAMPLE_USAGE_SCAN_RANGE = range(0, 1000)` — the *full* `PRESET_SELECT`
+wire range, not the `range(0, 128)` default `catalog_presets`/
+`catalog_samples` use elsewhere. That default was believed "confirmed
+populated" on this hardware from an earlier live sweep, but that sweep's
+own upper bound was arbitrary (matching the code default, not a proven
+capacity) — live-caught while building this: a real bank on hand was found
+to hold presets up to at least P269. Silently under-scanning here would
+have given a confident, wrong answer to exactly the question this feature
+answers. **Live-timed at ~4 minutes for a full 0-999 sweep** on that same
+bank — confirmed to genuinely reach 999, not hang or error out partway.
+
+A *complete* sweep (or one that stops via the early-stop heuristic below,
+as opposed to a user cancellation) records every sample it saw along the
+way, not just the one that triggered it, into
+`EosRemoteApp._sample_usage_index` — every later lookup, for *any* sample,
+is then instant with no MIDI at all, until a real write invalidates it
+(`_invalidate_write_sensitive_caches`, shared with `_preset_overview_cache`
+and called from `_apply_edit`/`_apply_rename`/`_fire_master_action`
+uniformly, same "don't reason out which writes are safe to leave be"
+principle). A cancelled/partial sweep's findings are shown once but not
+persisted as this index — no way to tell "not found" from "not scanned
+yet" for whatever a cancellation didn't reach.
+
+**Early-stop heuristic, configurable in `config.toml`.** Bails out after
+`SAMPLE_USAGE_EARLY_STOP_DEFAULT = 10` *consecutive* no-voices presets —
+a strong "past the real data" signal, not a certainty (a bank with an
+unusually large deliberate gap could have a real preset sitting past the
+stop point that this would then miss; this is a heuristic the user
+explicitly accepted the tradeoff on, not a discovered protocol fact).
+`eos.bridge.load_sample_usage_early_stop` reads a user-edited (not
+app-written) `sample_usage_early_stop` key: an int overrides the
+threshold, the literal string `"fullscan"` disables early-stop entirely.
+Sharing `config.toml` with the port cache and view-mode preference via the
+same read-modify-write helpers, and skipped for `--demo` for the same
+"demo touches no real local state" reasoning as those two.
+
+**Two follow-ups from live testing:** the final status now names the exact
+preset the sweep stopped at (`stopped at preset N after ...`/`cancelled at
+preset N, partial`/`full sweep to preset N`) — live-caught as a gap once
+the status line's *progress* text (which preset it's currently on) had
+already scrolled past by the time a run finished, leaving no way to tell
+whether an early stop landed somewhere sensible without re-running it.
+`c` (`action_clear_sample_usage_cache`) manually clears
+`_sample_usage_index`/`_sample_usage_scanned_range` on demand — previously
+the only way to force a fresh sweep was an actual write.
+
+**`preset_num_voices`'s "-1" correction (§11) turned out to be wrong too —
+abandoned entirely, same fix shape as `voice_num_szones`.** Live use of `u`
+against the user's real 270-preset bank appeared to stop early at a genuine
+content gap; front-panel checks of P075 ("a bass preset", 1 voice/2 samples,
+audible) and P080 ("another bass preset", 1 voice/5 samples, audible) proved
+otherwise — both raw `preset_num_voices` values were `1`, which the `-1`
+fix turned into a false "no voices". A timing/race explanation was checked
+and ruled out first (a 4-variant probe: with/without re-setting
+`PRESET_SELECT`, with/without a 150ms settle delay, twice each, across
+presets 65-100 — all identical). The real cause: like `voice_num_szones`,
+this count field simply isn't reliable, full stop — not off by a different
+constant, not fixable by another correction attempt. Found the same kind of
+signal §11 already used for zones, one level up: a voice's own
+`E4_GEN_SAMPLE` reads a consistent `0x3FFE` (16382) when that voice index
+doesn't exist, distinct from the `0x3FFF` multisample sentinel. Fixed by
+dropping `preset_num_voices` from every call site (`_load_preset_overview`,
+`_start_browse_voices`, the `u` scan) in favor of walking voice indices
+directly via `EosRemoteApp._voice_sample_info`, which now returns `None`
+to signal "stop" instead of trusting a count; capped at
+`_MAX_VOICE_SCAN = 64` as a safety bound, same non-trusted-count pattern
+as `_MAX_ZONE_SCAN`. `eos.bridge.EosBridge.preset_num_voices` now returns
+the raw wire value unmodified (kept for API completeness only, like
+`voice_num_szones`); `DemoBridge` updated to answer `0x3FFE` for any
+non-zero `VOICE_SELECT` so demo presets (all single-voice) still walk
+correctly. Full writeup: RESOLUTION_NOTES §12. This also explains the
+early-stop false trigger above — presets that genuinely had voices were
+being counted as empty, manufacturing a "gap" that never existed on the
+device.
 
 **View toggle is `e` (Extended view), not `v`** — after the first pass
 reused `v` for the view toggle (displacing "browse voices"), live testing

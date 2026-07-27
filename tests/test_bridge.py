@@ -429,19 +429,21 @@ def test_memory_queries():
     assert bridge.sample_memory().total_mb == 32
 
 
-def test_preset_num_voices_subtracts_one_from_the_wire_value():
-    # Live-hardware finding (docs/RESOLUTION_NOTES.md §11): confirmed on two
-    # different presets by cross-checking each preset's own dump file
-    # (whose embedded voice-count field is a plain, direct count with no
-    # offset) -- the wire value is (real count + 1).
+def test_preset_num_voices_returns_the_raw_unreliable_value():
+    # Live-hardware finding (docs/RESOLUTION_NOTES.md §12): a "-1" correction
+    # looked confirmed (two different bank states, cross-checked against
+    # each preset's own dump file) until two more real presets (front-panel-
+    # confirmed, audibly playing) directly contradicted it -- not a fixed
+    # offset at all, the same failure mode as voice_num_szones.
+    # eosremote.app no longer uses this method's return value at all.
     def handler(frame):
         _, command, _ = m.parse_frame(frame)
         if command == m.Command.PRESET_NUM_VOICES_REQUEST:
-            return m.PresetNumVoicesResponse(num_voices=3).encode()  # 2 real voices
+            return m.PresetNumVoicesResponse(num_voices=3).encode()
         return None
 
     bridge = _bridge_with(handler)
-    assert bridge.preset_num_voices(0) == 2
+    assert bridge.preset_num_voices(0) == 3
 
 
 def test_preset_num_links_is_a_plain_count_unlike_its_sibling():

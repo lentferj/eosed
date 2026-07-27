@@ -34,6 +34,16 @@ _DEMO_PARAM_VALUES: Dict[int, int] = {
     183: 0,    # MASTER_TUNING_OFFSET
 }
 
+# eosremote.app walks voice indices directly (preset_num_voices/voice_num_
+# szones cannot be trusted live -- see docs/RESOLUTION_NOTES.md §11/§12),
+# stopping at the device's own 0x3FFE "no such voice" signal. Every demo
+# preset has exactly one real voice (index 0); anything else must answer
+# with that marker so the walk stops, or every demo preset would appear to
+# have _MAX_VOICE_SCAN voices instead of 1.
+_GEN_SAMPLE_ID = p.lookup("E4_GEN_SAMPLE").id
+_VOICE_SELECT_ID = p.lookup("VOICE_SELECT").id
+_NO_SUCH_VOICE_MARKER = 0x3FFE
+
 
 def _name_bytes(name: str) -> bytes:
     return name.encode("ascii")[:m.NAME_LENGTH].ljust(m.NAME_LENGTH, b" ")
@@ -79,6 +89,8 @@ class DemoBridge:
         return 1
 
     def get_parameter(self, param_id: int, *, timeout: Optional[float] = None) -> int:
+        if param_id == _GEN_SAMPLE_ID and _DEMO_PARAM_VALUES.get(_VOICE_SELECT_ID, 0) != 0:
+            return _NO_SUCH_VOICE_MARKER
         return _DEMO_PARAM_VALUES.get(param_id, 0)
 
     def get_parameters(self, param_ids, *, timeout: Optional[float] = None) -> Dict[int, int]:
