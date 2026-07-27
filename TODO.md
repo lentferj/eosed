@@ -84,11 +84,181 @@ are multisample sharing the same 3 samples.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 268 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). 288 tests pass
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
   only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
   the view-toggle's default/persistence behavior.
+
+**Two live-caught follow-ups to cache-all, both from the same session it
+shipped in.** First: the sample-name catalog pass (the second half of
+`_run_full_sweep`, after the preset walk) always ran the complete 0-999
+range even when the preset walk itself had just bailed out early via the
+consecutive-empty-presets heuristic — inconsistent, and slower than it
+needed to be for the same reason the heuristic exists at all. Fixed by
+replacing the single `catalog_samples(...)` bulk call with the app's own
+per-sample loop (mirroring the preset loop's shape exactly), using
+"did `get_sample_name` find anything" as the per-item signal and honoring
+the *same* `gap` value — a sample without a name is just as valid an
+"empty" signal as a preset without voices. Only applies when that gap is
+actually active (`"structure"`/`"full"` depth); `"names"` depth's "always
+a complete catalog" guarantee is unchanged. `_catalog_scanned_upto["sample"]`
+now reflects wherever that pass actually stopped, not an unconditional
+"the whole range", and the status note gained a second clause
+(`"; sample names stopped at N after G consecutive unnamed samples"`)
+when it fires. Second: `u`'s results (`_show_sample_usage_results`) were
+only ever written into the `#samples` pane and the status bar's own
+5-item truncation — but `#samples` is hidden in compact view (the
+default), so a compact-view user got nothing but that truncated one-liner
+for anything past 5 matches. Fixed the same way `select_sample` already
+solved the identical problem for plain sample info: mirror the full match
+list into `#params` too, which is visible in both view modes — `preset N`
+/ name pairs, non-editable (`_current_param_ids = []`, same guard
+`action_edit_value` already has for other borrowed-`#params` rows).
+
+**Third live-caught follow-up, live-hardware-only (never surfaced
+synthetically), took three attempts before the actual root cause was
+found: the sample-name early-stop fix above still didn't bail out early
+on real hardware.** Reported live: S195 was the first genuinely empty
+sample slot on the bank in hand, with nothing after it, yet the
+sample-name pass still ran the complete 0-999 range, twice over across
+two different guessed fixes. **First attempt** assumed the device pads
+an empty slot with plain ASCII spaces and checked `fetched.strip()` for
+blankness — still ran the full range live. **Second attempt** assumed
+some other non-whitespace filler (NUL, `0xFF`, decode-replacement
+garbage) and checked for the absence of any letter/digit — also still
+ran the full range live. **Actual root cause**, found only by directly
+probing the raw wire reply instead of guessing a third byte pattern: an
+empty sample slot's `SAMPLE_NAME` reply is a completely normal,
+well-formed frame containing the literal, human-readable placeholder
+name **`"Empty Sample"`** — confirmed for every unused slot probed, 0
+through 999 — and `PRESET_NAME` has the identical device-wide
+convention, replying `"Empty Preset"` for an unused preset. Both earlier
+guesses failed for the same reason: that string is neither blank nor
+free of letters, so neither heuristic could tell it apart from a real
+name without ever having been checked against what the device actually
+sends. **Fixed** by comparing the fetched sample name (case-folded,
+stripped) against this exact placeholder and treating a match as empty
+— `eosremote.app._EMPTY_SAMPLE_NAME`. **Verified live**, precisely: a
+direct, read-only run of the app's own sweep against the real E4XT
+Ultra stopped the sample-name pass at sample 204 — exactly 195 (the
+first empty slot) plus the default 10-consecutive-empty gap. `get_preset_name`
+wasn't touched at any point: its own early-stop signal already comes
+from the voice walk (§12), never from name-lookup success, so it was
+never exposed to this failure mode in the first place — though it does
+mean the plain preset/sample bank browser has always displayed
+"Empty Preset"/"Empty Sample" as literal text for unused slots, a
+pre-existing cosmetic quirk not introduced by cache-all and not yet
+addressed. Full account: `docs/RESOLUTION_NOTES.md` §13.
+
+**Fourth live-caught follow-up: `cache_depth = "full"` cached each
+preset's own data but not any voice's, so `v` (browse voices) still did a
+lot of fresh MIDI work post-sweep.** Reported live: preset selection had
+gotten instant, but browsing into a voice hadn't — each voice's own
+146-parameter group was never part of the sweep at any depth. Asked
+whether to fold this into `"full"` depth, add a separate depth level, or
+leave it out for now; chose folding it into `"full"` (it's already the
+"fetch everything" tier). `_run_full_sweep` now also fetches every
+voice's parameter group during the same per-voice walk that already
+determines zone/sample structure — `EosRemoteApp._voice_details`, keyed
+by `(preset, voice)`, storing `(sample numbers, param values)` so
+`_load_voice_detail` can skip *both* the zone re-walk and the param
+fetch on a cache hit, not just the latter. Structurally the most
+expensive addition yet — one batched request per **voice**, not per
+preset — so `"full"`-depth sweeps on banks with many multi-voice presets
+(drum kits, layered patches) will take noticeably longer than before this
+fix; `"structure"` depth is unaffected and remains the cheaper,
+voice-params-excluded tier. Cleared uniformly by
+`_invalidate_write_sensitive_caches`, same as every other cache-all
+cache.
+
+**Live-caught: the preset/sample pane only ever showed one fetched
+window, with `g` (goto) as the only way to reach past it — not a
+regression, this has been true since the very first commit, but easy not
+to know exists.** Reported live as "presets and samples only show the
+first 50 entries now — and no way to get further down"; confirmed `g`
+does work, but the user recalled other navigation existing before. Two
+additions, not mutually exclusive:
+
+- **Infinite-scroll extend**: scrolling near the bottom of the currently
+  loaded rows — by arrow keys, mouse wheel, or anything else that moves
+  the cursor, not a dedicated key — fetches and *appends* the next
+  `BROWSER_EXTEND_CHUNK = 50` entries in the background
+  (`EosRemoteApp._extend_bank_page`, triggered from
+  `on_data_table_row_highlighted` once the cursor is within
+  `BROWSER_EXTEND_THRESHOLD = 10` of the end of what's loaded). Reuses
+  `_catalog_cache`/`_catalog_scanned_upto` first if a cache-all sweep
+  already covers the range — no MIDI at all in that case. One in-flight
+  extend per bank at a time (`self._extending`), guarded on the UI thread
+  before the background worker is dispatched, not inside it.
+- **`PageDown`/`PageUp`**: jump a whole page forward/back, replacing the
+  page (same as `g`, just without typing a number). `DataTable` already
+  binds these two keys itself (scrolling the cursor within whatever rows
+  are currently loaded) — overriding them on the shared
+  `_FillWidthDataTable` class would have also stolen them from the
+  146-row Parameters table, where that built-in scrolling is exactly
+  what's needed. Fixed by giving the bank browser its own subclass,
+  `_BankBrowserTable`, that redefines just those two keys for itself.
+
+**`a` — cache-all: one deliberate sweep filling every cache the app has,
+built directly on top of `u`'s reverse-lookup sweep rather than as a
+separate walk.** Motivation: every cache before this was narrow — the
+paged bank browser only ever held its currently-visible window, the
+single-slot preset-overview cache only remembered the *last* preset
+viewed, and `u`'s own full-bank sweep threw away almost everything it
+fetched, keeping only the sample→preset mapping. So the same preset's
+voices/zones got re-walked over MIDI every time it was revisited, and a
+complete sweep couldn't be reused for anything but the one sample that
+triggered it. `EosRemoteApp._run_full_sweep(depth)` is now the single
+shared walk both `u` (always at `"structure"` depth, for one sample) and
+`a` (`action_cache_all`, at the configured depth, for everything) run —
+returning a dict the caller decides whether to promote into the real
+caches (`EosRemoteApp._promote_sweep_result`) or, for a cancelled sweep,
+discard (same "no way to tell 'not found' from 'not reached'" reasoning
+`u` already had). Three depths, `cache_depth` in `config.toml`:
+`"names"` (preset + sample name catalogs only — cheap, and, having no
+voice signal to drive the early-stop heuristic from, always a complete,
+uninterrupted sweep regardless of the configured gap), `"structure"`
+(adds the voice/zone/sample walk — `_preset_overviews` keyed by every
+preset now, not just one, and the `u` index), `"full"` (**default** —
+also each preset's GLOBAL values, one batched `get_parameters` call per
+preset). `cache_all_on_startup = true` runs it automatically right after
+the first bank page loads; both settings are read-only from `config.toml`
+(no `save_*`, matching `sample_usage_early_stop`) and skipped for
+`--demo`, same "demo touches no real local state" convention as the
+other view/scan settings — the `a` key itself still works in demo.
+**Deliberately never persisted to disk**: a front-panel edit is invisible
+to this app, so a saved cache could confidently serve data that no longer
+matches the device — every launch genuinely re-scans.
+
+A real gap surfaced while wiring this up: `select_preset` (Enter/
+double-click) had *never* consulted the preset-overview cache at all —
+only returning from a voice/link view or the Sample bank did
+(`_show_or_reload_preset_overview`). With only ever one preset cached at
+a time this didn't matter much, but once `_preset_overviews` became a
+real multi-preset dict (keyed by preset number, filled in wholesale by a
+cache-all sweep), a plain preset selection clearly needed to check it
+too — otherwise the entire feature would do nothing for the most common
+navigation path. Fixed by routing `select_preset` through the same
+`_show_or_reload_preset_overview` reuse logic; `r` (`action_refresh`)
+still forces a genuine re-fetch regardless, calling `_load_preset_overview`
+directly. A `"structure"`-depth cache entry (no GLOBAL values) is upgraded
+to a full one in place on first access rather than re-walking everything
+just to fetch the missing globals (`_load_preset_globals_only`).
+
+`load_bank_page` (the paged bank browser) also consults the same
+catalog-name cache before hitting the device for a window it's never
+paged to on its own — `_catalog_scanned_upto` tracks how far each bank
+has actually been swept (a sparse `{number: name}` dict can't otherwise
+tell "no name here" from "not scanned yet"). `action_refresh` (`r`)
+passes `force=True` to bypass this deliberately, so an explicit refresh
+still means a real one.
+
+`_invalidate_write_sensitive_caches` clears every one of these caches
+uniformly on any write — a parameter edit, a rename, or a Master action —
+same "don't reason out which specific writes are safe to leave alone"
+principle already applied to the preset-overview and sample-usage caches
+before this.
 
 **How "is this voice a multisample, and how many zones" is actually
 determined** (not from `voice_num_szones` — see RESOLUTION_NOTES §11 for
@@ -324,6 +494,28 @@ for the Preset pane (`BROWSER_MIN_WINDOW`/`BROWSER_FETCH_MULTIPLIER`/
 `BROWSER_RESIZE_SETTLE`, `_desired_browser_window`, `_settle_browser_resize`)
 unchanged — only demo/pytest-verified again here, not re-tried live, since
 this branch's work happened without hardware access.
+
+**Fixed: the key-hint bar now wraps to as many lines as the terminal width
+needs, instead of Textual's built-in `Footer`.** Now that `a` (cache-all)
+joined `q p s g r o v l u c e m` plus `enter`/`escape`, `Footer` (hardcoded
+to `height: 1` with horizontal scroll on overflow, not wrap — see
+`textual/widgets/_footer.py`'s `Footer`/`FooterKey` `DEFAULT_CSS`) was
+getting crowded, clipping/scrolling entries instead of reflowing them.
+Replaced with `eosremote.app._KeyHints`, a plain `Static` that folds its
+text to `self.size.width` via a new `wrap_blocks` helper — **ported from
+the sibling k2kremote project** (`k2kremote/app.py`'s `wrap_blocks`, same
+author, GPL-2.0-or-later; see `LICENSE`'s third-party table, updated
+accordingly), which solved the identical problem for its own legend.
+Unlike k2kremote's separate `keymap.LEGEND_BLOCKS` table, the legend text
+here is derived directly from `BINDINGS` (`EosRemoteApp._legend_blocks`,
+`f"{key} {description}"` for every binding with `show=True`) — one source
+of truth for both key dispatch and the displayed hint, nothing to keep in
+sync by hand. Re-folds on its own `on_resize`, same per-widget pattern
+already used by `_FillWidthDataTable`'s column-stretch, rather than
+k2kremote's App-level `on_resize` override. Not a fixed two rows — however
+many lines the fold actually needs at the current width and binding
+count (confirmed 2 at 100 columns with the current 14 bindings; 1 on a
+wide terminal, 3+ on a narrow one).
 
 ## Dump field order vs. E4B_FORMAT.md — partially verified
 

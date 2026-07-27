@@ -27,17 +27,26 @@ eos/messages.py, eos/params.py
   wire-protocol facts (command bytes, parameter ids, ranges, display-conversion
   formulas) are used, as data. Released under GPL-2.0-or-later.
 
-eosremote/midi_bridge.py
-  The throttled-output queue, the MultiIn merged-input facade, ALSA-client
-  leak fix, and port-enumeration helpers are ported from the sibling
-  k2kremote project (k2kremote/midi_bridge.py), which itself ports them from:
+eos/bridge.py
+  The throttled-output queue (ThrottledOut), the MultiIn merged-input facade,
+  the ALSA-client leak fix, and the MIDI port-enumeration helpers are ported
+  from the sibling k2kremote project (k2kremote/midi_bridge.py), which itself
+  ports them from:
     mpc2emu (tests/re_banks/krz_sysex_live.py)
     Copyright (C) 2025-2026  mpc2emu contributors
     License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
   Both k2kremote and mpc2emu are sibling projects by the same author, also
-  released under GPL-2.0-or-later.
+  released under GPL-2.0-or-later. The rest of this file (EosBridge, the
+  config.toml read/write helpers) is original work.
 
-All other files (eos/bridge.py, eosremote/app.py, eosremote/refresh.py, tests)
+eosremote/app.py
+  Mostly original work, except: the key-hint legend's fold-to-terminal-width
+  algorithm (wrap_blocks) is ported from the sibling k2kremote project
+  (k2kremote/app.py's wrap_blocks), same author, released under
+  GPL-2.0-or-later.
+
+All other files (eos/__init__.py, eosremote/__init__.py, eosremote/cli.py,
+eosremote/demo.py, tests/)
   Original work. Released under GPL-2.0-or-later.
 
 -------------------------------------------------------------------------------

@@ -155,6 +155,29 @@ def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
     return None
 
 
+# --- "cache all data" sweep (eosremote.app's 'a' key / startup option) -------
+# A full bank sweep (same walk as the sample-usage lookup above, but keeping
+# everything it fetches instead of just the sample->preset mapping) is
+# expensive — several minutes on a fully-populated bank — so both how deep it
+# goes and whether it runs unattended at startup are user-edited, not
+# app-written, same convention as sample_usage_early_stop above. Never
+# persisted to disk *by* the app: the cache itself is deliberately in-memory
+# only (see eosremote.app.EosRemoteApp's cache fields) since a front-panel
+# edit is invisible to us and a stale disk cache would confidently lie.
+
+def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
+    value = _read_config_dict(path).get("cache_all_on_startup")
+    return value if isinstance(value, bool) else None
+
+
+def load_cache_depth(path: str = DEFAULT_CONFIG_PATH) -> Optional[str]:
+    """Returns "names", "structure", "full", or None if unset/invalid."""
+    value = _read_config_dict(path).get("cache_depth")
+    if isinstance(value, str) and value.strip().lower() in ("names", "structure", "full"):
+        return value.strip().lower()
+    return None
+
+
 def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[bytes]:
     """Probe exactly one send/receive port pair for an E-mu Device Inquiry
     reply. Returns the raw reply bytes, or None if either port no longer

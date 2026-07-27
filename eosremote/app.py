@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
 #
-# This file is part of eosremote. Original work. GPL-2.0-or-later.
+# This file is part of eosremote. Mostly original work, GPL-2.0-or-later,
+# except: the key-hint legend's fold-to-terminal-width helper (wrap_blocks)
+# is ported from the sibling k2kremote project (k2kremote/app.py's
+# wrap_blocks), same author, also GPL-2.0-or-later — see LICENSE.
 #
 # The general Textual-app shape (a title/status bar, modal arm-then-fire
 # screens for destructive operations, --demo mode) follows the pattern
-# established by the sibling k2kremote project, though none of its code is
-# copied — this app has no LCD to mirror and no continuous refresh loop; it
-# is a plain on-demand request/response editor.
+# established by k2kremote, though otherwise none of its code is copied —
+# this app has no LCD to mirror and no continuous refresh loop; it is a
+# plain on-demand request/response editor.
 
 """eosremote — a Textual editor for the EOS remote editor protocol.
 
@@ -49,13 +52,14 @@ import math
 import threading
 from typing import Callable, Dict, List, Optional, Tuple
 
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.theme import Theme
-from textual.widgets import DataTable, Footer, Header, Input, Static
+from textual.widgets import DataTable, Header, Input, Static
 
 from eos import bridge as bridge_mod
 from eos import messages as m
@@ -72,6 +76,44 @@ from eosremote.demo import DemoBridge
 BROWSER_MIN_WINDOW = 16
 BROWSER_FETCH_MULTIPLIER = 1.5
 BROWSER_RESIZE_SETTLE = 0.4
+
+# Infinite-scroll extension: the presets/samples pane only ever shows one
+# fetched window at a time (0-999 is the full PRESET_SELECT wire range, far
+# more than any one page), and 'g' (goto) was the only way to reach past it
+# -- live-caught as a real gap since it's easy not to know 'g' exists.
+# Approaching the bottom of the loaded rows (within this many, by keyboard
+# or otherwise) fetches the next chunk in the background and appends it,
+# rather than replacing the page -- ordinary DataTable scrolling then keeps
+# working across the new rows with no further action needed.
+BROWSER_EXTEND_THRESHOLD = 10
+BROWSER_EXTEND_CHUNK = 50
+
+# Block separator in the key-hint legend (see _KeyHints/wrap_blocks below).
+_LEGEND_SEP = " · "
+
+
+def wrap_blocks(blocks: List[str], width: int, sep: str = _LEGEND_SEP) -> str:
+    """Pack ``blocks`` into lines no wider than ``width``, joined by ``sep``.
+
+    Ported from the sibling k2kremote project (k2kremote/app.py's
+    ``wrap_blocks``, same author, GPL-2.0-or-later — see LICENSE), which
+    solved the identical problem for its own key-hint legend. Breaks
+    happen only *between* blocks, never inside one, so a binding like
+    "u Find usage" is never split mid-label; a block wider than ``width``
+    on its own simply occupies its own line rather than being cut.
+    """
+    lines: List[str] = []
+    current = ""
+    for block in blocks:
+        candidate = block if not current else current + sep + block
+        if width and len(candidate) > width and current:
+            lines.append(current)
+            current = block
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
 
 # The full PRESET_SELECT wire range (spec'd 0-999), not the 0-127 default
 # catalog_presets/catalog_samples use elsewhere in this codebase. That
@@ -122,6 +164,13 @@ def _group_param_ids(group: str) -> List[int]:
     prefix = {"voice": "voice.", "global": "global", "link": "link"}[group]
     return sorted(pid for pid, param in p.PARAMETERS.items() if param.group.startswith(prefix))
 
+
+_VOICE_PARAM_IDS = _group_param_ids("voice")  # the 146-id group, same every voice/preset
+
+# Confirmed live by directly probing the raw wire reply (see
+# docs/RESOLUTION_NOTES.md §13): an unused sample slot's get_sample_name
+# returns this exact placeholder, not a blank name and not an exception.
+_EMPTY_SAMPLE_NAME = "Empty Sample"
 
 _MULTISAMPLE_SENTINEL = 0x3FFF  # spec: voice-level E4_GEN_SAMPLE == this means multisample
 _NO_SUCH_VOICE_MARKER = 0x3FFE  # empirically: this voice index does not exist on this preset
@@ -380,6 +429,77 @@ class _FillWidthDataTable(DataTable):
             self.resize_callback()
 
 
+class _BankBrowserTable(_FillWidthDataTable):
+    """The #presets/#samples bank browser specifically -- ``DataTable``
+    itself already binds PageUp/PageDown to scroll the cursor within
+    whatever rows are currently loaded (``page_up``/``page_down``, both
+    ``show=False``); redefining the same keys here overrides that just for
+    this table; overriding on the shared ``_FillWidthDataTable`` instead
+    would have also stolen PageUp/PageDown from the 146-row Parameters
+    table, where DataTable's own paging is exactly what's needed."""
+
+    BINDINGS = [
+        Binding("pageup", "prev_bank_page", "Prev page", show=False),
+        Binding("pagedown", "next_bank_page", "Next page", show=False),
+    ]
+
+    def action_prev_bank_page(self) -> None:
+        self.app.action_prev_page()
+
+    def action_next_bank_page(self) -> None:
+        self.app.action_next_page()
+
+
+class _KeyHints(Static):
+    """The persistent, multi-line key-binding legend at the bottom of the
+    screen.
+
+    Replaces Textual's built-in ``Footer``: that widget is hardcoded to a
+    single, horizontally-scrolling line (see ``textual.widgets._footer``'s
+    ``Footer``/``FooterKey`` ``DEFAULT_CSS``, ``height: 1``) rather than
+    wrapping, so bindings started getting clipped/scrolled off once this
+    app's binding count grew past what one line comfortably holds. This
+    folds itself to the terminal's actual width instead (via wrap_blocks),
+    onto as many lines as that width actually needs — 1 on a wide terminal,
+    more on a narrow one — rather than a fixed line count.
+
+    ``Footer`` also colored its key/description halves distinctly (its own
+    ``footer-key--key``/``footer-key--description`` component classes) —
+    losing that when it was dropped made the legend look flat next to the
+    rest of the E4XT-themed app. Each block is re-split back into its key
+    and description (recovered from the folded plain text — every binding
+    here is a single space-free token, so splitting on the first space is
+    unambiguous) and re-styled: the key in the theme's accent red, the
+    description in its muted secondary tone.
+    """
+
+    DEFAULT_CSS = "_KeyHints { height: auto; }"
+
+    def __init__(self, blocks: List[str], *, id: Optional[str] = None):
+        super().__init__(id=id)
+        self._blocks = blocks
+
+    def on_mount(self) -> None:
+        self._render_hints()
+
+    def on_resize(self, event) -> None:
+        self._render_hints()
+
+    def _render_hints(self) -> None:
+        folded = wrap_blocks(self._blocks, self.size.width)
+        text = Text(no_wrap=True)
+        for line_num, line in enumerate(folded.split("\n")):
+            if line_num:
+                text.append("\n")
+            for block_num, block in enumerate(line.split(_LEGEND_SEP)):
+                if block_num:
+                    text.append(_LEGEND_SEP, style="dim")
+                key, _, description = block.partition(" ")
+                text.append(key, style=f"bold {E4XT_THEME.accent}")
+                text.append(" " + description, style=E4XT_THEME.secondary)
+        self.update(text)
+
+
 # --- main app ----------------------------------------------------------------
 
 class EosRemoteApp(App):
@@ -415,6 +535,7 @@ class EosRemoteApp(App):
         Binding("l", "browse_links", "Links"),
         Binding("u", "find_sample_usage", "Find usage"),
         Binding("c", "clear_sample_usage_cache", "Clear usage cache"),
+        Binding("a", "cache_all", "Cache all"),
         Binding("e", "toggle_view", "Extended view"),
         Binding("escape", "back_to_preset", "Back to preset"),
         Binding("m", "master_menu", "Master"),
@@ -451,35 +572,71 @@ class EosRemoteApp(App):
         self.browser_window = BROWSER_MIN_WINDOW
         self._resize_timer = None
         self._bank_states: Dict[str, _BankState] = {"preset": _BankState(), "sample": _BankState()}
+        # Guards the infinite-scroll background extend below (one in-flight
+        # fetch per bank at a time) -- set on the UI thread the moment a
+        # fetch is dispatched, cleared once its result is applied.
+        self._extending: Dict[str, bool] = {"preset": False, "sample": False}
 
         # What's currently shown in the Parameters pane, so a value edit can
         # refresh the same set without re-deriving "global vs. this voice".
         self._current_param_ids: List[int] = []
         self._current_param_label: str = "global"
 
-        # Cached result of the last _load_preset_overview fetch (one preset
-        # of "walk every voice/zone" work) — reused when navigating back
-        # from a voice/link to the *same* preset instead of re-walking every
-        # voice/zone over MIDI again for data that hasn't changed. Cleared
-        # by anything that could actually invalidate it: a parameter write
-        # (could change which sample a zone points at) or a Master action.
-        self._preset_overview_cache: Optional[
-            Tuple[int, int, Dict[int, int], List[int], Dict[int, int],
-                 List[Tuple[int, str, str]]]] = None
+        # Cached result of the last _load_preset_overview fetch per preset
+        # (one preset of "walk every voice/zone" work), keyed by preset
+        # number — reused when navigating back to a preset (from a voice/
+        # link, or from the Sample bank) instead of re-walking its voices/
+        # zones over MIDI again for data that hasn't changed. A "structure"-
+        # depth cache-all entry (see below) stores None for global_values
+        # (index 3 of the tuple) — _show_or_reload_preset_overview fetches
+        # just those on first access rather than treating the entry as
+        # absent. Cleared by anything that could actually invalidate it: a
+        # parameter write (could change which sample a zone points at) or a
+        # Master action.
+        self._preset_overviews: Dict[int, Tuple[
+            int, Dict[int, int], List[int], Optional[Dict[int, int]],
+            List[Tuple[int, str, str]]]] = {}
 
-        # Opt-in full-bank reverse lookup ("which presets use this sample")
-        # — see action_find_sample_usage. Deliberately not automatic: a full
-        # sweep is a per-voice/zone walk repeated across every preset, easily
-        # a minute or more of sequential MIDI round-trips. A *complete* sweep
-        # builds a reusable {sample: [(preset, name), ...]} index for every
-        # sample it saw along the way, not just the one that triggered it —
-        # every later lookup is then instant, no MIDI at all, until
-        # something is actually written (same invalidation as the preset-
-        # overview cache above). A cancelled/partial sweep's findings are
-        # shown once but not persisted as this index — no way to tell "not
-        # found" from "not scanned yet" for whatever it didn't reach.
-        self._sample_scan_active = False
-        self._cancel_sample_scan = False
+        # Each voice's own 146-param group, keyed by (preset, voice) --
+        # (sample numbers, param values) -- filled in only by a "full"-
+        # depth cache-all sweep (see _run_full_sweep), since fetching this
+        # for every voice of every preset is itself the single most
+        # expensive addition to that sweep. Live-caught: even after a
+        # "full" sweep, browsing into a voice ('v') still re-fetched this
+        # group fresh every time -- selecting a *preset* had gotten fast,
+        # but a voice's own params hadn't, which didn't match what "cache
+        # ALL data" implies. _load_voice_detail consults this first.
+        self._voice_details: Dict[Tuple[int, int], Tuple[List[int], Dict[int, int]]] = {}
+
+        # Full preset/sample name catalogs, keyed by bank ("preset"/
+        # "sample") — filled in by a cache-all sweep (see _run_full_sweep
+        # below); consulted by load_bank_page before it hits the device for
+        # a page it already has in hand. Sparse (only numbers with a real
+        # name), so a bare "is this number in the dict" can't tell "no name
+        # here" from "not scanned yet" — _catalog_scanned_upto tracks how
+        # far each bank has actually been swept (exclusive upper bound) so
+        # load_bank_page knows whether a requested window is fully covered.
+        self._catalog_cache: Dict[str, Dict[int, str]] = {"preset": {}, "sample": {}}
+        self._catalog_scanned_upto: Dict[str, int] = {"preset": 0, "sample": 0}
+
+        # Opt-in full-bank sweep, shared by two entry points: 'u' (find-
+        # sample-usage) always sweeps at "structure" depth for one specific
+        # sample; 'a' (cache-all, action_cache_all) sweeps at the configured
+        # depth and keeps everything for every preset/sample. Deliberately
+        # not automatic by default: a full sweep is a per-voice/zone walk
+        # repeated across every preset, easily a minute or more of
+        # sequential MIDI round-trips — see _run_full_sweep. A *complete*
+        # sweep (or one that stops via the early-stop heuristic, as opposed
+        # to a user cancellation) builds a reusable {sample: [(preset,
+        # name), ...]} index for every sample it saw along the way, not
+        # just the one that triggered it — every later lookup is then
+        # instant, no MIDI at all, until something is actually written
+        # (same invalidation as the preset-overview cache above). A
+        # cancelled/partial sweep's findings are shown once (for 'u') but
+        # never promoted into these caches — no way to tell "not found"
+        # from "not scanned yet" for whatever it didn't reach.
+        self._scan_active = False
+        self._cancel_scan = False
         self._sample_usage_index: Dict[int, List[Tuple[int, str]]] = {}
         self._sample_usage_scanned_range: Optional[range] = None
         # None = "fullscan" (early-stop disabled); an int = that many
@@ -494,16 +651,33 @@ class EosRemoteApp(App):
         else:
             self._sample_usage_early_stop_gap = SAMPLE_USAGE_EARLY_STOP_DEFAULT
 
+        # Cache-all ('a' key): how deep a sweep goes, and whether one runs
+        # unattended right after startup's first bank page loads. Both
+        # user-edited in config.toml (eos.bridge.load_cache_depth/
+        # load_cache_all_on_startup), never read for --demo, same reasoning
+        # as compact_view/sample_usage_early_stop above.
+        self._cache_all_on_startup: bool = (
+            False if self.demo else bool(bridge_mod.load_cache_all_on_startup(self._view_config_path)))
+        configured_depth = None if self.demo else bridge_mod.load_cache_depth(self._view_config_path)
+        self._cache_depth: str = configured_depth or "full"
+
         self.last_status: str = ""  # exposed for tests
 
     def _bank_state(self, bank: Optional[str] = None) -> _BankState:
         return self._bank_states[bank if bank is not None else self.bank]
 
     # -- layout ---------------------------------------------------------
+    def _legend_blocks(self) -> List[str]:
+        # BINDINGS is the single source of truth for both key dispatch and
+        # the legend text — unlike k2kremote's separate LEGEND_BLOCKS table,
+        # there is no second list to keep in sync by hand. `show=False`
+        # entries (e.g. "enter") are hidden the same way Footer hid them.
+        return [f"{binding.key} {binding.description}" for binding in self.BINDINGS if binding.show]
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield Horizontal(
-            _FillWidthDataTable(id="presets"),
+            _BankBrowserTable(id="presets"),
             _FillWidthDataTable(id="voices"),
             _FillWidthDataTable(id="params"),
             _FillWidthDataTable(id="samples"),
@@ -511,7 +685,7 @@ class EosRemoteApp(App):
             classes="compact" if self.compact_view else "",
         )
         yield Static("", id="status")
-        yield Footer()
+        yield _KeyHints(self._legend_blocks(), id="keyhints")
 
     def action_toggle_view(self) -> None:
         self.compact_view = not self.compact_view
@@ -562,6 +736,11 @@ class EosRemoteApp(App):
             self.set_status(f"connected: {self.bridge.description}"
                             if hasattr(self.bridge, "description") else "connected (demo)")
             self.load_bank_page("preset", 0)
+            self._maybe_cache_all_on_startup()
+
+    def _maybe_cache_all_on_startup(self) -> None:
+        if self._cache_all_on_startup:
+            self._start_cache_all(self._cache_depth)
 
     def on_unmount(self) -> None:
         if self.bridge is not None:
@@ -631,14 +810,19 @@ class EosRemoteApp(App):
         self.bridge = bridge
         self.call_from_thread(self.set_status, f"connected: {bridge.description}")
         self.call_from_thread(self.load_bank_page, "preset", 0)
+        self.call_from_thread(self._maybe_cache_all_on_startup)
 
     # -- bank browser (presets or samples) -----------------------------------
     @staticmethod
     def _catalog_fn(bridge, bank: str):
         return bridge.catalog_presets if bank == "preset" else bridge.catalog_samples
 
+    def _catalog_cache_covers(self, bank: str, wanted: range) -> bool:
+        return wanted.stop <= self._catalog_scanned_upto.get(bank, 0)
+
     @work(thread=True)
-    def load_bank_page(self, bank: str, start: int, cursor: Optional[int] = None) -> None:
+    def load_bank_page(self, bank: str, start: int, cursor: Optional[int] = None,
+                       force: bool = False) -> None:
         if self.bridge is None:
             return
         # Captured once up front: self.browser_window may change concurrently
@@ -646,6 +830,14 @@ class EosRemoteApp(App):
         # results must agree on the same window size.
         window = self.browser_window
         label = "presets" if bank == "preset" else "samples"
+        wanted = range(start, start + window)
+        if not force and self._catalog_cache_covers(bank, wanted):
+            # A cache-all sweep already scanned this whole window — no need
+            # to hit the device for names already in hand.
+            cache = self._catalog_cache[bank]
+            names = {number: cache[number] for number in wanted if number in cache}
+            self.call_from_thread(self._show_bank_page, bank, start, window, names, None, cursor)
+            return
         self.call_from_thread(self.set_status, f"loading {label} {start}-{start + window - 1} ...")
         try:
             with self._bridge_lock:
@@ -685,6 +877,57 @@ class EosRemoteApp(App):
             table.move_cursor(row=cursor - start)
         label = "presets" if bank == "preset" else "samples"
         self.set_status(status if status is not None else f"{label} {start}-{start + window - 1}")
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.data_table.id != "presets":
+            return
+        self._maybe_extend_bank_page(event.cursor_row, event.data_table.row_count)
+
+    def _maybe_extend_bank_page(self, cursor_row: int, row_count: int) -> None:
+        if self.bridge is None:
+            return
+        bank = self.bank
+        state = self._bank_state(bank)
+        if self._extending.get(bank) or state.cache_range is None:
+            return
+        if state.cache_range.stop >= SAMPLE_USAGE_SCAN_RANGE.stop:
+            return  # already fetched to the end of the wire range
+        if cursor_row < row_count - BROWSER_EXTEND_THRESHOLD:
+            return
+        self._extending[bank] = True
+        self._extend_bank_page(bank)
+
+    @work(thread=True)
+    def _extend_bank_page(self, bank: str) -> None:
+        state = self._bank_state(bank)
+        extend_range = range(state.cache_range.stop,
+                             min(state.cache_range.stop + BROWSER_EXTEND_CHUNK,
+                                SAMPLE_USAGE_SCAN_RANGE.stop))
+        try:
+            cache = self._catalog_cache[bank]
+            if extend_range.stop <= self._catalog_scanned_upto.get(bank, 0):
+                # A cache-all sweep already covers this range -- no MIDI at all.
+                names = {number: cache[number] for number in extend_range if number in cache}
+            else:
+                with self._bridge_lock:
+                    names = self._catalog_fn(self.bridge, bank)(extend_range)
+        except Exception as exc:
+            self._extending[bank] = False
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        self.call_from_thread(self._append_bank_rows, bank, extend_range, names)
+
+    def _append_bank_rows(self, bank: str, extend_range: range, names: Dict[int, str]) -> None:
+        state = self._bank_state(bank)
+        state.cache.update(names)
+        state.cache_range = range(state.cache_range.start, extend_range.stop)
+        self._extending[bank] = False
+        if bank != self.bank:
+            return  # switched banks while this was loading -- cache is still updated for later
+        table = self.query_one("#presets", _FillWidthDataTable)
+        for number in extend_range:
+            table.add_row(str(number), names.get(number, ""), key=str(number))
+        table.call_after_refresh(table._stretch_last_column)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.row_key.value is None:
@@ -764,15 +1007,38 @@ class EosRemoteApp(App):
             self._show_or_reload_preset_overview()
 
     def _show_or_reload_preset_overview(self) -> None:
-        cache = self._preset_overview_cache
-        if cache is not None and cache[0] == self.current_preset:
+        cached = self._preset_overviews.get(self.current_preset)
+        if cached is not None and cached[3] is not None:
             # Nothing about drilling into a voice/link (or switching Sample
             # bank and back) changes what the preset-level view would
             # recompute — reuse it instead of re-walking every voice/zone
             # over MIDI again.
-            self._show_preset_overview(*cache)
+            self._show_preset_overview(self.current_preset, *cached)
+        elif cached is not None:
+            # A "structure"-depth cache-all sweep walked this preset's
+            # voices/zones/samples but deliberately skipped its GLOBAL
+            # values (that's the whole point of that depth level) — fetch
+            # just those instead of redoing everything else over MIDI.
+            self._load_preset_globals_only(self.current_preset, cached)
         else:
             self._load_preset_overview(self.current_preset)
+
+    @work(thread=True)
+    def _load_preset_globals_only(self, preset: int, cached: Tuple) -> None:
+        voice_count, zone_counts, global_ids, _, sample_rows = cached
+        try:
+            with self._bridge_lock:
+                self.bridge.set_parameter(_PRESET_SELECT, preset)
+                global_values = self.bridge.get_parameters(global_ids)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        # Upgrade the cached entry in place — global values fetched once are
+        # then reused the same way a "full"-depth sweep's would be.
+        self._preset_overviews[preset] = (voice_count, zone_counts, global_ids,
+                                          global_values, sample_rows)
+        self.call_from_thread(self._show_preset_overview, preset, voice_count, zone_counts,
+                              global_ids, global_values, sample_rows)
 
     def action_show_presets_bank(self) -> None:
         self._switch_bank("preset")
@@ -810,9 +1076,29 @@ class EosRemoteApp(App):
         else:
             self.select_sample(number)
 
+    def action_next_page(self) -> None:
+        self._step_page(1)
+
+    def action_prev_page(self) -> None:
+        self._step_page(-1)
+
+    def _step_page(self, direction: int) -> None:
+        # A full jump, unlike the infinite-scroll extend above -- replaces
+        # the page rather than growing it, the same as 'g' (goto) already
+        # does, just without needing to know or type an exact number.
+        if self.bridge is None:
+            return
+        state = self._bank_state()
+        last_start = max(0, SAMPLE_USAGE_SCAN_RANGE.stop - self.browser_window)
+        new_start = max(0, min(state.window_start + direction * self.browser_window, last_start))
+        if new_start == state.window_start:
+            self.set_status("already at the first page" if direction < 0 else "already at the last page")
+            return
+        self.load_bank_page(self.bank, new_start)
+
     def action_refresh(self) -> None:
         state = self._bank_state()
-        self.load_bank_page(self.bank, state.window_start)
+        self.load_bank_page(self.bank, state.window_start, force=True)
         if self.bank == "preset" and self.current_preset is not None:
             if self.current_voice is not None:
                 self._load_voice_detail(self.current_preset, self.current_voice)
@@ -826,7 +1112,15 @@ class EosRemoteApp(App):
         self.current_preset = preset
         self.current_voice = None
         self.current_link = None
-        self._load_preset_overview(preset)
+        # Reuses _preset_overviews the same way returning from a voice/link
+        # or the Sample bank already did (_show_or_reload_preset_overview)
+        # — a cache-all sweep (see action_cache_all) has generally already
+        # walked every preset, and a plain re-select shouldn't re-walk one
+        # over MIDI again just because it came from a fresh click/goto/enter
+        # rather than an "escape" back. An explicit 'r' still forces a real
+        # refetch regardless (action_refresh calls _load_preset_overview
+        # directly, bypassing this).
+        self._show_or_reload_preset_overview()
 
     @work(thread=True)
     def _load_preset_overview(self, preset: int) -> None:
@@ -850,8 +1144,8 @@ class EosRemoteApp(App):
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
-        self._preset_overview_cache = (preset, voice_count, zone_counts,
-                                       global_ids, global_values, sample_rows)
+        self._preset_overviews[preset] = (voice_count, zone_counts, global_ids,
+                                          global_values, sample_rows)
         self.call_from_thread(self._show_preset_overview, preset, voice_count, zone_counts,
                               global_ids, global_values, sample_rows)
 
@@ -884,9 +1178,9 @@ class EosRemoteApp(App):
         # overview when available, rather than re-walking voices just to
         # bound this modal's range (preset_num_voices cannot be trusted at
         # all — see _voice_sample_info's docstring / RESOLUTION_NOTES §12).
-        cache = self._preset_overview_cache
-        if cache is not None and cache[0] == self.current_preset:
-            count = cache[1]
+        cached = self._preset_overviews.get(self.current_preset)
+        if cached is not None:
+            count = cached[0]
         else:
             try:
                 with self._bridge_lock:
@@ -928,6 +1222,19 @@ class EosRemoteApp(App):
 
     @work(thread=True)
     def _load_voice_detail(self, preset: int, voice: int) -> None:
+        cached = self._voice_details.get((preset, voice))
+        if cached is not None:
+            numbers, voice_values = cached
+            with self._bridge_lock:
+                # Only touches the bridge if this voice's samples reference
+                # a name not already in _catalog_cache["sample"] -- normally
+                # a no-op after a "full" sweep, but _resolve_sample_rows can
+                # still fall back to a live get_sample_name, which needs the
+                # same lock as any other MIDI call.
+                sample_rows = self._resolve_sample_rows({voice: numbers})
+            self.call_from_thread(self._show_voice_detail, voice, _VOICE_PARAM_IDS, voice_values,
+                                  sample_rows)
+            return
         self.call_from_thread(self.set_status, f"loading voice V{voice + 1} ...")
         try:
             with self._bridge_lock:
@@ -941,13 +1248,13 @@ class EosRemoteApp(App):
                 # zone's — otherwise voice-only fields (CTUNE, XPOSE, RT_*)
                 # come back as the spec's -1/"not applicable" sentinel.
                 self.bridge.set_parameter(_VOICE_SELECT, voice)
-                voice_ids = _group_param_ids("voice")
-                voice_values = self.bridge.get_parameters(voice_ids)
+                voice_values = self.bridge.get_parameters(_VOICE_PARAM_IDS)
                 sample_rows = self._resolve_sample_rows({voice: numbers})
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
-        self.call_from_thread(self._show_voice_detail, voice, voice_ids, voice_values, sample_rows)
+        self.call_from_thread(self._show_voice_detail, voice, _VOICE_PARAM_IDS, voice_values,
+                              sample_rows)
 
     def _show_voice_detail(self, voice: int, ids: List[int], values: Dict[int, int],
                            sample_rows: List[Tuple[int, str, str]]) -> None:
@@ -1013,9 +1320,9 @@ class EosRemoteApp(App):
         self._show_params(ids, values, f"link L{link + 1}")
 
     def action_back_to_preset(self) -> None:
-        if self._sample_scan_active:
-            self._cancel_sample_scan = True
-            self.set_status("cancelling sample usage scan ...")
+        if self._scan_active:
+            self._cancel_scan = True
+            self.set_status("cancelling scan ...")
             return
         if self.current_preset is None or (self.current_voice is None and self.current_link is None):
             return
@@ -1036,11 +1343,15 @@ class EosRemoteApp(App):
             for number in numbers:
                 users.setdefault(number, set()).add(voice)
         rows = []
+        sample_cache = self._catalog_cache["sample"]
         for number in sorted(users):
-            try:
-                name = self.bridge.get_sample_name(number)
-            except Exception:
-                name = ""
+            if number in sample_cache:
+                name = sample_cache[number]  # already known from a cache-all sweep — no MIDI
+            else:
+                try:
+                    name = self.bridge.get_sample_name(number)
+                except Exception:
+                    name = ""
             voices_label = ",".join(f"V{v + 1}" for v in sorted(users[number]))
             rows.append((number, name, voices_label))
         return rows
@@ -1057,7 +1368,7 @@ class EosRemoteApp(App):
         if self.bank != "sample" or self.current_sample is None:
             self.set_status("select a sample first")
             return
-        if self._sample_scan_active:
+        if self._scan_active:
             self.set_status("a scan is already running ('escape' to cancel)")
             return
         if self._sample_usage_scanned_range == SAMPLE_USAGE_SCAN_RANGE:
@@ -1069,7 +1380,7 @@ class EosRemoteApp(App):
         self._start_find_sample_usage(self.current_sample)
 
     def action_clear_sample_usage_cache(self) -> None:
-        if self._sample_scan_active:
+        if self._scan_active:
             self.set_status("a scan is running ('escape' to cancel first)")
             return
         if not self._sample_usage_index and self._sample_usage_scanned_range is None:
@@ -1081,14 +1392,140 @@ class EosRemoteApp(App):
 
     @work(thread=True)
     def _start_find_sample_usage(self, sample: int) -> None:
-        self._sample_scan_active = True
-        self._cancel_sample_scan = False
+        # 'u' always sweeps at "structure" depth: it needs the voice/zone
+        # walk (to build the sample-usage index) but has no use for GLOBAL
+        # parameter values — same shared sweep 'a' (action_cache_all) uses.
+        result = self._run_full_sweep("structure")
+        matches = result["sample_index"].get(sample, [])
+        if result["cancelled"]:
+            note = f" (cancelled at preset {result['stopped_at']}, partial)"
+        else:
+            self._promote_sweep_result(result)
+            note = self._sweep_note(result)
+        self.call_from_thread(self._show_sample_usage_results, sample, matches, note)
+
+    def _show_sample_usage_results(self, sample: int, matches: List[Tuple[int, str]],
+                                   note: str = "") -> None:
+        samples_table = self.query_one("#samples", _FillWidthDataTable)
+        samples_table.clear()
+        for preset, name in matches:
+            samples_table.add_row(str(preset), name, "", key=str(preset))
+        samples_table.call_after_refresh(samples_table._stretch_last_column)
+
+        # #samples is hidden in compact view (see the "compact" CSS class)
+        # — mirror the same results into #params, which is visible in
+        # *both* view modes, the same way select_sample already borrows it
+        # for read-only sample info instead of leaving compact-view users
+        # with nothing but the status bar's own 5-item truncation.
+        self._current_param_ids = []  # nothing here is a real, editable parameter
+        self._current_param_label = f"sample {sample} usage"
+        params_table = self.query_one("#params", _FillWidthDataTable)
+        params_table.clear()
+        for preset, name in matches:
+            params_table.add_row("—", f"preset {preset}", name, "", key=f"usage_{preset}")
+        params_table.call_after_refresh(params_table._stretch_last_column)
+
+        where = ", ".join(f"{preset} {name!r}" for preset, name in matches[:5])
+        if len(matches) > 5:
+            where += f", +{len(matches) - 5} more — see the Parameters pane"
+        summary = f"sample {sample}: used by {len(matches)} preset(s){note}"
+        self.set_status(f"{summary} — {where}" if matches else summary)
+
+    # -- cache-all: one full-bank sweep filling every cache at once ---------
+    def action_cache_all(self) -> None:
+        if self._scan_active:
+            self.set_status("a scan is already running ('escape' to cancel)")
+            return
+        self._start_cache_all(self._cache_depth)
+
+    @work(thread=True)
+    def _start_cache_all(self, depth: str) -> None:
+        result = self._run_full_sweep(depth)
+        if result["cancelled"]:
+            self.call_from_thread(
+                self.set_status,
+                f"cache-all cancelled at preset {result['stopped_at']}, nothing cached")
+            return
+        self._promote_sweep_result(result)
+        note = self._sweep_note(result)
+        self.call_from_thread(
+            self.set_status,
+            f"cache all ({depth}): {len(result['preset_names'])} preset name(s), "
+            f"{len(result['sample_names'])} sample name(s){note}")
+
+    def _sweep_note(self, result: dict) -> str:
+        if result["stopped_early"]:
+            note = (f" (stopped at preset {result['stopped_at']} after "
+                    f"{result['gap']} consecutive empty presets)")
+        else:
+            note = f" (full sweep to preset {result['stopped_at']})"
+        if result["sample_stopped_early"]:
+            note += (f"; sample names stopped at {result['sample_stopped_at']} "
+                     f"after {result['gap']} consecutive unnamed samples")
+        return note
+
+    def _promote_sweep_result(self, result: dict) -> None:
+        # A fresh sweep's findings are authoritative on their own (complete,
+        # or early-stopped by the accepted heuristic) — replace wholesale
+        # rather than merging into whatever was cached before, so a stale
+        # duplicate row from an earlier partial run can't linger.
+        self._catalog_cache["preset"] = result["preset_names"]
+        self._catalog_cache["sample"] = result["sample_names"]
+        self._catalog_scanned_upto["preset"] = result["stopped_at"] + 1
+        self._catalog_scanned_upto["sample"] = result["sample_stopped_at"] + 1
+        if result["depth"] in ("structure", "full"):
+            self._preset_overviews = result["overviews"]
+            self._sample_usage_index = result["sample_index"]
+            self._sample_usage_scanned_range = SAMPLE_USAGE_SCAN_RANGE
+        if result["depth"] == "full":
+            self._voice_details = result["voice_details"]
+
+    def _run_full_sweep(self, depth: str) -> dict:
+        """One preset-range walk shared by 'u' (always "structure") and 'a'
+        (the configured depth). Fills in as much as ``depth`` calls for and
+        returns it all in a dict for the caller to decide what to do with
+        (promote to the real caches, or, for 'u', just report one sample's
+        matches) — a cancelled sweep's findings must never be promoted (no
+        way to tell "not found" from "not reached" for whatever it didn't
+        get to), so the decision has to stay with the caller.
+
+        "names": preset_names + sample_names only (no voice/zone walk at
+        all, so early-stop has no signal to work from — always a complete,
+        uninterrupted sweep, for both catalogs). "structure": adds the same
+        per-voice/zone walk _load_preset_overview does for one preset,
+        repeated across the range — zone_counts/by_voice resolved into both
+        a preset-keyed overview cache and a sample-keyed usage index —
+        honoring the configured early-stop gap for the preset walk *and*,
+        separately, for the sample-name pass that follows it (bailing after
+        the same number of consecutive nameless samples — a name lookup
+        failing is just as valid an "empty" signal for a sample as no
+        voices is for a preset; a sample-name pass that always ran the full
+        0-999 range regardless of the preset walk having already bailed out
+        looked inconsistent in practice). "full" additionally fetches each
+        preset's GLOBAL parameter values (one batched get_parameters call
+        per preset, not one per parameter) *and* every voice's own 146-id
+        parameter group (_voice_details, keyed by (preset, voice)) — by far
+        the most expensive addition, since it's one batched call per voice,
+        not per preset; live-caught as worth it anyway, since selecting a
+        preset having gotten instant while browsing into any of its voices
+        ('v') still re-fetched fresh every time did not match what "cache
+        ALL data" was supposed to mean.
+        """
+        self._scan_active = True
+        self._cancel_scan = False
         last = SAMPLE_USAGE_SCAN_RANGE.stop - 1
-        gap = self._sample_usage_early_stop_gap  # None = fullscan, no early stop
-        # Every sample each preset uses is recorded, not just this one —
-        # a complete (or early-stopped, see below) sweep becomes a reusable
-        # index for any future lookup.
-        index: Dict[int, List[Tuple[int, str]]] = {}
+        walk_voices = depth in ("structure", "full")
+        gap = self._sample_usage_early_stop_gap if walk_voices else None
+        # Needed whenever an overview tuple gets built at all (so a later
+        # "structure"-depth upgrade to full, see _load_preset_globals_only,
+        # knows *which* ids to fetch) — not gated to depth == "full" itself,
+        # which only decides whether global_values gets fetched right now.
+        global_ids = _group_param_ids("global") if walk_voices else None
+
+        preset_names: Dict[int, str] = {}
+        overviews: Dict[int, Tuple] = {}
+        sample_index: Dict[int, List[Tuple[int, str]]] = {}
+        voice_details: Dict[Tuple[int, int], Tuple[List[int], Dict[int, int]]] = {}
         consecutive_empty = 0
         stopped_early = False
         stopped_at = SAMPLE_USAGE_SCAN_RANGE.start
@@ -1096,65 +1533,132 @@ class EosRemoteApp(App):
             with self._bridge_lock:
                 for preset in SAMPLE_USAGE_SCAN_RANGE:
                     stopped_at = preset
-                    if self._cancel_sample_scan:
+                    if self._cancel_scan:
                         break
                     self.call_from_thread(
                         self.set_status,
-                        f"scanning for sample usage: preset {preset}/{last} "
-                        f"(builds a reusable index — 'escape' to cancel) ...")
-                    found_voices = False
+                        f"caching preset {preset}/{last} ({depth} — "
+                        f"'escape' to cancel) ...")
+                    self.bridge.set_parameter(_PRESET_SELECT, preset)
+                    # Name lookup and the voice walk are independent signals
+                    # (see docs/RESOLUTION_NOTES.md §12) — kept in separate
+                    # try blocks so a name-lookup failure (a real possibility
+                    # for a preset the device holds no name for) can't
+                    # preempt the voice walk, which is what the early-stop
+                    # heuristic below actually depends on. The original
+                    # single-sample 'u' lookup got this right by fetching
+                    # the name lazily, only once voices were found; cache-
+                    # all needs every preset's name unconditionally, so the
+                    # two steps are decoupled here instead.
+                    name: Optional[str] = None
                     try:
-                        self.bridge.set_parameter(_PRESET_SELECT, preset)
-                        used_samples = set()
-                        for voice in range(_MAX_VOICE_SCAN):
-                            info = _voice_sample_info(self.bridge, preset, voice)
-                            if info is None:
-                                break
-                            found_voices = True
-                            used_samples.update(info[1])
-                        if used_samples:
-                            name = self.bridge.get_preset_name(preset)
-                            for used in used_samples:
-                                index.setdefault(used, []).append((preset, name))
+                        name = self.bridge.get_preset_name(preset)
+                        preset_names[preset] = name
                     except Exception:
-                        pass  # best-effort, same convention as catalog_presets -- counts as "empty" below
-                    if found_voices:
-                        consecutive_empty = 0
-                    else:
-                        consecutive_empty += 1
-                        if gap is not None and consecutive_empty >= gap:
-                            stopped_early = True
-                            break
-        finally:
-            self._sample_scan_active = False
-        cancelled = self._cancel_sample_scan
-        if not cancelled:
-            # Early-stopping is a deliberate, accepted tradeoff (see
-            # SAMPLE_USAGE_EARLY_STOP_DEFAULT) -- unlike a user cancellation,
-            # its result is still trusted as the cache for future lookups.
-            self._sample_usage_index = index
-            self._sample_usage_scanned_range = SAMPLE_USAGE_SCAN_RANGE
-        if cancelled:
-            note = f" (cancelled at preset {stopped_at}, partial)"
-        elif stopped_early:
-            note = f" (stopped at preset {stopped_at} after {gap} consecutive empty presets)"
-        else:
-            note = f" (full sweep to preset {stopped_at})"
-        self.call_from_thread(
-            self._show_sample_usage_results, sample, index.get(sample, []), note)
+                        pass  # no name here -- matches catalog_presets' "skip it" convention
+                    found_voices = False
+                    if walk_voices:
+                        try:
+                            zone_counts: Dict[int, int] = {}
+                            by_voice: Dict[int, List[int]] = {}
+                            voice_count = 0
+                            for voice in range(_MAX_VOICE_SCAN):
+                                info = _voice_sample_info(self.bridge, preset, voice)
+                                if info is None:
+                                    break
+                                zone_counts[voice] = info[0]
+                                by_voice[voice] = info[1]
+                                voice_count = voice + 1
+                                if depth == "full":
+                                    # Re-select the voice first -- the zone
+                                    # walk inside _voice_sample_info may have
+                                    # left SAMPLE_ZONE_SELECT pointed at its
+                                    # last zone, and voice-only fields read
+                                    # back the spec's -1/"not applicable"
+                                    # sentinel otherwise (same fix already
+                                    # in _load_voice_detail).
+                                    self.bridge.set_parameter(_VOICE_SELECT, voice)
+                                    voice_details[(preset, voice)] = (
+                                        info[1], self.bridge.get_parameters(_VOICE_PARAM_IDS))
+                            found_voices = voice_count > 0
+                            global_values = (self.bridge.get_parameters(global_ids)
+                                             if depth == "full" else None)
+                            sample_rows = self._resolve_sample_rows(by_voice)
+                            overviews[preset] = (voice_count, zone_counts, global_ids,
+                                                 global_values, sample_rows)
+                            if found_voices:
+                                used_samples = {s for numbers in by_voice.values() for s in numbers}
+                                for used in used_samples:
+                                    sample_index.setdefault(used, []).append((preset, name or ""))
+                        except Exception:
+                            pass  # best-effort, same convention as catalog_presets -- counts as "empty" below
+                    if walk_voices:
+                        if found_voices:
+                            consecutive_empty = 0
+                        else:
+                            consecutive_empty += 1
+                            if gap is not None and consecutive_empty >= gap:
+                                stopped_early = True
+                                break
 
-    def _show_sample_usage_results(self, sample: int, matches: List[Tuple[int, str]],
-                                   note: str = "") -> None:
-        table = self.query_one("#samples", _FillWidthDataTable)
-        table.clear()
-        for preset, name in matches:
-            table.add_row(str(preset), name, "", key=str(preset))
-        table.call_after_refresh(table._stretch_last_column)
-        where = ", ".join(f"{preset} {name!r}" for preset, name in matches[:5])
-        if len(matches) > 5:
-            where += f", +{len(matches) - 5} more — see extended view ('e')"
-        summary = f"sample {sample}: used by {len(matches)} preset(s){note}"
-        self.set_status(f"{summary} — {where}" if matches else summary)
+                cancelled = self._cancel_scan
+                sample_names: Dict[int, str] = {}
+                sample_stopped_early = False
+                sample_stopped_at = SAMPLE_USAGE_SCAN_RANGE.start
+                if not cancelled:
+                    # A per-sample loop (not catalog_samples, which has no
+                    # early-stop hook of its own) so this honors the same
+                    # gap the preset walk above does -- "does this sample
+                    # have a name at all" is exactly as valid a per-item
+                    # signal as "did this preset have voices", and a
+                    # sample-name pass that always ran the full 0-999 range
+                    # regardless of the preset walk having already bailed
+                    # out early looked inconsistent in practice.
+                    #
+                    # Live-caught, three times now, before the actual root
+                    # cause was found by directly probing the raw wire
+                    # reply (see docs/RESOLUTION_NOTES.md §13): an empty
+                    # sample slot doesn't raise, isn't blank, and isn't
+                    # non-ASCII padding garbage -- the device replies with
+                    # a real, legitimate-looking, *named* placeholder:
+                    # literally "Empty Sample" (confirmed for every unused
+                    # slot probed, 0 through 999). The equivalent
+                    # get_preset_name also returns "Empty Preset" for an
+                    # unused preset, the same device-wide convention --
+                    # harmless there since that early-stop signal already
+                    # comes from the voice walk, not the name lookup, but
+                    # it means this exact placeholder string is a reliable,
+                    # precise "nothing here" signal, not a guess about byte
+                    # padding.
+                    consecutive_empty_samples = 0
+                    for sample in SAMPLE_USAGE_SCAN_RANGE:
+                        sample_stopped_at = sample
+                        if self._cancel_scan:
+                            cancelled = True
+                            break
+                        self.call_from_thread(
+                            self.set_status, f"caching sample names: {sample}/{last} ...")
+                        try:
+                            fetched = self.bridge.get_sample_name(sample)
+                        except Exception:
+                            fetched = ""
+                        if fetched.strip() and fetched.strip().casefold() != _EMPTY_SAMPLE_NAME.casefold():
+                            sample_names[sample] = fetched
+                            consecutive_empty_samples = 0
+                        else:
+                            consecutive_empty_samples += 1
+                            if gap is not None and consecutive_empty_samples >= gap:
+                                sample_stopped_early = True
+                                break
+        finally:
+            self._scan_active = False
+        return {
+            "depth": depth, "cancelled": cancelled, "stopped_early": stopped_early,
+            "stopped_at": stopped_at, "gap": gap, "preset_names": preset_names,
+            "sample_names": sample_names, "overviews": overviews, "sample_index": sample_index,
+            "sample_stopped_early": sample_stopped_early, "sample_stopped_at": sample_stopped_at,
+            "voice_details": voice_details,
+        }
 
     # -- parameter table ------------------------------------------------
     def _show_params(self, ids: List[int], values: Dict[int, int], label: str) -> None:
@@ -1212,13 +1716,17 @@ class EosRemoteApp(App):
             EditValueScreen(param, current, rng.minimum, rng.maximum, rng.default), on_result)
 
     def _invalidate_write_sensitive_caches(self) -> None:
-        # Any real write could change which sample a voice/zone points at
-        # (or, for a Master action, far more) — neither the cached preset
-        # overview nor the sample-usage index can be trusted as unchanged
-        # after one.
-        self._preset_overview_cache = None
+        # Any real write could change which sample a voice/zone points at,
+        # a preset/sample's name, or (for a Master action) far more —
+        # nothing cache-all filled in can be trusted as unchanged after one,
+        # cleared uniformly rather than reasoning out which specific caches
+        # a given write could not possibly have touched.
+        self._preset_overviews = {}
         self._sample_usage_index = {}
         self._sample_usage_scanned_range = None
+        self._catalog_cache = {"preset": {}, "sample": {}}
+        self._catalog_scanned_upto = {"preset": 0, "sample": 0}
+        self._voice_details = {}
 
     @work(thread=True)
     def _apply_edit(self, param_id: int, value: int) -> None:

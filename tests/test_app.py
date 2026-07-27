@@ -11,7 +11,9 @@ import pytest
 
 from eos import params as p
 from eosremote import demo as demo_mod
-from eosremote.app import BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, EosRemoteApp
+from eosremote.app import (
+    BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
+    EosRemoteApp)
 from eosremote.demo import DemoBridge
 
 
@@ -255,7 +257,7 @@ async def test_find_sample_usage_scans_full_range_and_reports_matches():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         assert "used by 3 preset(s)" in app.last_status
         samples = app.query_one("#samples")
@@ -307,7 +309,7 @@ async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
         assert "used by 1 preset(s)" in app.last_status
         calls_after_full_scan = app.bridge.calls
         assert calls_after_full_scan > 0
@@ -349,10 +351,10 @@ async def test_cancel_sample_usage_scan():
 
         await pilot.press("u")
         await pilot.pause(0.05)
-        assert app._sample_scan_active is True
+        assert app._scan_active is True
 
         await pilot.press("escape")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=200, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
         assert "cancelled" in app.last_status
 
 
@@ -397,7 +399,7 @@ async def test_sample_usage_scan_stops_after_consecutive_empty_presets():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=200, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
 
         assert "stopped at preset 10 after 10 consecutive empty presets" in app.last_status
         assert "used by 1 preset(s)" in app.last_status  # preset 0 itself, found before the gap
@@ -461,7 +463,7 @@ async def test_clear_sample_usage_cache():
         assert await _wait_for(pilot, lambda: "no sample-usage cache to clear" in app.last_status)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=200, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
         assert app._sample_usage_scanned_range is not None
 
         await pilot.press("c")
@@ -471,8 +473,343 @@ async def test_clear_sample_usage_cache():
 
         # A subsequent lookup must scan fresh, not report "(cached)" again.
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._sample_scan_active, tries=200, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
         assert "(cached)" not in app.last_status
+
+
+async def test_cache_all_names_depth_fills_only_the_name_catalogs():
+    # "names" depth (see action_cache_all / EosRemoteApp._run_full_sweep)
+    # has no use for a voice/zone walk at all -- must not populate the
+    # preset-overview or sample-usage caches, only the two name catalogs.
+    class FakeBridge(DemoBridge):
+        _PRESETS = {5: "Foo", 130: "Bar"}
+        _SAMPLES = {0: "Kick", 1: "Snare"}
+
+        def get_preset_name(self, preset, *, timeout=None):
+            if preset not in self._PRESETS:
+                raise LookupError("no such preset")
+            return self._PRESETS[preset]
+
+        def get_sample_name(self, sample, *, timeout=None):
+            if sample not in self._SAMPLES:
+                raise LookupError("no such sample")
+            return self._SAMPLES[sample]
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "names"
+    app._sample_usage_early_stop_gap = None  # "names" depth ignores this anyway -- explicit for clarity
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        assert app._catalog_cache["preset"] == {5: "Foo", 130: "Bar"}
+        assert app._catalog_cache["sample"] == {0: "Kick", 1: "Snare"}
+        assert app._preset_overviews == {}
+        assert app._sample_usage_index == {}
+        assert app._sample_usage_scanned_range is None
+
+
+async def test_cache_all_sample_names_stop_early_after_consecutive_empty_samples():
+    # The sample-name pass now honors the same early-stop gap as the preset
+    # walk -- an empty slot is exactly as valid an "empty" signal for a
+    # sample as no voices is for a preset, and a sample-name pass that
+    # always ran the full 0-999 range regardless of the preset walk having
+    # already bailed out looked inconsistent in practice. Live-caught: the
+    # real device returns "Empty Sample" (a legitimate-looking name, not a
+    # blank string and not an exception) for an unused slot -- this
+    # FakeBridge mirrors that exact behavior instead of raising, which is
+    # what let two earlier, more naive fixes (blank-check, then
+    # any-alnum-check) both look correct here yet still fail live.
+    class FakeBridge(DemoBridge):
+        def get_preset_name(self, preset, *, timeout=None):
+            return ""  # irrelevant here -- keep the preset walk trivial
+
+        def get_parameter(self, param_id, *, timeout=None):
+            if param_id == p.lookup("E4_GEN_SAMPLE").id:
+                return 0x3FFE  # no preset has any voices -- keep the preset walk cheap
+            return 0
+
+        def get_sample_name(self, sample, *, timeout=None):
+            return "Only Sample" if sample == 0 else "Empty Sample"
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "full"
+    assert app._sample_usage_early_stop_gap == 10  # the documented default
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        # sample 0 has a name, then 10 consecutive misses (samples 1-10)
+        # trip the same default gap the preset walk uses.
+        assert app._catalog_cache["sample"] == {0: "Only Sample"}
+        assert app._catalog_scanned_upto["sample"] == 11
+        assert "sample names stopped at 10 after 10 consecutive unnamed samples" in app.last_status
+
+
+async def test_find_sample_usage_shows_results_in_the_params_pane_too():
+    # #samples (where matches were already shown) is hidden in compact
+    # view -- a compact-view user pressing 'u' used to see nothing but a
+    # truncated one-line status-bar summary. The full match list must also
+    # land in #params, which is visible in both view modes.
+    class FakeBridge(DemoBridge):
+        _MATCHING_PRESETS = {5: "Foo", 130: "Bar"}
+
+        def __init__(self):
+            super().__init__()
+            self._current_preset = None
+            self._current_voice = None
+
+        def set_parameter(self, param_id, value):
+            if param_id == p.lookup("PRESET_SELECT").id:
+                self._current_preset = value
+            elif param_id == p.lookup("VOICE_SELECT").id:
+                self._current_voice = value
+
+        def get_parameter(self, param_id, *, timeout=None):
+            if param_id == p.lookup("E4_GEN_SAMPLE").id:
+                if self._current_voice == 0 and self._current_preset in self._MATCHING_PRESETS:
+                    return 0
+                return 0x3FFE
+            return 0
+
+        def get_preset_name(self, preset, *, timeout=None):
+            return self._MATCHING_PRESETS.get(preset, "")
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    assert app.compact_view is True  # default -- #samples is hidden right now
+    app._sample_usage_early_stop_gap = None
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        await pilot.press("s")
+        await pilot.pause()
+        await pilot.click("#presets")
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: app.current_sample == 0)
+
+        await pilot.press("u")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        params = app.query_one("#params")
+        assert await _wait_for(pilot, lambda: params.row_count == 2)
+        rows = {params.get_row_at(i)[1]: params.get_row_at(i)[2] for i in range(2)}
+        assert rows == {"preset 5": "Foo", "preset 130": "Bar"}
+
+
+async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
+    # "structure" depth walks every voice/zone (needed for the sample-usage
+    # index) but deliberately skips each preset's GLOBAL parameter values --
+    # selecting that preset afterward must reuse the cached voice/zone/
+    # sample work and fetch only the globals it's missing, not redo the
+    # whole walk over MIDI again.
+    class FakeBridge(DemoBridge):
+        def __init__(self):
+            super().__init__()
+            self._current_preset = None
+            self._current_voice = None
+            self.get_parameters_calls = 0
+
+        def get_preset_name(self, preset, *, timeout=None):
+            return "Demo Grand Piano" if preset == 0 else ""
+
+        def set_parameter(self, param_id, value):
+            if param_id == p.lookup("PRESET_SELECT").id:
+                self._current_preset = value
+            elif param_id == p.lookup("VOICE_SELECT").id:
+                self._current_voice = value
+
+        def get_parameter(self, param_id, *, timeout=None):
+            if param_id == p.lookup("E4_GEN_SAMPLE").id:
+                if self._current_preset == 0 and self._current_voice == 0:
+                    return 0
+                return 0x3FFE
+            return 0
+
+        def get_parameters(self, param_ids, *, timeout=None):
+            self.get_parameters_calls += 1
+            return {pid: 0 for pid in param_ids}
+
+        def get_sample_name(self, sample, *, timeout=None):
+            return "Demo Kick" if sample == 0 else ""
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "structure"
+    app._sample_usage_early_stop_gap = None  # this test wants the full, uninterrupted sweep
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        assert 0 in app._preset_overviews
+        voice_count, _zone_counts, global_ids, global_values, _sample_rows = app._preset_overviews[0]
+        assert voice_count == 1
+        assert global_values is None  # "structure" depth deliberately skips GLOBAL values
+        # The real GLOBAL id list must still be cached even though the values
+        # aren't -- otherwise the later lazy fetch has nothing to ask for.
+        assert len(global_ids) == 22
+        assert app._sample_usage_index.get(0) == [(0, "Demo Grand Piano")]
+        assert app._sample_usage_scanned_range == SAMPLE_USAGE_SCAN_RANGE
+        calls_after_sweep = app.bridge.get_parameters_calls
+
+        # Selecting preset 0 must reuse the cached voice/zone/sample data --
+        # the only new MIDI is the one batched fetch for its GLOBAL values,
+        # and it must actually populate the Parameters pane (not 0 rows).
+        await pilot.click("#presets")
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: app._preset_overviews[0][3] is not None)
+        assert app.bridge.get_parameters_calls == calls_after_sweep + 1
+        params = app.query_one("#params")
+        assert await _wait_for(pilot, lambda: params.row_count == 22)
+
+
+async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
+    # The whole point of "full" depth: once it's swept, browsing straight
+    # through presets must issue no MIDI at all -- everything a selection
+    # needs is already in _preset_overviews/_catalog_cache.
+    class FakeBridge(DemoBridge):
+        def __init__(self):
+            super().__init__()
+            self._current_preset = None
+            self._current_voice = None
+            self.midi_calls = 0
+
+        def get_preset_name(self, preset, *, timeout=None):
+            self.midi_calls += 1
+            return "Demo Grand Piano" if preset == 0 else ""
+
+        def set_parameter(self, param_id, value):
+            self.midi_calls += 1
+            if param_id == p.lookup("PRESET_SELECT").id:
+                self._current_preset = value
+            elif param_id == p.lookup("VOICE_SELECT").id:
+                self._current_voice = value
+
+        def get_parameter(self, param_id, *, timeout=None):
+            self.midi_calls += 1
+            if param_id == p.lookup("E4_GEN_SAMPLE").id:
+                if self._current_preset == 0 and self._current_voice == 0:
+                    return 0
+                return 0x3FFE
+            return 0
+
+        def get_parameters(self, param_ids, *, timeout=None):
+            self.midi_calls += 1
+            return {pid: 0 for pid in param_ids}
+
+        def get_sample_name(self, sample, *, timeout=None):
+            self.midi_calls += 1
+            return "Demo Kick" if sample == 0 else ""
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "full"
+    app._sample_usage_early_stop_gap = None
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        assert app._preset_overviews[0][3] is not None  # globals cached too at "full" depth
+        assert (0, 0) in app._voice_details  # voice 0's own 146-param group, too
+        calls_after_sweep = app.bridge.midi_calls
+
+        await pilot.click("#presets")
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: app.current_preset == 0)
+        await pilot.pause()
+        assert app.bridge.midi_calls == calls_after_sweep  # no new MIDI at all
+
+        # Browsing into the voice ('v') must be just as free of new MIDI --
+        # live-caught: selecting a preset had gotten instant, but 'v' still
+        # re-fetched its 146-param group fresh every time.
+        await _select_voice(pilot, app)
+        assert app.current_voice == 0
+        params = app.query_one("#params")
+        assert await _wait_for(pilot, lambda: params.row_count == len(_VOICE_PARAM_IDS))
+        assert app.bridge.midi_calls == calls_after_sweep
+
+
+async def test_cancelling_cache_all_promotes_nothing():
+    import time
+
+    class FakeBridge(DemoBridge):
+        def get_preset_name(self, preset, *, timeout=None):
+            return "Demo Grand Piano" if preset == 0 else ""
+
+        def get_parameter(self, param_id, *, timeout=None):
+            if param_id == p.lookup("E4_GEN_SAMPLE").id:
+                time.sleep(0.01)  # slow enough to reliably catch mid-scan
+                return 0x3FFE
+            return 0
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "full"
+    app._sample_usage_early_stop_gap = None  # testing user-cancel, not the heuristic
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        await pilot.pause(0.05)
+        assert app._scan_active is True
+
+        await pilot.press("escape")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
+        assert "cancelled" in app.last_status
+        assert app._catalog_cache == {"preset": {}, "sample": {}}
+        assert app._preset_overviews == {}
+        assert app._sample_usage_index == {}
+        assert app._sample_usage_scanned_range is None
+
+
+async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
+    config_path = str(tmp_path / "config.toml")
+    (tmp_path / "config.toml").write_text("cache_all_on_startup = true\ncache_depth = \"names\"\n")
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                       connect_kwargs={"config_path": config_path})
+    assert app._cache_all_on_startup is True
+    assert app._cache_depth == "names"
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        # DemoBridge's own presets (0, 1, 5) got picked up by the startup sweep.
+        assert app._catalog_cache["preset"] == {
+            0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
+
+    (tmp_path / "config.toml").write_text("")  # unset -- must default to off
+    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                        connect_kwargs={"config_path": config_path})
+    assert app2._cache_all_on_startup is False
+    assert app2._cache_depth == "full"  # the documented default
+
+
+async def test_a_key_still_works_in_demo_with_no_startup_config():
+    # --demo never reads cache_all_on_startup/cache_depth (same "demo
+    # touches no real local state" convention as compact_view/sample_usage_
+    # early_stop) -- the 'a' key itself must still work regardless.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    assert app._cache_all_on_startup is False
+    assert app._cache_depth == "full"
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert app._catalog_cache["preset"] == {
+            0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
 
 
 async def test_selecting_preset_loads_voices_global_params_and_samples():
@@ -589,6 +926,38 @@ async def test_editing_a_parameter_invalidates_the_cached_overview():
         assert calls == [1]  # the edit invalidated the cache -> re-fetched
 
 
+async def test_editing_a_parameter_invalidates_the_catalog_cache_too():
+    # _invalidate_write_sensitive_caches clears every cache-all-filled cache
+    # uniformly, not just the preset overview -- a write could change a
+    # name just as easily as a sample assignment.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert app._catalog_cache["preset"]  # something got cached
+        assert app._catalog_scanned_upto["preset"] > 0
+        assert app._catalog_scanned_upto["sample"] > 0
+        assert app._voice_details  # "full" depth (the demo default) caches these too
+
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        value_input = app.screen_stack[-1].query_one("#value")
+        value_input.value = ""
+        await pilot.click("#value")
+        for ch in "5":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: "set id" in app.last_status)
+
+        assert app._catalog_cache == {"preset": {}, "sample": {}}
+        assert app._catalog_scanned_upto == {"preset": 0, "sample": 0}
+        assert app._voice_details == {}
+
+
 async def test_edit_value_writes_through_and_refreshes_table():
     app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -655,7 +1024,7 @@ async def test_rename_preset():
         assert await _wait_for(pilot, lambda: "renamed" in app.last_status)
         assert app.bridge.get_preset_name(0).strip() == "New Name"
         # every write invalidates the cached preset overview, on principle
-        assert app._preset_overview_cache is None
+        assert app._preset_overviews == {}
 
 
 async def test_master_menu_delete_preset_requires_arm_then_fire():
@@ -791,6 +1160,37 @@ async def test_goto_preset_within_same_window_does_not_rescan():
         assert scans == []  # no rescan triggered
 
 
+async def test_cache_all_makes_bank_paging_free_of_new_midi():
+    # load_bank_page consults _catalog_cache before hitting the device --
+    # after a cache-all sweep, paging to a window the paged browser has
+    # never fetched on its own must not call catalog_presets at all.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app._cache_depth = "names"
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+
+        scans = []
+        original = app.bridge.catalog_presets
+
+        def counting_catalog_presets(*args, **kwargs):
+            scans.append(1)
+            return original(*args, **kwargs)
+
+        app.bridge.catalog_presets = counting_catalog_presets
+
+        await _goto(pilot, app, "500")  # far outside anything paged in before
+        assert await _wait_for(pilot, lambda: app.current_preset == 500)
+        assert scans == []  # the cache-all sweep already covers this window
+
+        # An explicit refresh still forces a real re-fetch regardless.
+        await pilot.press("r")
+        assert await _wait_for(pilot, lambda: scans == [1])
+
+
 async def test_browser_window_grows_and_shrinks_with_terminal_height():
     app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(80, 24)) as pilot:
@@ -821,6 +1221,84 @@ async def test_browser_window_grows_and_shrinks_with_terminal_height():
         assert presets.row_count == small_window
         # shrinking back reuses the cached names from the larger fetch above
         assert len(scans) == 1
+
+
+async def test_scrolling_near_bottom_of_page_extends_with_more_rows():
+    # Live-caught: the preset/sample pane only ever showed one fetched
+    # window, with 'g' (goto) as the only way to reach past it -- easy not
+    # to know it exists. Approaching the bottom of the loaded rows (by
+    # keyboard/mouse, not just an explicit key) should fetch and append the
+    # next chunk rather than requiring 'g' every time.
+    class FakeBridge(DemoBridge):
+        def catalog_presets(self, preset_range=range(0, 128), *, timeout=None, on_progress=None):
+            return {n: f"P{n}" for n in preset_range}
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    async with app.run_test(size=(80, 24)) as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        initial_count = table.row_count
+
+        await pilot.click("#presets")
+        table.move_cursor(row=initial_count - 1)  # last loaded row -- within the extend threshold
+        assert await _wait_for(pilot, lambda: table.row_count > initial_count, tries=100)
+        assert table.row_count == initial_count + BROWSER_EXTEND_CHUNK
+        # The new rows must actually be usable, not placeholders.
+        assert table.get_row_at(table.row_count - 1) == [str(initial_count + BROWSER_EXTEND_CHUNK - 1),
+                                                         f"P{initial_count + BROWSER_EXTEND_CHUNK - 1}"]
+
+
+async def test_extend_reuses_cache_all_data_with_no_new_midi():
+    class FakeBridge(DemoBridge):
+        def __init__(self):
+            super().__init__()
+            self.catalog_calls = 0
+
+        def catalog_presets(self, preset_range=range(0, 128), *, timeout=None, on_progress=None):
+            self.catalog_calls += 1
+            return {n: f"P{n}" for n in preset_range}
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app._cache_depth = "names"
+    async with app.run_test(size=(80, 24)) as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        initial_count = table.row_count
+
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        calls_after_sweep = app.bridge.catalog_calls
+
+        await pilot.click("#presets")
+        table.move_cursor(row=initial_count - 1)
+        assert await _wait_for(pilot, lambda: table.row_count > initial_count, tries=100)
+        assert app.bridge.catalog_calls == calls_after_sweep  # extend reused the cache-all sweep
+
+
+async def test_page_down_up_step_through_the_bank():
+    class FakeBridge(DemoBridge):
+        def catalog_presets(self, preset_range=range(0, 128), *, timeout=None, on_progress=None):
+            return {n: f"P{n}" for n in preset_range}
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    async with app.run_test(size=(80, 24)) as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        window = app.browser_window
+
+        await pilot.click("#presets")
+        await pilot.press("pagedown")
+        assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == window)
+        assert table.get_row_at(0) == [str(window), f"P{window}"]
+
+        await pilot.press("pageup")
+        assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == 0)
+
+        # PageUp at the very first page is a no-op, not an error.
+        await pilot.press("pageup")
+        await pilot.pause()
+        assert "already at the first page" in app.last_status
+        assert app._bank_state("preset").window_start == 0
 
 
 async def test_samples_pane_aggregates_across_voices_and_dedups():

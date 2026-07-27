@@ -666,3 +666,68 @@ This also explains the sample-usage scan's false early-stop: presets in
 the 75-90 range that genuinely have voices were being reported as having
 none, manufacturing a run of consecutive "empty" presets that never
 actually existed on the device.
+
+## §13 — An empty preset/sample slot answers with a real, named placeholder, not blank or an error (resolved, verified live)
+
+The cache-all sweep's sample-name pass (see the `_run_full_sweep`
+docstring in `eosremote/app.py`) needed its own "is this slot empty"
+signal, separate from `get_preset_name`'s (whose early-stop already comes
+from the voice walk, not the name lookup — §12 above). Live use against
+the user's real bank (270 presets, S000 upward) reported the sample-name
+pass never stopping early at all, even though S195 was confirmed the
+first genuinely empty sample slot with nothing populated afterward.
+
+**Two guesses were tried and both failed live before the raw wire reply
+was actually inspected:**
+
+1. *Assumed the device pads an empty slot's name with plain ASCII
+   spaces* — checked `fetched.strip()` for blankness. Still ran the full
+   range live.
+2. *Assumed some other non-ASCII filler* (NUL, `0xFF` "erased flash",
+   or decode-replacement garbage from `eos.messages._unpad_name`, which
+   masks each byte to 7 bits and decodes with `errors="replace"`) —
+   checked for the absence of any letter/digit (`any(ch.isalnum() for ch
+   in fetched)`), reasoning a real name always has one. Also still ran
+   the full range live.
+
+**Root cause, found by finally probing the actual raw SysEx reply**
+directly (bypassing `catalog_samples`/the app entirely — a plain script
+sending `SampleNameRequest` for samples 0, 1, 194–200, 250, 300, 500, 999
+and printing both the raw frame bytes and the decoded name): an unused
+sample slot's `SAMPLE_NAME` reply is a completely normal, well-formed
+frame containing the literal, human-readable name **`"Empty Sample"`**
+— not blank, not garbage, a real placeholder string the device itself
+assigns. Confirmed identically for every unused slot probed, from sample
+0 through sample 999. The equivalent probe against `PresetNameRequest`
+found the exact same device-wide convention one level up: an unused
+preset (270, 300, 500, 999 all probed) answers `"Empty Preset"`.
+
+Both of the earlier guesses failed for the same reason: `"Empty
+Sample".strip()` is non-blank, and it obviously contains plenty of
+letters — neither heuristic had any way to distinguish a real name from
+this specific, legitimate-looking placeholder, because neither guess was
+checked against what the device actually sends before being written.
+
+**Fix:** `eosremote.app._EMPTY_SAMPLE_NAME = "Empty Sample"`; the
+sample-name loop in `_run_full_sweep` now compares the fetched name
+(case-folded, stripped) against this exact placeholder and treats a
+match the same as blank/absent — counts toward the early-stop gap, and
+is not cached into `_catalog_cache["sample"]` as if it were a real name.
+`get_preset_name`'s own "Empty Preset" answer was left alone: that
+early-stop signal already comes from the voice walk (§12), never from
+name-lookup success, so it was never exposed to this failure mode, and
+whether to also strip "Empty Preset" out of the *displayed* preset
+catalog is a separate, purely cosmetic question not yet addressed (the
+plain, pre-cache-all `catalog_presets`/`catalog_samples` bank browser
+would show the same literal placeholder text for an unused slot, and
+always has — not a regression introduced by cache-all).
+
+**Verified live** with a direct, read-only run of the app's actual
+`_run_full_sweep("structure")` against the real E4XT Ultra (headless,
+via Textual's `run_test()` against the real bridge — no visible terminal
+needed): the preset walk stopped at preset 62 after 10 consecutive empty
+presets (a real, if unexpected, gap that far down — not a bug), and the
+sample-name pass stopped at sample 204 — exactly 195 (the first
+genuinely empty slot, per the user) plus the 10-consecutive-empty
+default gap. Both numbers landing exactly where expected is strong
+confirmation the fix is correct, not just plausible.

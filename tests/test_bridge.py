@@ -214,6 +214,60 @@ def test_save_and_load_compact_view_roundtrip(tmp_path):
     assert bridge_mod.load_compact_view(path) is True
 
 
+def test_load_cache_all_on_startup_missing_file_returns_none(tmp_path):
+    assert bridge_mod.load_cache_all_on_startup(str(tmp_path / "does-not-exist.toml")) is None
+
+
+def test_load_cache_all_on_startup_reads_bool(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("cache_all_on_startup = true\n")
+    assert bridge_mod.load_cache_all_on_startup(str(path)) is True
+    path.write_text("cache_all_on_startup = false\n")
+    assert bridge_mod.load_cache_all_on_startup(str(path)) is False
+
+
+def test_load_cache_all_on_startup_invalid_type_returns_none(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('cache_all_on_startup = "yes"\n')  # must be a real bool, not a string
+    assert bridge_mod.load_cache_all_on_startup(str(path)) is None
+
+
+def test_load_cache_depth_missing_file_returns_none(tmp_path):
+    assert bridge_mod.load_cache_depth(str(tmp_path / "does-not-exist.toml")) is None
+
+
+def test_load_cache_depth_accepts_the_three_valid_levels_case_insensitively(tmp_path):
+    path = tmp_path / "config.toml"
+    for level in ("names", "structure", "full"):
+        path.write_text(f'cache_depth = "{level}"\n')
+        assert bridge_mod.load_cache_depth(str(path)) == level
+    path.write_text('cache_depth = "FULL"\n')
+    assert bridge_mod.load_cache_depth(str(path)) == "full"
+
+
+def test_load_cache_depth_invalid_value_returns_none(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('cache_depth = "everything"\n')
+    assert bridge_mod.load_cache_depth(str(path)) is None
+
+
+def test_cache_all_settings_coexist_with_other_config_keys(tmp_path):
+    # Regression guard, same as test_port_cache_and_view_preference_coexist_
+    # in_the_same_file below: config.toml holds several independent settings
+    # -- writing one must not clobber another.
+    path = str(tmp_path / "config.toml")
+    bridge_mod.save_compact_view(True, path)
+    bridge_mod.save_last_ports("Out Port", "In Port", path)
+    data = bridge_mod._read_config_dict(path)
+    data["cache_all_on_startup"] = True
+    data["cache_depth"] = "names"
+    bridge_mod._write_config_dict(data, path)
+    assert bridge_mod.load_compact_view(path) is True
+    assert bridge_mod.load_last_ports(path) == ("Out Port", "In Port")
+    assert bridge_mod.load_cache_all_on_startup(path) is True
+    assert bridge_mod.load_cache_depth(path) == "names"
+
+
 def test_port_cache_and_view_preference_coexist_in_the_same_file(tmp_path):
     # Regression guard: config.toml holds more than one independent setting
     # now -- saving one must not clobber the other (read-modify-write, not a
