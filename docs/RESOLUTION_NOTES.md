@@ -731,3 +731,164 @@ sample-name pass stopped at sample 204 — exactly 195 (the first
 genuinely empty slot, per the user) plus the 10-consecutive-empty
 default gap. Both numbers landing exactly where expected is strong
 confirmation the fix is correct, not just plausible.
+
+## §14 — Making the front-panel LCD actually redraw after a remote edit: Program Change, not the editor protocol (resolved, verified live)
+
+Raised live: a remote rename (`o`) via the editor protocol worked (the
+device's own data changed), but the front-panel LCD only showed the new
+name after physically touching the preset from the front panel — exactly
+what the specification says (`PRESET_SELECT`, id 223, is documented
+"independent of the front panel's own selection"; a remote edit lands in
+a buffer the LCD doesn't consult until the preset is touched physically).
+
+**First checked: is there any SysEx command in the documented protocol
+for "redraw the screen"?** Exhaustively — every command byte in
+`eos.messages.Command` (58 defined values across the full 0x00–0x7F
+range), the raw specification text itself (searched for "screen",
+"panel", "LCD", "display", "refresh", "redraw" — the only hit is the
+spec's own stated design goal, that the remote editor is meant to
+provide an interface "superior to the standard E4 front panel display",
+i.e. the remote side is *meant* to replace the LCD as the interface, not
+drive it), and this project's own existing panel/mirror-protocol notes
+(§3), which already record that a screen/LCD concept only exists in the
+*undocumented* panel protocol, never reverse-engineered here. Conclusion:
+no such command exists in the documented editor protocol, by design.
+
+**The actual answer: a plain MIDI Program Change**, suggested by the
+user — a completely ordinary MIDI channel voice message, not part of
+this SysEx protocol at all, and exactly the same mechanism a keyboard
+player uses to switch patches during a performance. Unlike
+`PRESET_SELECT`, this *does* make the device select the preset for real
+(for playback) and redraw its own LCD, since it's the same path the
+front panel's own preset up/down buttons ultimately drive.
+
+**Bank/program scheme, confirmed live (per the user's own explanation,
+then verified against real hardware across multiple banks):** Bank
+Select MSB is always 0; Bank Select LSB selects which block of 128
+presets (0 → presets 0-127, 1 → 128-255, 2 → 256-383, …); Program Change
+then picks within that 128-preset block. All three messages (Bank
+Select MSB, Bank Select LSB, Program Change) must be sent every time —
+the device does not treat a bank as "sticky" in a way that would let
+Bank Select be skipped when the target bank hasn't changed from the
+last command.
+
+**First live attempt failed in a genuinely confusing way — not because
+the bank/program math was wrong, but because of message timing.**
+Commanding preset 52 (bank 0, program 52) landed on **P049** (off by
+exactly −3, not the classic ±1 indexing mismatch); a *second* Program
+Change immediately after, targeting preset 3, did **nothing at all** —
+the display stayed on P049. Ruled out MultiMode as an explanation first
+(`MIDIGLO_MIDI_MODE` read back live as `0` = omni, not `2` = multi, so
+per-channel MultiMode preset mapping doesn't apply here) and confirmed
+`MIDIGLO_RCV_PROGRAM_CHANGE` was on (`1`) and the channel read
+(`MIDIGLO_BASIC_CHANNEL` = 4, i.e. channel 5) was being used correctly.
+**Root cause: unlike SysEx (already throttled by `bridge.ThrottledOut`,
+which explicitly documents that only `0xF0`-leading messages get a gap —
+"ordinary MIDI... passes straight through"), the three plain channel
+messages (Bank Select MSB, Bank Select LSB, Program Change) were being
+sent back-to-back with zero delay at all.** The receiving MIDI
+interface/driver apparently drops or misorders rapid, ungapped
+consecutive channel messages — exactly the kind of USB-MIDI timing
+quirk this project has run into before in a different form (see §7's
+`ThrottledOut` motivation for SysEx). **Fix:** insert `SEND_GAP` (the
+same 50ms already used to throttle SysEx) between each of the three
+messages in `EosBridge.send_program_change`. **Verified live afterward
+across three separate presets spanning two different banks** — 10 (bank
+0), 52 (bank 0), and 300 (bank 2, program 44) — each one landing on the
+*exact* commanded preset number with no discrepancy, confirming both the
+bank/program math and the gap fix are correct, not just no-longer-broken
+by coincidence.
+
+**Not addressed by this feature:** there is still no way to *read back*
+which preset the device currently considers active/selected — probed
+directly (`PRESET_SELECT` before and after a Program Change) and
+confirmed it stays completely unchanged regardless, consistent with the
+spec's own "independent of the front panel" wording. Verifying that a
+Program Change actually landed on the intended preset still requires
+looking at the physical front panel; there is no SysEx-readable
+equivalent, at least none found in the documented protocol.
+
+## §15 — Live automation without Program Change silently edits the wrong (inactive) preset, and triggered a device crash (open, 2026-07-28)
+
+**Context:** a sibling project (mpc2emu) tried to drive an amp-envelope
+sustain-level calibration sweep against a real E4XT Ultra purely over this
+repo's editor protocol: `set_parameters([(PRESET_SELECT, 1), (VOICE_SELECT,
+0), ...])` then repeated `set_parameters([(DCY1_LVL, pct), ...])` before each
+note, with plain `midi_out.send_message()` note-on/off in between. Every
+parameter read back exactly as written (confirmed live via `get_parameter`),
+yet the recorded audio never tracked the swept value — it matched Preset 0's
+envelope (a ~29s decay) almost the whole time.
+
+**Root cause: exactly §14's finding, hit blind because the calibration script
+didn't know about it yet.** `PRESET_SELECT` only retargets which preset's
+*data* the editor protocol edits — it is not "select for playback" and does
+not change what a Note On actually triggers. The script edited Preset 1 the
+whole time while Preset 0 kept right on playing. **Fix for any future live
+automation: call `EosBridge.send_program_change(preset)` (not
+`set_parameter(PRESET_SELECT, ...)`) before any note is expected to exercise
+edits made to that preset** — this is the one documented mechanism that
+actually activates a preset for playback (§14).
+
+**Separately, and more seriously: the device crashed mid-session** (front
+panel showed a fatal "Gen Trap error", needing a full power cycle to
+recover). It happened during a small follow-up diagnostic — a
+`set_parameters` call immediately followed by a `get_parameter` call on the
+same id, sent moments after the calibration script's full run (9x
+parameter-edit + note-on + note-off + parameter-edit + note-on... cycle, ~40
+messages total including plain channel messages with **no throttling gap at
+all** — `ThrottledOut` only paces `0xF0`-leading SysEx, and §14 already found
+that *plain* channel messages need the same `SEND_GAP` treatment because the
+USB-MIDI interface drops/misorders rapid ungapped ones). No repro attempt has
+been made yet — this note exists so nobody retries the same traffic pattern
+blind.
+
+**Not yet root-caused. Blocked on:**
+1. **A minimal, deliberately cautious repro** — one isolated
+   `set_parameters`-then-`get_parameter` pair, run alone (not after a long
+   burst of prior traffic), to check whether it's that specific pattern or
+   cumulative untrottled traffic that's at fault.
+2. If reproducible, bisect: is it specific to `voice.amp.env` ids, to
+   editing-then-immediately-querying the same id, or to sending SysEx
+   requests without the same gap §14 mandated for channel messages?
+3. Until root-caused, treat rapid automated traffic against a real E4XT as
+   genuinely capable of crashing it, not just misbehaving cosmetically —
+   this raises the stakes on the "only one session, synthetic-first"
+   CLAUDE.md rule beyond what was previously assumed (misordered display
+   updates vs. a fatal trap are very different risk levels).
+
+## §16 — OLD-format dump layout for `voice.*` ids is uniform and predictable: `dump_offset = 98 + (id − 53) × 2` (resolved, verified live)
+
+**Resolves the "voice data whose exact byte layout is not yet fully
+cross-checked" caveat in §6/§7**, at least for the ids covered here.
+Found productively (not as a bug hunt) while a sibling project (mpc2emu)
+used this repo to hunt down unknown `E4B` file-format bytes: `set_parameters`
+a distinctive value onto a live voice, `dump_preset_old` before and after,
+diff the two dumps.
+
+**Every single one of ~35 parameter ids tested, spanning `voice.general`
+(53) through `voice.lfo` (116) — crossing the `voice.tuning`/`.mode`/
+`.amp`/`.filter`/`.lfo` group boundaries, and the structural boundary
+between `vpar`-style scalars and the amp-envelope rate/level pairs at id
+70 — landed at exactly `98 + (id − 53) × 2`.** Each parameter occupies 2
+consecutive bytes regardless of its live-protocol value range (a `0-127`
+scalar and `E4_VOICE_DELAY`'s `0-10000` both take exactly 2 bytes; unused
+high bits are just `0`). No exceptions found across the whole tested span.
+
+**Important caveat, not a contradiction:** this describes the *dump's own*
+internal layout only. It does **not** mean dump-adjacent ids land at
+correspondingly-adjacent offsets in the on-disk **file** format — mpc2emu's
+own cross-check found the file groups the amp/filter envelopes' 6 rate/level
+stage-pairs by *phase name* (Atk1, Atk2, Dcy1, Dcy2, Rls1, Rls2), while a
+third envelope (Aux, ids 117-128, previously undocumented on the mpc2emu
+side too) is packed in the *live protocol's own* `SEG0..SEG5` raw id order
+instead (Atk1, Dcy1, Rls1, Atk2, Dcy2, Rls2) — two different envelopes in
+the same file using two different internal orderings, neither matching this
+dump's uniform id-ascending layout. Useful for testing whether a parameter
+*exists* and reading its current value quickly; not a substitute for an
+independent file-offset diff if the on-disk position is what's actually
+needed (see mpc2emu's `docs/RESOLUTION_NOTES.md` §E4BPARAMHUNT for the full
+methodology and findings on that side).
+
+**Not yet checked:** whether the same uniform formula extends below id 53
+or above id 128, and whether the NEW-format dump (`dump_preset_new`) has an
+analogous uniform layout or something else entirely.

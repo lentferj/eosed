@@ -178,6 +178,22 @@ def load_cache_depth(path: str = DEFAULT_CONFIG_PATH) -> Optional[str]:
     return None
 
 
+# --- send Program Change on preset select ------------------------------------
+# PRESET_SELECT (id 223, the editor protocol's own selector) is spec-stated
+# to be "independent of the front panel's own selection" -- selecting a
+# preset that way never makes the device redraw its own LCD (see
+# DISCLAIMER.md). A plain MIDI Program Change is a completely different,
+# ordinary channel voice message (not part of this SysEx protocol at all)
+# that genuinely does. User-edited, not app-written, same convention as the
+# cache-all settings above; defaults to on (unlike cache_all_on_startup)
+# since it's cheap and has no real downside for a session actually being
+# played on the hardware.
+
+def load_send_pc_on_preset_select(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
+    value = _read_config_dict(path).get("send_pc_on_preset_select")
+    return value if isinstance(value, bool) else None
+
+
 def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[bytes]:
     """Probe exactly one send/receive port pair for an E-mu Device Inquiry
     reply. Returns the raw reply bytes, or None if either port no longer
@@ -859,6 +875,60 @@ class EosBridge:
     def erase_all_ram_samples(self) -> None:
         """DESTRUCTIVE, one-shot, no device-side confirmation."""
         self._send(m.EraseAllRamSamples(device_id=self.device_id).encode())
+
+    # -- plain MIDI performance messages (not the editor SysEx protocol) -----
+    # PRESET_SELECT (id 223) is spec-stated to be "independent of the front
+    # panel's own selection" -- a remote edit made after selecting a preset
+    # that way is written to a separate buffer the LCD doesn't reflect until
+    # the preset is touched from the front panel (see docs/RESOLUTION_NOTES.md
+    # and DISCLAIMER.md). Program Change is a completely different, ordinary
+    # MIDI channel voice message (not SysEx at all) -- the normal way a
+    # keyboard player switches patches during a performance. Bank Select
+    # (CC0 MSB / CC32 LSB) precedes it since a bare Program Change only
+    # reaches 0-127 and the preset range here is 0-999 (2999 with Preset
+    # Flash) -- this follows the universal MIDI Bank Select convention, not
+    # something specific to this device; NOT YET independently verified
+    # live that the E4XT accepts exactly this MSB/LSB/order for its own
+    # preset numbering (see docs/RESOLUTION_NOTES.md before trusting it).
+    def send_program_change(self, preset: int, *, channel: Optional[int] = None) -> None:
+        """Select ``preset`` via Bank Select + Program Change, not the
+        editor protocol's PRESET_SELECT -- this is what actually makes the
+        E4/E4XT itself select the preset (and redraw its own front-panel
+        display), the same as a musician switching patches live.
+
+        Bank Select MSB is always 0; LSB selects which block of 128
+        presets (0 -> 0-127, 1 -> 128-255, ...), Program Change picks
+        within that block (0-127) -- confirmed live, all three messages
+        required every time (banks aren't "sticky" across calls in a way
+        that would let Bank Select be skipped when unchanged).
+
+        ``channel`` defaults to reading the device's own live
+        ``MIDIGLO_BASIC_CHANNEL`` (id 198) rather than assuming channel 0.
+        Sends nothing (silently) if the device's ``MIDIGLO_RCV_PROGRAM_
+        CHANGE`` (id 220) is off -- callers that care should check that
+        themselves before relying on this to have any effect.
+        """
+        if not 0 <= preset <= 16383:
+            raise ValueError(f"preset {preset} out of MIDI bank/program range")
+        if channel is None:
+            channel = self.get_parameter(198)  # MIDIGLO_BASIC_CHANNEL
+        if not 0 <= channel <= 15:
+            raise ValueError(f"channel {channel} out of range 0-15")
+        bank, program = divmod(preset, 128)
+        # Live-caught: unlike SysEx (throttled by ThrottledOut), plain
+        # channel messages pass through with no gap at all -- sending these
+        # three back-to-back with zero delay got Bank Select and/or Program
+        # Change dropped or misprocessed (commanding preset 52 landed on
+        # P049 once, then a second Program Change alone did nothing at
+        # all). SEND_GAP between each message, same value already used for
+        # SysEx, fixed it -- confirmed landing on the exact commanded
+        # preset every time after.
+        self._send(bytes([0xB0 | channel, 0, (bank >> 7) & 0x7F]))   # Bank Select MSB
+        time.sleep(SEND_GAP)
+        self._send(bytes([0xB0 | channel, 32, bank & 0x7F]))         # Bank Select LSB
+        time.sleep(SEND_GAP)
+        self._send(bytes([0xC0 | channel, program]))                 # Program Change
+        time.sleep(SEND_GAP)
 
     # -- lifecycle -----------------------------------------------------------
     def close(self) -> None:

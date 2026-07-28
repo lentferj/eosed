@@ -268,6 +268,24 @@ def test_cache_all_settings_coexist_with_other_config_keys(tmp_path):
     assert bridge_mod.load_cache_depth(path) == "names"
 
 
+def test_load_send_pc_on_preset_select_missing_file_returns_none(tmp_path):
+    assert bridge_mod.load_send_pc_on_preset_select(str(tmp_path / "does-not-exist.toml")) is None
+
+
+def test_load_send_pc_on_preset_select_reads_bool(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("send_pc_on_preset_select = false\n")
+    assert bridge_mod.load_send_pc_on_preset_select(str(path)) is False
+    path.write_text("send_pc_on_preset_select = true\n")
+    assert bridge_mod.load_send_pc_on_preset_select(str(path)) is True
+
+
+def test_load_send_pc_on_preset_select_invalid_type_returns_none(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('send_pc_on_preset_select = "yes"\n')  # must be a real bool, not a string
+    assert bridge_mod.load_send_pc_on_preset_select(str(path)) is None
+
+
 def test_port_cache_and_view_preference_coexist_in_the_same_file(tmp_path):
     # Regression guard: config.toml holds more than one independent setting
     # now -- saving one must not clobber the other (read-modify-write, not a

@@ -25,14 +25,43 @@ device yet.
 - Remaining: the NEW-format dump path (`eoscli dump --new-format`) is
   untested live — its header-ACK handling in `dump_preset_new` is
   extrapolated from the OLD-format finding, not independently confirmed
-  (RESOLUTION_NOTES §7). Also remaining: the OLD-format link/voice byte
-  layout beyond the name+global-parms prefix is not yet correctly parsed
-  (RESOLUTION_NOTES §6/§7) — a real captured sample is saved at
+  (RESOLUTION_NOTES §7). **Partially resolved for OLD format:** the
+  `voice.*` byte layout for ids 53-116 is now known to be a uniform
+  `98 + (id-53)*2` (RESOLUTION_NOTES §16, found via a sibling project's
+  parameter hunt) — still not hooked up to an actual decoder in this repo,
+  and ids below 53 / above 128, plus the link-data layout, remain
+  unconfirmed. A real captured sample is saved at
   `docs/samples/e4xt_ultra_preset0_old_format.bin` to work from.
   Only after dump reading is solid should any write path be tried live — the
   editor TUI's write actions default to disabled against real hardware for
   exactly this reason (`--allow-write` required; see the Editor TUI section
   below).
+
+## Scripted live automation: `PRESET_SELECT` gotcha + a real device crash (OPEN, 2026-07-28)
+
+A sibling project (mpc2emu) drove this repo's editor protocol unattended for
+an amp-envelope calibration sweep and hit two things worth fixing here before
+anyone scripts against a real E4XT again:
+
+1. **`PRESET_SELECT` is not "select for playback."** Editing a preset's
+   parameters via `set_parameters` without also calling
+   `EosBridge.send_program_change(preset)` first silently edits a preset
+   that's never actually heard — playback keeps using whatever preset a real
+   Program Change last activated. Same root cause as §14, just hit blind by
+   a caller that didn't know about §14 yet. Consider a guard/warning in
+   `EosBridge` itself (e.g. track "last program-changed preset" and warn on
+   `set_parameters` targeting a different one) so the next caller doesn't
+   have to rediscover this the hard way.
+2. **The device crashed** ("Gen Trap error" fatal firmware fault, needed a
+   power cycle) during unattended automation sending plain MIDI channel
+   messages (note on/off) with no inter-message gap, on top of an
+   already-long burst of SysEx traffic. Not yet root-caused or reliably
+   reproduced — see RESOLUTION_NOTES §15 for exactly what was sent.
+   **Blocked on:** a careful, isolated repro (not a repeat of the full
+   traffic pattern) to identify the actual trigger, then either a fix or at
+   minimum a documented "don't do this" in `EosBridge`'s docstring. Until
+   then, treat any unattended/rapid live automation against a real E4XT as a
+   crash risk, not just a cosmetic-desync risk.
 
 ## Panel/remote (screen-mirror) protocol — reverse engineering not started
 
@@ -84,7 +113,7 @@ are multisample sharing the same 3 samples.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 288 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). 296 tests pass
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
   only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
@@ -477,6 +506,73 @@ been verified live. Once ready to try `--allow-write` live, go in this
 order: a single low-stakes parameter edit + read-back first, then rename,
 then (with real caution and a fresh backup) a Master action — never start
 with a Master action.
+
+**`w` — runtime write-mode toggle, on top of `--allow-write` rather than
+instead of it.** `--allow-write` still sets the *starting* state (armed
+for `--demo`, disarmed by default against real hardware) but
+`action_toggle_write_mode` can arm or disarm `self.allow_write` at any
+point during a session either way — never persisted, unlike
+`compact_view`; every fresh launch starts back at whatever
+`--allow-write` says. `_prompt_edit`/`action_rename`/`_on_master_result`
+needed no changes at all: all three already re-read `self.allow_write`
+fresh at the moment of the action rather than caching it, so the toggle
+"just worked" for gating once it existed. The header bar
+(`Header.-write-armed` CSS class, `background: $accent` — the E4XT
+badge's own red) turns red while armed and back to its default grey
+when disarmed, toggled from `_update_write_mode_indicator` (called from
+both the toggle action and `on_mount`, so a session launched already
+armed via `--allow-write`/`--demo` shows red immediately, not only after
+the first toggle). The existing "writes disabled" status message on a
+blocked edit/rename/Master attempt now points at `w` instead of only
+`--allow-write`.
+
+**Live-caught: a remote rename worked (the device's own data changed)
+but the front-panel LCD only showed it after touching the preset
+physically — expected per spec (`PRESET_SELECT` is "independent of the
+front panel's own selection"), but the user asked whether *anything*
+could force a redraw.** Checked exhaustively for a SysEx command to do
+this — every `eos.messages.Command` byte, the raw specification text
+(searched "screen"/"panel"/"LCD"/"display"/"refresh"/"redraw" — the only
+hit is the spec's own stated design goal that the remote editor
+*replaces* the front panel display, not drives it) — confirmed there
+isn't one. **The user's own suggestion, a plain MIDI Program Change,
+turned out to be exactly right** — an ordinary channel voice message,
+not part of this SysEx protocol at all, the same thing a keyboard player
+sends switching patches, and it genuinely does make the device select
+the preset and redraw its own LCD.
+
+`EosBridge.send_program_change(preset, *, channel=None)`: Bank Select
+MSB always 0, LSB selects which 128-preset block, Program Change picks
+within it (per the user's own description of the scheme, confirmed
+live) — `channel` defaults to reading the device's live
+`MIDIGLO_BASIC_CHANNEL` rather than assuming 0. **First live attempt
+looked like a bank/program math bug but wasn't**: commanding preset 52
+landed on P049 (off by exactly −3, not a classic ±1 index mismatch),
+then a second Program Change to preset 3 did nothing at all. Ruled out
+MultiMode first (`MIDIGLO_MIDI_MODE` read back as `0` = omni, not
+multi) before finding the real cause: unlike SysEx (already throttled by
+`ThrottledOut`), the three plain channel messages were being sent with
+*zero* gap between them, and the MIDI interface dropped/misprocessed
+rapid ungapped channel messages. Fixed by inserting the same `SEND_GAP`
+(50ms) already used for SysEx between each of the three messages.
+**Re-verified live across three presets spanning two banks** (10, 52,
+300) — each landed on the exact commanded number. Full account:
+`docs/RESOLUTION_NOTES.md` §14.
+
+`EosRemoteApp` now sends one automatically on every `select_preset` (no
+key binding), gated by `self._send_pc_on_preset_select` —
+`send_pc_on_preset_select` in `config.toml`, user-edited like the other
+cache-all-adjacent settings, defaulting to **on** (unlike
+`cache_all_on_startup`) since it's cheap and has no real downside for a
+session actually being played on the hardware. `--demo` never reads
+`config.toml` for it (same convention as the others) but the feature
+still defaults on there too — `DemoBridge.send_program_change` is a
+plain no-op, matching the "demo never opens real MIDI" rule while still
+exercising the same call path. There is still no way to *read back*
+which preset the device currently has selected via any SysEx query —
+probed directly (`PRESET_SELECT` before/after) and confirmed it stays
+unaffected — so verifying a Program Change landed correctly still needs
+the physical front panel, not something this app can check for itself.
 
 Not built: NEW-format dump/restore, and anything from the panel/mirror
 protocol (see the section above — that's out of scope for this TUI

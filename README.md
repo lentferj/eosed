@@ -191,6 +191,13 @@ Four panes, left to right:
   rebuilt fresh every launch, deliberately: the E4XT can be edited from
   its own front panel with no way for this app to notice, so a saved
   cache could confidently show data that no longer matches the device.
+- **Selecting a preset also sends it a MIDI Program Change** (no key
+  binding — happens automatically), which is what actually makes the
+  E4/E4XT select that preset for real and redraw its own front-panel
+  LCD; the editor protocol's own `PRESET_SELECT` never does (see
+  [Two protocols, one device](#two-protocols-one-device) above). Set
+  `send_pc_on_preset_select = false` in `config.toml` to turn this off
+  (default: on).
 - **Voice** — every voice of the selected preset, with a single/
   multisample hint. `v` (from either bank) also opens a modal voice
   picker.
@@ -227,8 +234,12 @@ Enter to fire) for any destructive operation — never a single
 keystroke.</sub></p>
 
 - **Writes (edit/rename/Master) are disabled by default against real
-  hardware** — pass `--allow-write` to enable them; always on for
-  `--demo`. No write path has been exercised against real hardware as
+  hardware** — pass `--allow-write` to start already armed, or press `w`
+  at any point during the session to arm/disarm them at runtime (always
+  starts armed for `--demo`, but `w` still toggles it there too). The
+  header bar turns the E4XT badge's own red while write mode is on, a
+  persistent, glanceable reminder that's easy to miss in the status line
+  alone. No write path has been exercised against real hardware as
   thoroughly as the read paths yet — see [TODO.md](TODO.md).
 
 Not yet implemented: NEW-format dump/restore, editing a raw sample's own
@@ -276,7 +287,25 @@ panel until that preset is touched from the front panel.** The
 specification states this explicitly — the remote editor writes to a
 separate live buffer from what the LCD renders. Don't assume the two
 agree; a TUI or script must track its own state, not read the hardware's
-screen as ground truth.
+screen as ground truth. There is no command anywhere in the documented
+protocol to force a redraw — confirmed by checking every command byte
+`eos/messages.py` defines and the raw specification text itself, whose
+own stated design goal is that the remote editor *replaces* the front
+panel display as the interface, not drives it. The one thing that
+*does* make the device select a preset for real (and redraw its own
+LCD) is a plain MIDI **Program Change** — an ordinary channel voice
+message, not part of this SysEx protocol at all, and exactly what a
+keyboard player sends switching patches. `EosBridge.send_program_change`
+implements it: Bank Select MSB is always 0, LSB selects which block of
+128 presets (0 → 0-127, 1 → 128-255, …), then Program Change picks
+within that block — all three messages required every time, each
+separated by `SEND_GAP` (plain channel messages get no throttling of
+their own the way SysEx does, and sending them back-to-back with zero
+gap got them dropped or misprocessed by the MIDI interface in testing).
+See `docs/RESOLUTION_NOTES.md` §14 for the live debugging story. There is
+no way to read back which preset the device currently has selected this
+way — `PRESET_SELECT` stays unaffected, confirmed live — so verifying it
+landed correctly still means looking at the actual front panel.
 
 ### Addressing model
 

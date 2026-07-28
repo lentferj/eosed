@@ -176,6 +176,9 @@ class DemoBridge:
                                  device_id=self.device_id)
         return header, data
 
+    def send_program_change(self, preset: int, *, channel: Optional[int] = None) -> None:
+        pass  # no MIDI is ever sent in demo mode -- see EosBridge.send_program_change
+
     def close(self) -> None:
         pass
 

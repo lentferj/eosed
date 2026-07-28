@@ -39,10 +39,14 @@ concurrently.
 **Write actions (parameter edits, rename, the Master menu) are gated behind
 ``allow_write``**, which defaults to on for ``--demo`` and off for real
 hardware unless ``--allow-write`` is passed — no write path has been
-hardware-verified as thoroughly as the read paths yet (see TODO.md). The
-Master menu's destructive operations (Delete Preset, Erase RAM Bank/Presets/
-Samples) are never bound to a single keypress: they require an explicit
-arm-then-fire confirmation in :class:`MasterScreen`.
+hardware-verified as thoroughly as the read paths yet (see TODO.md).
+``allow_write`` is also toggleable at runtime with ``w`` (``action_
+toggle_write_mode``), on top of whatever ``--allow-write`` started it at;
+the header turns the E4XT badge's own red while armed, a persistent
+reminder that's easy to miss in the status line alone. The Master menu's
+destructive operations (Delete Preset, Erase RAM Bank/Presets/Samples) are
+never bound to a single keypress regardless of write mode: they require an
+explicit arm-then-fire confirmation in :class:`MasterScreen`.
 """
 
 from __future__ import annotations
@@ -521,6 +525,11 @@ class EosRemoteApp(App):
     #tables.compact #samples { display: none; }
     #tables.compact #presets { width: 40%; }
     #tables.compact #params { width: 60%; }
+
+    /* Write mode armed (see action_toggle_write_mode): the top bar turns
+       the E4XT badge's own red instead of its default grey, as a
+       persistent, glanceable reminder that edits/rename/Master are live. */
+    Header.-write-armed { background: $accent; color: $foreground; }
     """
 
     BINDINGS = [
@@ -539,6 +548,7 @@ class EosRemoteApp(App):
         Binding("e", "toggle_view", "Extended view"),
         Binding("escape", "back_to_preset", "Back to preset"),
         Binding("m", "master_menu", "Master"),
+        Binding("w", "toggle_write_mode", "Write mode"),
     ]
 
     def __init__(self, bridge, *, allow_write: bool, demo: bool,
@@ -661,6 +671,22 @@ class EosRemoteApp(App):
         configured_depth = None if self.demo else bridge_mod.load_cache_depth(self._view_config_path)
         self._cache_depth: str = configured_depth or "full"
 
+        # Send a plain MIDI Program Change whenever a preset is selected
+        # (see eos.bridge.EosBridge.send_program_change and
+        # docs/RESOLUTION_NOTES.md §14) -- unlike PRESET_SELECT (the editor
+        # protocol's own selector), this is what actually makes the device
+        # select the preset and redraw its own front-panel LCD, the same as
+        # touching it physically would. No key binding -- happens
+        # automatically on select_preset. Defaults to on (unlike
+        # cache_all_on_startup): cheap, and there's no real downside for a
+        # session actually being played on the hardware. Config-only, same
+        # "demo touches no real local state" reasoning as the other
+        # settings above, but the *feature* itself still defaults on in
+        # --demo too (DemoBridge.send_program_change is a no-op either way).
+        configured_send_pc = (
+            None if self.demo else bridge_mod.load_send_pc_on_preset_select(self._view_config_path))
+        self._send_pc_on_preset_select: bool = True if configured_send_pc is None else configured_send_pc
+
         self.last_status: str = ""  # exposed for tests
 
     def _bank_state(self, bank: Optional[str] = None) -> _BankState:
@@ -698,6 +724,24 @@ class EosRemoteApp(App):
             bridge_mod.save_compact_view(self.compact_view, self._view_config_path)
         self.set_status(f"view: {'compact' if self.compact_view else 'extended'}")
 
+    def action_toggle_write_mode(self) -> None:
+        # A runtime arm/disarm switch on top of --allow-write, not a
+        # replacement for it: --allow-write (always on for --demo) just
+        # sets the *starting* state; this key can arm or disarm either way,
+        # every session starting back at whatever --allow-write said. Never
+        # persisted, unlike compact_view -- a write-armed reminder is only
+        # useful live, not worth carrying into the next launch.
+        self.allow_write = not self.allow_write
+        self._update_write_mode_indicator()
+        self.set_status("write mode ON — edit/rename/Master enabled" if self.allow_write
+                        else "write mode OFF — read-only")
+
+    def _update_write_mode_indicator(self) -> None:
+        # The E4XT badge's own red (see E4XT_THEME.accent) instead of the
+        # header's default grey — a persistent, glanceable reminder that
+        # writes are live, not just a one-off status line easy to miss.
+        self.query_one(Header).set_class(self.allow_write, "-write-armed")
+
     def on_mount(self) -> None:
         self.title = "eosremote"
         presets_table = self.query_one("#presets", _FillWidthDataTable)
@@ -720,6 +764,11 @@ class EosRemoteApp(App):
         samples_table.add_columns("Sample", "Name", "Used by")
         samples_table.cursor_type = "row"
         samples_table.call_after_refresh(samples_table._stretch_last_column)
+
+        # Reflect the constructor's initial allow_write (--allow-write, or
+        # always-on for --demo) immediately — the header shouldn't start
+        # grey if writes are already armed at launch.
+        self._update_write_mode_indicator()
 
         # Deferred like the column stretch above: at this exact point in
         # on_mount, the pane hasn't had its first real layout pass yet, so
@@ -1121,6 +1170,16 @@ class EosRemoteApp(App):
         # refetch regardless (action_refresh calls _load_preset_overview
         # directly, bypassing this).
         self._show_or_reload_preset_overview()
+        if self._send_pc_on_preset_select and self.bridge is not None:
+            self._send_program_change_for_preset(preset)
+
+    @work(thread=True)
+    def _send_program_change_for_preset(self, preset: int) -> None:
+        try:
+            with self._bridge_lock:
+                self.bridge.send_program_change(preset)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"program change error: {exc}")
 
     @work(thread=True)
     def _load_preset_overview(self, preset: int) -> None:
@@ -1704,7 +1763,7 @@ class EosRemoteApp(App):
 
     def _prompt_edit(self, param: p.Parameter, current: int, rng: m.ParameterRange) -> None:
         if not self.allow_write:
-            self.set_status("writes disabled (pass --allow-write to enable)")
+            self.set_status("writes disabled -- press 'w' to arm write mode")
             return
 
         def on_result(new_value: Optional[int]) -> None:
@@ -1750,7 +1809,7 @@ class EosRemoteApp(App):
             self.set_status(f"select a {kind} first")
             return
         if not self.allow_write:
-            self.set_status("writes disabled (pass --allow-write to enable)")
+            self.set_status("writes disabled -- press 'w' to arm write mode")
             return
         self.push_screen(RenameScreen(self._current_item_name()), self._on_rename_result)
 
@@ -1792,7 +1851,7 @@ class EosRemoteApp(App):
         if action is None:
             return
         if not self.allow_write:
-            self.set_status("writes disabled (pass --allow-write to enable)")
+            self.set_status("writes disabled -- press 'w' to arm write mode")
             return
         self._fire_master_action(action)
 

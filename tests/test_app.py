@@ -8,6 +8,7 @@
 import asyncio
 
 import pytest
+from textual.widgets import Header
 
 from eos import params as p
 from eosremote import demo as demo_mod
@@ -1105,6 +1106,103 @@ async def test_writes_disabled_by_default_blocks_edit_rename_and_master():
         await pilot.press("enter")
         assert await _wait_for(pilot, lambda: "disabled" in app.last_status)
         assert demo_mod._DEMO_PRESET_NAMES  # erase_all_presets did NOT fire
+
+
+async def test_write_mode_toggle_arms_writes_and_colors_the_header():
+    # 'w' arms/disarms writes at runtime on top of whatever --allow-write
+    # started the session at; the header turns the E4XT badge's own red
+    # while armed -- a persistent reminder, not just a status-line message.
+    app = EosRemoteApp(DemoBridge(), allow_write=False, demo=True)
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)  # let the initial page load settle first
+        header = app.query_one(Header)
+        assert app.allow_write is False
+        assert "-write-armed" not in header.classes
+
+        await pilot.press("w")
+        assert await _wait_for(pilot, lambda: app.allow_write is True)
+        assert "-write-armed" in header.classes
+        assert "write mode ON" in app.last_status
+
+        # An edit is now actually reachable, unlike before the toggle.
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)  # EditValueScreen opened
+        await pilot.press("escape")
+
+        await pilot.press("w")
+        assert await _wait_for(pilot, lambda: app.allow_write is False)
+        assert "-write-armed" not in header.classes
+        assert "write mode OFF" in app.last_status
+
+
+async def test_write_mode_starts_armed_when_launched_with_allow_write():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        header = app.query_one(Header)
+        assert "-write-armed" in header.classes
+
+
+async def test_selecting_a_preset_sends_a_program_change_by_default():
+    # Unlike PRESET_SELECT (the editor protocol's own selector, spec-stated
+    # "independent of the front panel's own selection"), a plain MIDI
+    # Program Change is what actually makes the device select the preset
+    # and redraw its own front-panel LCD -- see docs/RESOLUTION_NOTES.md
+    # §14. No key binding: this fires automatically on every preset select.
+    class FakeBridge(DemoBridge):
+        def __init__(self):
+            super().__init__()
+            self.pc_calls = []
+
+        def send_program_change(self, preset, *, channel=None):
+            self.pc_calls.append(preset)
+
+    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    assert app._send_pc_on_preset_select is True  # the documented default
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app, row=0)
+        assert await _wait_for(pilot, lambda: app.bridge.pc_calls == [0])
+
+
+async def test_send_pc_on_preset_select_configurable_via_config_toml(tmp_path):
+    config_path = str(tmp_path / "config.toml")
+    (tmp_path / "config.toml").write_text("send_pc_on_preset_select = false\n")
+    # demo=False (with a DemoBridge standing in for a real one) exercises
+    # the actual config-reading wiring, matching the pattern used for the
+    # other config-backed settings -- --demo itself never reads config.toml.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                       connect_kwargs={"config_path": config_path})
+    assert app._send_pc_on_preset_select is False
+
+    (tmp_path / "config.toml").write_text("send_pc_on_preset_select = true\n")
+    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                        connect_kwargs={"config_path": config_path})
+    assert app2._send_pc_on_preset_select is True
+
+    (tmp_path / "config.toml").write_text("")  # unset -- must default to on
+    app3 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+                        connect_kwargs={"config_path": config_path})
+    assert app3._send_pc_on_preset_select is True
+
+
+async def test_demo_mode_does_not_touch_config_toml_for_send_pc_setting(monkeypatch):
+    # Same "demo touches no real local state" convention already verified
+    # for compact_view (test_demo_mode_does_not_touch_config_toml_for_view_
+    # preference) -- --demo must never read config.toml, even though the
+    # feature itself still defaults on there.
+    from eos import bridge as bridge_mod
+
+    def _boom(*a, **k):
+        raise AssertionError("--demo must never read config.toml")
+    monkeypatch.setattr(bridge_mod, "load_send_pc_on_preset_select", _boom)
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    assert app._send_pc_on_preset_select is True
 
 
 async def test_goto_preset_out_of_current_window():

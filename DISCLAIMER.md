@@ -122,9 +122,11 @@ sure": Preset Delete (`71h`), Erase Current RAM Bank (`74h`), Erase All
 RAM Presets (`75h`), and Erase All RAM Samples (`76h`). None of these are
 ever key-bound in this tool; they are only reachable through a modal
 arm-then-fire screen in the TUI — but a scripting mistake using `eoscli`
-directly, or a bug in the editor, could still fire one. **`--allow-write`
-is required to enable any write path at all** (including these) against
-real hardware, and defaults to off.
+directly, or a bug in the editor, could still fire one. Write mode
+(edit/rename/Master) is off by default; `--allow-write` starts a session
+already armed, and `w` arms or disarms it at any point during the
+session — the header bar turns the E4XT badge's own red while armed, as
+a persistent reminder alongside the status line.
 
 Remote edits made through this protocol are written to a **separate
 buffer** from what the device's own front-panel display shows; the
