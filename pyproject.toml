@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eosed"
 version = "0.1.0"
-description = "Terminal remote/editor for the E-mu EOS sampler family (E4/E4XT) over MIDI SysEx"
+description = "Terminal editor for the E-mu EOS sampler family (E4/E4XT) over MIDI SysEx"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-2.0-or-later" }
@@ -16,7 +16,6 @@ authors = [{ name = "Jan Lentfer", email = "jan.lentfer@web.de" }]
 dependencies = [
     "textual>=0.80",
     "python-rtmidi>=1.5",
-    "attrs>=23",
 ]
 
 [project.optional-dependencies]

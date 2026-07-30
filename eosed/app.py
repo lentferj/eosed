@@ -1961,8 +1961,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--device-id", type=int, default=m.DEFAULT_DEVICE_ID)
     parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)
     parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
-                        help="port cache file: the last successful autodetect pair is tried "
-                             "first on reconnect (default: config.toml; ignored if absent)")
+                        help="local settings file: caches the last successful autodetect port "
+                             "pair, and holds the view/cache-sweep/program-change "
+                             "preferences (default: config.toml; ignored if absent)")
     parser.add_argument("--demo", action="store_true",
                         help="use a canned in-memory device; never opens a MIDI port")
     parser.add_argument("--allow-write", action="store_true",

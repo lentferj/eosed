@@ -113,7 +113,11 @@ def cmd_get(args: argparse.Namespace, bridge) -> None:
     try:
         rng = bridge.get_parameter_range(param.id)
         print(f"  device range   : {rng.minimum} .. {rng.maximum} (default {rng.default})")
-    except (TimeoutError, KeyError):
+    except (TimeoutError, LookupError, ValueError):
+        # ValueError too: a device that answers with some other frame (or
+        # nothing parseable) is exactly the case the static fallback exists
+        # for, but it used to escape to main() and abort the command after
+        # the value had already been printed.
         print(f"  static range   : {param.minimum} .. {param.maximum} (spec, not device-verified)")
 
 
@@ -135,8 +139,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device-id", type=int, default=m.DEFAULT_DEVICE_ID)
     parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)
     parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
-                        help="port cache file: the last successful autodetect pair is tried "
-                             "first on reconnect (default: config.toml; ignored if absent)")
+                        help="local settings file: caches the last successful autodetect port "
+                             "pair, and holds the view/cache-sweep/program-change "
+                             "preferences (default: config.toml; ignored if absent)")
     parser.add_argument("--demo", action="store_true",
                         help="use a canned in-memory device; never opens a MIDI port")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -187,7 +192,7 @@ def main(argv=None) -> None:
 
     try:
         _COMMANDS[args.command](args, bridge)
-    except (KeyError, LookupError, TimeoutError, ValueError) as exc:
+    except (LookupError, TimeoutError, ValueError) as exc:  # KeyError is a LookupError
         sys.exit(f"error: {exc}")
     finally:
         bridge.close()
