@@ -395,6 +395,8 @@ class EosBridge:
         self.device_id = device_id
         self.timeout = timeout
         self.inquiry: Optional[m.DeviceInquiryReply] = None
+        # Lazily-read MIDIGLO_BASIC_CHANNEL (id 198) — see basic_channel().
+        self._basic_channel: Optional[int] = None
 
     # -- constructors ---------------------------------------------------
     @classmethod
@@ -890,6 +892,23 @@ class EosBridge:
     # something specific to this device; NOT YET independently verified
     # live that the E4XT accepts exactly this MSB/LSB/order for its own
     # preset numbering (see docs/RESOLUTION_NOTES.md before trusting it).
+    def basic_channel(self, *, timeout: Optional[float] = None) -> int:
+        """The device's ``MIDIGLO_BASIC_CHANNEL`` (id 198), read once and cached.
+
+        A device-global setting, not a per-preset one, so re-reading it on
+        every :meth:`send_program_change` was a wasted round trip per preset
+        selection. It *can* still be changed from the front panel mid-
+        session — call :meth:`forget_basic_channel` if that may have
+        happened, or pass ``channel`` explicitly.
+        """
+        if self._basic_channel is None:
+            self._basic_channel = self.get_parameter(198, timeout=timeout)
+        return self._basic_channel
+
+    def forget_basic_channel(self) -> None:
+        """Drop the cached basic channel so the next read hits the device."""
+        self._basic_channel = None
+
     def send_program_change(self, preset: int, *, channel: Optional[int] = None) -> None:
         """Select ``preset`` via Bank Select + Program Change, not the
         editor protocol's PRESET_SELECT -- this is what actually makes the
@@ -902,16 +921,26 @@ class EosBridge:
         required every time (banks aren't "sticky" across calls in a way
         that would let Bank Select be skipped when unchanged).
 
-        ``channel`` defaults to reading the device's own live
+        ``channel`` defaults to the device's own live
         ``MIDIGLO_BASIC_CHANNEL`` (id 198) rather than assuming channel 0.
-        Sends nothing (silently) if the device's ``MIDIGLO_RCV_PROGRAM_
-        CHANGE`` (id 220) is off -- callers that care should check that
-        themselves before relying on this to have any effect.
+        That value is read once per connection and cached
+        (:attr:`_basic_channel`): it is a device-global setting, and re-
+        reading it cost a full extra request/reply round trip on *every*
+        preset selection. Pass ``channel`` explicitly to bypass the cache,
+        or call :meth:`forget_basic_channel` if it may have been changed
+        from the front panel mid-session.
+
+        **This does NOT check ``MIDIGLO_RCV_PROGRAM_CHANGE`` (id 220).** If
+        the device has Program Change reception switched off it will ignore
+        these messages and this call is silently a no-op -- checking would
+        cost another round trip per selection, so callers that care must
+        read id 220 themselves. (An earlier version of this docstring
+        claimed the check was done here; it never was.)
         """
         if not 0 <= preset <= 16383:
             raise ValueError(f"preset {preset} out of MIDI bank/program range")
         if channel is None:
-            channel = self.get_parameter(198)  # MIDIGLO_BASIC_CHANNEL
+            channel = self.basic_channel()
         if not 0 <= channel <= 15:
             raise ValueError(f"channel {channel} out of range 0-15")
         bank, program = divmod(preset, 128)
@@ -928,6 +957,11 @@ class EosBridge:
         self._send(bytes([0xB0 | channel, 32, bank & 0x7F]))         # Bank Select LSB
         time.sleep(SEND_GAP)
         self._send(bytes([0xC0 | channel, program]))                 # Program Change
+        # The trailing gap is NOT redundant, despite following the last
+        # message here: ThrottledOut only tracks the timestamp of SysEx it
+        # sent, so a SysEx issued immediately after this Program Change
+        # would see a stale `_last` and go out with no gap at all. This
+        # keeps that case covered too.
         time.sleep(SEND_GAP)
 
     # -- lifecycle -----------------------------------------------------------

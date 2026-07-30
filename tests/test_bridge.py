@@ -797,3 +797,60 @@ def test_close_does_not_raise():
 
     bridge = _bridge_with(handler)
     bridge.close()  # should not raise even though FakeDevice has no delete()
+
+
+def test_basic_channel_is_read_once_and_cached():
+    # send_program_change fires on every preset selection; re-reading the
+    # device-global MIDIGLO_BASIC_CHANNEL (id 198) each time cost a full
+    # extra request/reply round trip per selection.
+    reads = []
+
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PARAMETER_REQUEST:
+            req = m.ParameterRequest.decode(frame)
+            reads.append(req.param_ids)
+            return m.ParameterEdit(values=[(req.param_ids[0], 3)]).encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.basic_channel() == 3
+    assert bridge.basic_channel() == 3
+    assert reads == [[198]]  # exactly one round trip, not two
+
+    bridge.forget_basic_channel()
+    assert bridge.basic_channel() == 3
+    assert reads == [[198], [198]]
+
+
+def test_send_program_change_uses_cached_channel_and_sends_bank_select():
+    def handler(frame):
+        if frame[0] != 0xF0:
+            return None
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(req.param_ids[0], 2)]).encode()  # channel 2
+
+    bridge = _bridge_with(handler)
+    bridge.send_program_change(200)
+    bridge.send_program_change(201)
+
+    channel_messages = [f for f in bridge.midi_out.sent if f[0] != 0xF0]
+    # 3 per call (Bank MSB, Bank LSB, Program Change), on the reported channel
+    assert len(channel_messages) == 6
+    assert channel_messages[0] == bytes([0xB0 | 2, 0, 0])     # MSB always 0 here
+    assert channel_messages[1] == bytes([0xB0 | 2, 32, 1])    # 200 // 128 == 1
+    assert channel_messages[2] == bytes([0xC0 | 2, 200 % 128])
+    # Only the first call needed to ask the device for the basic channel.
+    assert len([f for f in bridge.midi_out.sent if f[0] == 0xF0]) == 1
+
+
+def test_send_program_change_rejects_out_of_range_channel():
+    def handler(frame):
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(req.param_ids[0], 99)]).encode()  # nonsense channel
+
+    bridge = _bridge_with(handler)
+    with pytest.raises(ValueError):
+        bridge.send_program_change(0)
+
+
