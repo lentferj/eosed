@@ -411,6 +411,106 @@ MIDI_MODE_LABELS: Dict[int, str] = {0: "omni", 1: "poly", 2: "multi"}
 CTRL7_CURVE_LABELS: Dict[int, str] = {0: "linear", 1: "squared", 2: "logarithmic"}
 
 
+# --- derived value descriptions ---------------------------------------------
+# Everything below turns a raw wire number into the label the front panel
+# would show for it. Same purpose as FILTER_TYPE_NAMES and the envelope-stage
+# labels: the raw number alone is meaningless for these, and reading e.g.
+# "45" where the panel says "A2" makes the Parameters pane much harder to
+# check against the hardware.
+
+_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+
+def note_name(value: int) -> str:
+    """MIDI key number -> E-mu's own note spelling (0 = C-2, 60 = C3, 127 = G8).
+
+    The octave offset is not the scientific-pitch convention (where 60 is
+    C4): it is fixed by the spec's own two statements about these fields,
+    "60 = C3" for E4_GEN_ORIG_KEY and the range "C-2 -> G8" for the key
+    limits. Both boundary values check out exactly, which is what pins the
+    -2 offset rather than any assumption.
+    """
+    return f"{_NOTE_NAMES[value % 12]}{value // 12 - 2}"
+
+
+# Absolute key numbers, so a note name is meaningful. The matching *FADE
+# fields are deliberately NOT here: those are widths in semitones, not keys,
+# and showing "C-2" for a zero-width fade would be actively misleading.
+_NOTE_VALUED_PARAMS = frozenset({
+    "E4_GEN_ORIG_KEY", "E4_GEN_KEY_LOW", "E4_GEN_KEY_HIGH",
+    "E4_LINK_KEY_LOW", "E4_LINK_KEY_HIGH", "MASTER_AUDITION_KEY",
+})
+
+# Plain 0/1 switches. The spec spells "0 = off / 1 = on" out for each of
+# these individually; collected here rather than repeated per parameter.
+_ON_OFF_PARAMS = frozenset({
+    "E4_VOICE_NON_TRANSPOSE", "E4_VOICE_LATCHMODE", "MASTER_AES_BOOST",
+    "MASTER_AKAI_LOOP_ADJ", "MIDIGLO_PEDAL_OVERRIDE",
+    "MIDIGLO_RCV_PROGRAM_CHANGE", "MIDIGLO_SEND_PROGRAM_CHANGE",
+    "MASTER_FX_BYPASS", "MASTER_OUTPUT_DITHER",
+})
+
+# Same shape, but the spec states these two with the senses *reversed*
+# (0 = on). Kept apart rather than silently normalised — the reversal is the
+# device's, and params.py's own notes already flag both as worth verifying
+# against hardware.
+_ON_OFF_INVERTED_PARAMS = frozenset({"MASTER_SCSI_TERM", "MASTER_COMBINE_LR"})
+
+# The 15 per-modulator link filter flags (ids 252-266): "0 = filter off,
+# 1 = filter on" in the spec's own wording. Note the count: ids 251-266 is
+# 16 parameters, but 251 is E4_LINK_INTERNAL_EXTERNAL (the link *type*),
+# not a flag -- an easy off-by-one when checking against the LINK group's
+# 29-parameter total.
+_FILTER_FLAG_PREFIX = "E4_LINK_FILTER_"
+
+LFO_SYNC_LABELS: Dict[int, str] = {0: "key sync", 1: "free run"}
+GLIDE_CURVE_LABELS: Dict[int, str] = {0: "linear", 8: "most exponential"}
+
+
+def volenv_depth_display(value: int) -> str:
+    """``E4_VOICE_VOLENV_DEPTH`` (id 68) raw 0-16 -> dB.
+
+    Spec: "Amp Env Depth: -96dB to -48dB by 3's" — 17 steps of 3 dB from
+    -96, whose top lands on -48 exactly, which is what confirms the step.
+    """
+    return f"{-96 + 3 * value}dB"
+
+
+def velocity_curve_display(value: int) -> str:
+    """``MIDIGLO_VEL_CURVE`` (id 216): 0 = linear, 1-13 = curve 1-13."""
+    return "linear" if value == 0 else f"curve {value}"
+
+
+def magic_preset_display(value: int) -> str:
+    """``MIDIGLO_MAGIC_PRESET`` (id 222): 0 = off, 1-128 -> presets 000-127."""
+    return "off" if value == 0 else f"preset {value - 1:03d}"
+
+
+def midi_channel_display(value: int, *, off_value: Optional[int] = None) -> str:
+    """A 0-based MIDI channel shown 1-based, the way every panel displays it."""
+    if off_value is not None and value == off_value:
+        return "off"
+    return f"ch {value + 1}"
+
+
+def link_type_display(value: int) -> str:
+    """``E4_LINK_INTERNAL_EXTERNAL`` (id 251), max 16.
+
+    The SysEx spec gives the range but never says what the values mean. The
+    EOS 4.0 Software Manual's "Link Type" section (ch. 8) does: a link is
+    "either an internal preset or an external MIDI device", and "MIDI Links
+    allow your keyboard to control up to 16 external MIDI devices" — 1
+    internal setting plus 16 channels is exactly this parameter's 0..16, so
+    0 = internal and 1-16 = the MIDI channel a external link transmits on.
+
+    INFERRED, not confirmed: the manual never prints the numbering, and the
+    off-by-one direction (channel 1 at value 1 vs value 0) is the assumption
+    doing the work here. Verify by setting this live and reading the panel's
+    Link Type field, the same check FX_A/FX_B_ALGORITHM still need.
+    """
+    return "internal" if value == 0 else f"MIDI ch {value}"
+
+
 def midi_control_display(value: int) -> str:
     """Display string for the MIDIGLO_*_CONTROL family (-1=off, 0-31, 32=ptwheel, 33=chnpres)."""
     if value == -1:
@@ -578,6 +678,42 @@ def _known_value_name(param: Parameter, value: int) -> Optional[str]:
     this particular value) has no known name — callers should fall back to
     showing the raw number."""
     name = param.name
+    # Checked before the per-parameter cases below: several of these apply to
+    # whole families (the 16 link filter flags, the note-valued key fields)
+    # and listing each id individually would be a maintenance trap.
+    if name in _NOTE_VALUED_PARAMS:
+        return note_name(value) if 0 <= value <= 127 else None
+    if name in _ON_OFF_PARAMS or name.startswith(_FILTER_FLAG_PREFIX):
+        return {0: "off", 1: "on"}.get(value)
+    if name in _ON_OFF_INVERTED_PARAMS:
+        return {0: "on", 1: "off"}.get(value)
+    if name == "E4_LINK_INTERNAL_EXTERNAL":
+        return link_type_display(value)
+    if name == "E4_VOICE_VOLENV_DEPTH":
+        return volenv_depth_display(value)
+    if name == "E4_VOICE_GLIDE_CURVE":
+        return GLIDE_CURVE_LABELS.get(value)
+    if name in ("E4_VOICE_LFO_SYNC", "E4_VOICE_LFO2_SYNC"):
+        return LFO_SYNC_LABELS.get(value)
+    if name == "MIDIGLO_VEL_CURVE":
+        return velocity_curve_display(value)
+    if name == "MIDIGLO_MAGIC_PRESET":
+        return magic_preset_display(value)
+    if name == "MIDIGLO_BASIC_CHANNEL":
+        return midi_channel_display(value)
+    if name == "MASTER_FX_MM_CTRL_CHANNEL":
+        return midi_channel_display(value, off_value=-1)
+    if name == "MULTIMODE_CHANNEL":
+        return f"ch {value}"  # already 1-based on the wire (min 1, max 16/32)
+    if name in ("MASTER_USING_MAC", "MASTER_AKAI_SAMPLER_ID"):
+        return "none" if value == -1 else f"SCSI id {value}"
+    if name in ("E4_PRESET_CTRL_A", "E4_PRESET_CTRL_B",
+                "E4_PRESET_CTRL_C", "E4_PRESET_CTRL_D"):
+        return "off" if value == -1 else None
+    if name == "MULTIMODE_PRESET":
+        return "off" if value == -1 else None
+    if name == "MULTIMODE_SUBMIX":
+        return SUBMIX_LABELS.get(value)
     if name.endswith("FX_A_ALGORITHM"):
         return FX_A_ALGORITHM_NAMES.get(value)
     if name.endswith("FX_B_ALGORITHM"):

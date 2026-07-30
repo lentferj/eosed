@@ -244,3 +244,75 @@ def test_describe_value_does_not_leak_long_caveat_notes_as_a_fake_name():
     # name — must not be shown in brackets as if it were one.
     param = p.lookup("E4_VOICE_FILT_GEN_PARM3")
     assert p.describe_value(param, 9) == "9"
+
+
+# --- derived value descriptions ---------------------------------------------
+
+def test_note_name_matches_the_specs_own_boundary_values():
+    # The -2 octave offset is pinned by the spec's own two statements about
+    # these fields: "60 = C3" (E4_GEN_ORIG_KEY) and the range "C-2 -> G8".
+    assert p.note_name(0) == "C-2"
+    assert p.note_name(60) == "C3"
+    assert p.note_name(127) == "G8"
+
+
+def test_key_parameters_display_note_names_but_fades_do_not():
+    for name in ("E4_GEN_ORIG_KEY", "E4_GEN_KEY_LOW", "E4_GEN_KEY_HIGH",
+                 "E4_LINK_KEY_LOW", "E4_LINK_KEY_HIGH", "MASTER_AUDITION_KEY"):
+        assert p.describe_value(p.lookup(name), 60) == "60 (C3)"
+    # A fade is a width in semitones, not a key -- labelling it "C-2" would
+    # be actively wrong, so these must stay bare numbers.
+    for name in ("E4_GEN_KEY_LOWFADE", "E4_GEN_KEY_HIGHFADE",
+                 "E4_LINK_KEY_LOWFADE", "E4_LINK_KEY_HIGHFADE"):
+        assert p.describe_value(p.lookup(name), 0) == "0"
+
+
+def test_volenv_depth_spans_the_specs_stated_db_range():
+    # Spec: "-96dB to -48dB by 3's" -- the top of the raw range must land on
+    # -48 exactly, which is what confirms the 3 dB step.
+    assert p.volenv_depth_display(0) == "-96dB"
+    assert p.volenv_depth_display(16) == "-48dB"
+
+
+def test_all_fifteen_link_filter_flags_describe_as_on_off():
+    flags = [param for param in p.PARAMETERS.values()
+             if param.name.startswith("E4_LINK_FILTER_")]
+    # 15, not 16: ids 251-266 is 16 parameters, but 251 is the link *type*.
+    assert len(flags) == 15
+    for param in flags:
+        assert p.describe_value(param, 0) == "0 (off)"
+        assert p.describe_value(param, 1) == "1 (on)"
+
+
+def test_scsi_term_and_combine_lr_keep_the_specs_inverted_sense():
+    # Both are stated 0 = on / 1 = off. Normalising them silently would
+    # misreport the device.
+    for name in ("MASTER_SCSI_TERM", "MASTER_COMBINE_LR"):
+        assert p.describe_value(p.lookup(name), 0) == "0 (on)"
+        assert p.describe_value(p.lookup(name), 1) == "1 (off)"
+
+
+def test_link_type_covers_internal_plus_sixteen_midi_channels():
+    param = p.lookup("E4_LINK_INTERNAL_EXTERNAL")
+    assert p.describe_value(param, 0) == "0 (internal)"
+    assert p.describe_value(param, 1) == "1 (MIDI ch 1)"
+    # The manual's "up to 16 external MIDI devices" has to reach the
+    # parameter's own maximum, or the inference behind this mapping is wrong.
+    assert p.describe_value(param, param.maximum) == "16 (MIDI ch 16)"
+
+
+def test_channel_and_offset_style_displays():
+    assert p.describe_value(p.lookup("MIDIGLO_BASIC_CHANNEL"), 0) == "0 (ch 1)"
+    assert p.describe_value(p.lookup("MASTER_FX_MM_CTRL_CHANNEL"), -1) == "-1 (off)"
+    assert p.describe_value(p.lookup("MIDIGLO_MAGIC_PRESET"), 0) == "0 (off)"
+    assert p.describe_value(p.lookup("MIDIGLO_MAGIC_PRESET"), 1) == "1 (preset 000)"
+    assert p.describe_value(p.lookup("MIDIGLO_VEL_CURVE"), 0) == "0 (linear)"
+    assert p.describe_value(p.lookup("MASTER_USING_MAC"), -1) == "-1 (none)"
+
+
+def test_describe_value_never_raises_across_every_parameters_full_range():
+    # A label table that indexes or slices on the raw value must not explode
+    # on a boundary -- the device is the authority on range, not our table.
+    for param in p.PARAMETERS.values():
+        for value in (param.minimum, param.maximum, 0):
+            assert isinstance(p.describe_value(param, value), str)
