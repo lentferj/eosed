@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote.
+# This file is part of eosed.
 # The parameter ids, names, ranges, units, and display-conversion formulas
 # below are transcribed as data from E-mu's own protocol specification:
 #   "Remote Preset Editing via MIDI SysEx", Draft #30, EOS 4.00
@@ -11,12 +11,12 @@
 # deliberately left unimplemented due to an unresolved transcription ambiguity
 # — see the module-level note near cnv_lfo_rate below.
 #
-# eosremote is free software: you can redistribute it and/or modify it
+# eosed is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# eosremote is distributed in the hope that it will be useful, but
+# eosed is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.

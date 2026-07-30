@@ -1,5 +1,5 @@
-eosremote — Terminal remote/editor for the E-mu EOS sampler family (E4/E4XT)
-Copyright (C) 2026  eosremote contributors
+eosed — Terminal editor for the E-mu EOS sampler family (E4/E4XT)
+Copyright (C) 2026  eosed contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -39,14 +39,14 @@ eos/bridge.py
   released under GPL-2.0-or-later. The rest of this file (EosBridge, the
   config.toml read/write helpers) is original work.
 
-eosremote/app.py
+eosed/app.py
   Mostly original work, except: the key-hint legend's fold-to-terminal-width
   algorithm (wrap_blocks) is ported from the sibling k2kremote project
   (k2kremote/app.py's wrap_blocks), same author, released under
   GPL-2.0-or-later.
 
-All other files (eos/__init__.py, eosremote/__init__.py, eosremote/cli.py,
-eosremote/demo.py, tests/)
+All other files (eos/__init__.py, eosed/__init__.py, eosed/cli.py,
+eosed/demo.py, tests/)
   Original work. Released under GPL-2.0-or-later.
 
 -------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote.
+# This file is part of eosed.
 # The SysEx frame layout, command bytes, parameter semantics, and checksum
 # algorithm implemented here are transcribed as data from E-mu's own protocol
 # specification:
@@ -11,12 +11,12 @@
 # protocol specification). See docs/RESOLUTION_NOTES.md §1 for where the
 # source PDF lives and §3 for why this is NOT the front-panel mirror protocol.
 #
-# eosremote is free software: you can redistribute it and/or modify it
+# eosed is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# eosremote is distributed in the hope that it will be useful, but
+# eosed is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.

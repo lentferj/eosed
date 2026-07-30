@@ -1,13 +1,13 @@
 <!--
 SPDX-License-Identifier: GPL-2.0-or-later
-SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 -->
 
-# eosremote
+# eosed
 
 A terminal tool for the E-mu **EOS** sampler family (E4, E4XT, E4XT Ultra,
 E6400, …) driven over MIDI System Exclusive — a command-line explorer
-(`eoscli`) plus a full Textual TUI editor (`eosremote`) for the
+(`eoscli`) plus a full Textual TUI editor (`eosed`) for the
 documented remote editor/librarian protocol, from the same author as the
 sibling **k2kremote** (Kurzweil K2000/K2000R) and **mpc2emu** projects.
 
@@ -19,11 +19,11 @@ sibling **k2kremote** (Kurzweil K2000/K2000R) and **mpc2emu** projects.
 
 ## ⚠️ Use at your own risk — back up first, hardware verification is partial
 
-eosremote is provided **as is, with absolutely no warranty and no
+eosed is provided **as is, with absolutely no warranty and no
 liability** for data loss or **hardware damage**. You assume all risk.
 Full terms: [DISCLAIMER.md](DISCLAIMER.md).
 
-**eosremote's *read* paths have been verified through repeated live
+**eosed's *read* paths have been verified through repeated live
 sessions against a real E4XT Ultra** — `eoscli inquire`/`config`/
 `memory`/`catalog`/`dump`, and the full TUI's preset/voice/link/sample
 browsing, bank switching, reverse sample-usage lookup, and cache-all
@@ -46,7 +46,7 @@ current backups before pointing this at anything you care about.**
 
 ## AI assistance & human authorship
 
-eosremote was built by its human author, **Jan Lentfer**, together with
+eosed was built by its human author, **Jan Lentfer**, together with
 Anthropic's **Claude**, following the pattern of the sibling k2kremote and
 mpc2emu projects. The decision to build the documented editor protocol
 first — rather than start from screen-mirroring, which would require
@@ -67,7 +67,7 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 python3 -m venv .venv
 .venv/bin/pip install -e .[dev]
 .venv/bin/eoscli --demo inquire
-.venv/bin/eosremote --demo
+.venv/bin/eosed --demo
 ```
 
 `--demo` on both entry points runs against a canned in-memory device —
@@ -76,7 +76,7 @@ is the safest way to explore the tool before pointing it at real
 hardware; every screenshot in this README was captured this way.
 
 <p align="center">
-  <img src="docs/screenshots/compact_view.svg" alt="eosremote compact view: a preset selected, its GLOBAL parameters shown, status line and two-row key legend at the bottom" width="720">
+  <img src="docs/screenshots/compact_view.svg" alt="eosed compact view: a preset selected, its GLOBAL parameters shown, status line and two-row key legend at the bottom" width="720">
 </p>
 
 <p align="center"><sub>The default 2-pane compact view: Preset (left) and
@@ -86,13 +86,13 @@ Real hardware use requires a MIDI interface connected to the E4/E4XT:
 
 ```sh
 .venv/bin/eoscli inquire                 # autodetect, read-only identify
-.venv/bin/eosremote                      # TUI, writes disabled by default
-.venv/bin/eosremote --allow-write        # enables edit/rename/Master — see the warning above
+.venv/bin/eosed                      # TUI, writes disabled by default
+.venv/bin/eosed --allow-write        # enables edit/rename/Master — see the warning above
 ```
 
 If you route through `mididings` or similar, make sure the route does
 **not** strip SysEx (see `docs/RESOLUTION_NOTES.md` §5 for a gotcha the
-author hit on their own setup) — though note that `eoscli`/`eosremote`'s
+author hit on their own setup) — though note that `eoscli`/`eosed`'s
 autodetect finds the real hardware send/receive ports directly and does
 not go through such a route at all (confirmed live).
 
@@ -133,7 +133,7 @@ eoscli [--port NAME | --demo] [--device-id N] [--timeout SEC] [--config FILE] <c
 
 ---
 
-## eosremote — the TUI
+## eosed — the TUI
 
 `e` toggles between a compact 2-pane view (Preset | Parameters, the
 default on a fresh install) and the full 4-pane layout below; the choice
@@ -141,7 +141,7 @@ is remembered across restarts (against real hardware — `--demo` never
 touches local state).
 
 <p align="center">
-  <img src="docs/screenshots/extended_view_voice.svg" alt="eosremote extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with a voice selected" width="900">
+  <img src="docs/screenshots/extended_view_voice.svg" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with a voice selected" width="900">
 </p>
 
 <p align="center"><sub>Extended view: Preset · Voice · Parameters · Samples,
@@ -213,7 +213,7 @@ Four panes, left to right:
 Editing, renaming, and the Master menu:
 
 <p align="center">
-  <img src="docs/screenshots/edit_value.svg" alt="eosremote's parameter edit dialog: current value, device-reported min/max/default, and unit" width="900">
+  <img src="docs/screenshots/edit_value.svg" alt="eosed's parameter edit dialog: current value, device-reported min/max/default, and unit" width="900">
 </p>
 
 <p align="center"><sub>Editing a parameter: the dialog shows the
@@ -226,7 +226,7 @@ new one.</sub></p>
   Bank/Presets/Samples — never bound to a single keypress).
 
 <p align="center">
-  <img src="docs/screenshots/master_menu.svg" alt="eosremote's Master menu: a two-step arm-then-fire confirmation for destructive operations, with Delete preset armed" width="900">
+  <img src="docs/screenshots/master_menu.svg" alt="eosed's Master menu: a two-step arm-then-fire confirmation for destructive operations, with Delete preset armed" width="900">
 </p>
 
 <p align="center"><sub>The Master menu requires two keypresses (arm, then
@@ -271,13 +271,13 @@ on each is very different — keep the distinction sharp:
    edit/request with live min/max/default query, preset dump/restore,
    preset/sample naming, memory/config queries, and voice/link/sample-zone
    utilities. **This is the entire subject of this section, and what
-   `eos/` and `eoscli`/`eosremote` implement.**
+   `eos/` and `eoscli`/`eosed` implement.**
 2. **The undocumented panel/remote-control protocol** — `F0 18 7F 00 00
    … F7`. What a tool like Ray Bellis's
    [e-remote](https://www.emu.tools/e-remote/) uses to mirror the
    device's own LCD and inject front-panel button presses (the same
    *kind* of thing k2kremote does for the K2000). E-mu never published
-   this one; only fragments are known publicly, and **eosremote does not
+   this one; only fragments are known publicly, and **eosed does not
    implement it** — see `docs/RESOLUTION_NOTES.md` §3 for what's known
    and the reverse-engineering plan for the rest.
 
@@ -429,7 +429,7 @@ Every one needs its own independent live check, no matter how similar it
 looks to an already-confirmed sibling. `eos/bridge.py`'s
 `preset_num_voices`/`voice_num_szones` now return the raw wire value
 unmodified, with a docstring warning not to trust it as a count;
-`eosremote/app.py` walks live device state directly instead (see
+`eosed/app.py` walks live device state directly instead (see
 `_voice_sample_info`). Full account, including the specific presets and
 front-panel readings involved, in `docs/RESOLUTION_NOTES.md` §11–§12.
 
@@ -665,9 +665,9 @@ eos/
   messages.py    SysEx frame codec: Command enum, every request/response dataclass
   params.py      Parameter id -> name/group/range table, enums, display-conversion curves
   bridge.py      EosBridge: transport (MIDI ports, throttled output), autodetect, config.toml
-eosremote/
+eosed/
   cli.py         eoscli entry point
-  app.py         eosremote Textual TUI
+  app.py         eosed Textual TUI
   demo.py        DemoBridge: canned in-memory device for --demo, no MIDI ever opened
 docs/
   RESOLUTION_NOTES.md   how open items were/are being resolved (RE procedures, live-hardware notes)

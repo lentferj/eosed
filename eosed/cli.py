@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote. Original work. GPL-2.0-or-later.
+# This file is part of eosed. Original work. GPL-2.0-or-later.
 
 """eoscli — read-only command-line explorer for the EOS editor protocol.
 
 Every subcommand here is documented in README.md. ``--demo`` runs every
-command against :class:`eosremote.demo.DemoBridge` and never opens a MIDI
+command against :class:`eosed.demo.DemoBridge` and never opens a MIDI
 port, per the project's synthetic-first hardware rule (see CLAUDE.md).
 """
 
@@ -19,7 +19,7 @@ from typing import Tuple
 from eos import bridge as bridge_mod
 from eos import messages as m
 from eos import params as p
-from eosremote.demo import DemoBridge
+from eosed.demo import DemoBridge
 
 
 def _parse_range(text: str) -> Tuple[int, int]:

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote. Mostly original work, GPL-2.0-or-later,
+# This file is part of eosed. Mostly original work, GPL-2.0-or-later,
 # except: the key-hint legend's fold-to-terminal-width helper (wrap_blocks)
 # is ported from the sibling k2kremote project (k2kremote/app.py's
 # wrap_blocks), same author, also GPL-2.0-or-later — see LICENSE.
@@ -12,7 +12,7 @@
 # this app has no LCD to mirror and no continuous refresh loop; it is a
 # plain on-demand request/response editor.
 
-"""eosremote — a Textual editor for the EOS remote editor protocol.
+"""eosed — a Textual editor for the EOS remote editor protocol.
 
 This is an EDITOR, not a screen mirror: it has no concept of the device's
 own LCD and never presses front-panel buttons (that would need the
@@ -68,7 +68,7 @@ from textual.widgets import DataTable, Header, Input, Static
 from eos import bridge as bridge_mod
 from eos import messages as m
 from eos import params as p
-from eosremote.demo import DemoBridge
+from eosed.demo import DemoBridge
 
 # The preset page size is not a fixed constant: it's recomputed from how many
 # rows the presets pane can actually show, so a taller terminal displays more
@@ -743,7 +743,7 @@ class EosRemoteApp(App):
         self.query_one(Header).set_class(self.allow_write, "-write-armed")
 
     def on_mount(self) -> None:
-        self.title = "eosremote"
+        self.title = "eosed"
         presets_table = self.query_one("#presets", _FillWidthDataTable)
         presets_table.add_columns("#", "Name")
         presets_table.cursor_type = "row"
@@ -1883,7 +1883,7 @@ class EosRemoteApp(App):
 
 def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(
-        prog="eosremote", description="Textual editor for the EOS remote editor protocol.")
+        prog="eosed", description="Textual editor for the EOS remote editor protocol.")
     parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
     parser.add_argument("--device-id", type=int, default=m.DEFAULT_DEVICE_ID)
     parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)

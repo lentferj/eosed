@@ -1,6 +1,6 @@
 <!--
 SPDX-License-Identifier: GPL-2.0-or-later
-SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 -->
 
 # Resolution Notes
@@ -317,7 +317,7 @@ the successful (send_port, recv_port) pair to `config.toml` (CWD-relative,
 gitignored — same convention as k2kremote's `BridgeConfig`); `autodetect()`
 tries that pair first via a single-port probe (`_try_port_pair`) before
 falling back to the full sweep if it's absent, stale, or doesn't answer.
-Both `eoscli` and `eosremote` expose `--config PATH`. Note for anyone editing
+Both `eoscli` and `eosed` expose `--config PATH`. Note for anyone editing
 tests: this writes to the **real filesystem** by default — every synthetic
 test that calls `EosBridge.autodetect()` with a fake `rtmidi` must pass
 `config_path=None` (or an isolated `tmp_path`-based path for tests that
@@ -407,7 +407,7 @@ get displayed as if they were a value name.
 
 Reported live (real E4XT Ultra session, `--demo` off): the presets pane
 looked frozen at a fixed size across terminal resizes while the params pane
-looked like it scaled. Root causes, both in `eosremote/app.py`:
+looked like it scaled. Root causes, both in `eosed/app.py`:
 
 - **`DataTable`'s own built-in default CSS is `height: auto; max-height:
   100%`** — Textual sizes each table to its *content* (row count), not to
@@ -560,7 +560,7 @@ trusted from [a structural derivation], not the count field" — see
 **Final fix:** stopped calling `voice_num_szones` for this purpose
 entirely. `eos.bridge.EosBridge.voice_num_szones` now returns the plain raw
 wire value with a docstring warning not to trust it as a count, kept only
-for API completeness. `eosremote.app._voice_sample_info` instead uses the
+for API completeness. `eosed.app._voice_sample_info` instead uses the
 spec-documented, reliable signal: read the voice-level `E4_GEN_SAMPLE`
 first — if it's not the `0x3FFF` sentinel, the voice is single-sample and
 that value *is* the real sample number, no zone walk needed; if it *is*
@@ -574,7 +574,7 @@ both correctly multi, with the 3 real distinct samples resolved and named
 for each.
 
 **Separate, also-real bug found and fixed alongside this** (not a wire/count
-issue): `eosremote.app.EosRemoteApp._load_voice_detail` read a voice's own
+issue): `eosed.app.EosRemoteApp._load_voice_detail` read a voice's own
 general parameter group for display *after* walking that voice's sample
 zones — but zone-walking leaves `SAMPLE_ZONE_SELECT` pointed at the last
 zone it visited, and the spec only resets zone selection on a fresh
@@ -647,7 +647,7 @@ calling `preset_num_voices` for this purpose entirely.
 `eos.bridge.EosBridge.preset_num_voices` now returns the plain raw wire
 value (the `-1` removed), kept only for API completeness with a docstring
 warning not to trust it as a count — same treatment as `voice_num_szones`.
-`eosremote.app._voice_sample_info` walks voice indices from 0, reading each
+`eosed.app._voice_sample_info` walks voice indices from 0, reading each
 voice's own `E4_GEN_SAMPLE` first: `0x3FFE` means the voice doesn't exist
 and the walk stops (returns `None`); otherwise the existing §11 logic
 applies unchanged (non-`0x3FFF` ⇒ single-sample voice, sample id is the
@@ -656,7 +656,7 @@ value itself; `0x3FFF` ⇒ multisample, walk zones as before). Capped at
 pattern as `_MAX_ZONE_SCAN`. All three call sites that previously trusted
 `preset_num_voices` (`_load_preset_overview`, `_start_browse_voices`, the
 `u` reverse-lookup scan's per-preset voice walk) now use this walk
-instead. `eosremote.demo.DemoBridge` was updated to simulate the same
+instead. `eosed.demo.DemoBridge` was updated to simulate the same
 `0x3FFE` marker for any `VOICE_SELECT` other than 0, since every demo
 preset has exactly one real voice — without this, the walk-based logic
 would have made every demo preset appear to have `_MAX_VOICE_SCAN` voices
@@ -670,7 +670,7 @@ actually existed on the device.
 ## §13 — An empty preset/sample slot answers with a real, named placeholder, not blank or an error (resolved, verified live)
 
 The cache-all sweep's sample-name pass (see the `_run_full_sweep`
-docstring in `eosremote/app.py`) needed its own "is this slot empty"
+docstring in `eosed/app.py`) needed its own "is this slot empty"
 signal, separate from `get_preset_name`'s (whose early-stop already comes
 from the voice walk, not the name lookup — §12 above). Live use against
 the user's real bank (270 presets, S000 upward) reported the sample-name
@@ -708,7 +708,7 @@ letters — neither heuristic had any way to distinguish a real name from
 this specific, legitimate-looking placeholder, because neither guess was
 checked against what the device actually sends before being written.
 
-**Fix:** `eosremote.app._EMPTY_SAMPLE_NAME = "Empty Sample"`; the
+**Fix:** `eosed.app._EMPTY_SAMPLE_NAME = "Empty Sample"`; the
 sample-name loop in `_run_full_sweep` now compares the fetched name
 (case-folded, stripped) against this exact placeholder and treats a
 match the same as blank/absent — counts toward the early-stop gap, and

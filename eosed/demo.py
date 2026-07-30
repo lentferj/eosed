@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote. Original work. GPL-2.0-or-later.
+# This file is part of eosed. Original work. GPL-2.0-or-later.
 
 """A canned, in-memory EOS device for ``--demo`` mode.
 
 Per project convention (see CLAUDE.md's hardware rule, mirrored from
 k2kremote): development and demonstration must be possible with **no MIDI
 port ever opened**. :class:`DemoBridge` duck-types the subset of
-:class:`eos.bridge.EosBridge`'s interface that :mod:`eosremote.cli` uses,
+:class:`eos.bridge.EosBridge`'s interface that :mod:`eosed.cli` uses,
 backed entirely by canned in-memory data.
 """
 
@@ -34,7 +34,7 @@ _DEMO_PARAM_VALUES: Dict[int, int] = {
     183: 0,    # MASTER_TUNING_OFFSET
 }
 
-# eosremote.app walks voice indices directly (preset_num_voices/voice_num_
+# eosed.app walks voice indices directly (preset_num_voices/voice_num_
 # szones cannot be trusted live -- see docs/RESOLUTION_NOTES.md §11/§12),
 # stopping at the device's own 0x3FFE "no such voice" signal. Every demo
 # preset has exactly one real voice (index 0); anything else must answer

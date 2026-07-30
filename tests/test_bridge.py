@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote.  Original work.  GPL-2.0-or-later.
+# This file is part of eosed.  Original work.  GPL-2.0-or-later.
 #
 # These tests use fake MIDI ports — no hardware required.
 
@@ -507,7 +507,7 @@ def test_preset_num_voices_returns_the_raw_unreliable_value():
     # each preset's own dump file) until two more real presets (front-panel-
     # confirmed, audibly playing) directly contradicted it -- not a fixed
     # offset at all, the same failure mode as voice_num_szones.
-    # eosremote.app no longer uses this method's return value at all.
+    # eosed.app no longer uses this method's return value at all.
     def handler(frame):
         _, command, _ = m.parse_frame(frame)
         if command == m.Command.PRESET_NUM_VOICES_REQUEST:
@@ -554,7 +554,7 @@ def test_voice_num_szones_returns_the_raw_unreliable_value():
     # Deliberately NOT corrected (docs/RESOLUTION_NOTES.md §11): confirmed
     # live to disagree with the real zone count in a preset/voice-dependent
     # way with no consistent formula (one voice needed +1, another +3) --
-    # eosremote.app._voice_sample_info does not use this method at all.
+    # eosed.app._voice_sample_info does not use this method at all.
     def handler(frame):
         _, command, _ = m.parse_frame(frame)
         if command == m.Command.VOICE_NUM_SZONES_REQUEST:

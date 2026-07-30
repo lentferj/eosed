@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote.  Original work.  GPL-2.0-or-later.
+# This file is part of eosed.  Original work.  GPL-2.0-or-later.
 #
 # --demo mode never opens a MIDI port — synthetic only.
 
@@ -11,11 +11,11 @@ import pytest
 from textual.widgets import Header
 
 from eos import params as p
-from eosremote import demo as demo_mod
-from eosremote.app import (
+from eosed import demo as demo_mod
+from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
     EosRemoteApp)
-from eosremote.demo import DemoBridge
+from eosed.demo import DemoBridge
 
 
 async def _wait_for(pilot, predicate, tries: int = 60, step: float = 0.05) -> bool:

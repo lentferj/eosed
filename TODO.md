@@ -1,6 +1,6 @@
 <!--
 SPDX-License-Identifier: GPL-2.0-or-later
-SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 -->
 
 # TODO
@@ -89,7 +89,7 @@ a first attempt got the direction backwards. Verified correct against two
 different real presets, one single-voice-style and one where both voices
 are multisample sharing the same 3 samples.
 
-`eosremote/app.py`, four `DataTable`s in one `Horizontal`:
+`eosed/app.py`, four `DataTable`s in one `Horizontal`:
 - **Preset** (`#presets`) — unchanged from `main`: paged, on-demand catalog
   scan, page size dynamic to the pane's height (see `main`'s entry below),
   `g` to goto, `o` to rename, `m` for the Master menu.
@@ -168,7 +168,7 @@ free of letters, so neither heuristic could tell it apart from a real
 name without ever having been checked against what the device actually
 sends. **Fixed** by comparing the fetched sample name (case-folded,
 stripped) against this exact placeholder and treating a match as empty
-— `eosremote.app._EMPTY_SAMPLE_NAME`. **Verified live**, precisely: a
+— `eosed.app._EMPTY_SAMPLE_NAME`. **Verified live**, precisely: a
 direct, read-only run of the app's own sweep against the real E4XT
 Ultra stopped the sample-name pass at sample 204 — exactly 195 (the
 first empty slot) plus the default 10-consecutive-empty gap. `get_preset_name`
@@ -597,7 +597,7 @@ joined `q p s g r o v l u c e m` plus `enter`/`escape`, `Footer` (hardcoded
 to `height: 1` with horizontal scroll on overflow, not wrap — see
 `textual/widgets/_footer.py`'s `Footer`/`FooterKey` `DEFAULT_CSS`) was
 getting crowded, clipping/scrolling entries instead of reflowing them.
-Replaced with `eosremote.app._KeyHints`, a plain `Static` that folds its
+Replaced with `eosed.app._KeyHints`, a plain `Static` that folds its
 text to `self.size.width` via a new `wrap_blocks` helper — **ported from
 the sibling k2kremote project** (`k2kremote/app.py`'s `wrap_blocks`, same
 author, GPL-2.0-or-later; see `LICENSE`'s third-party table, updated

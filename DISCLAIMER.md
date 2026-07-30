@@ -1,13 +1,13 @@
 <!--
 SPDX-License-Identifier: GPL-2.0-or-later
-SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 -->
 
 # Disclaimer
 
 ## AI Assistance & Human Authorship
 
-In the interest of transparency: eosremote was created by its **human
+In the interest of transparency: eosed was created by its **human
 author, Jan Lentfer (<jan.lentfer@web.de>)**, working together with
 Anthropic's **Claude**, an AI coding assistant, and closely follows the
 pattern established by the author's sibling **k2kremote** and **mpc2emu**
@@ -67,17 +67,17 @@ repeated, real-hardware use.
 
 ## Undocumented and Partially-Documented Protocol
 
-EOS exposes **two separate SysEx dialects**, and eosremote's relationship
+EOS exposes **two separate SysEx dialects**, and eosed's relationship
 to each is very different:
 
 1. **The remote editor/librarian protocol** (`F0 18 21 <devID> 55 <cmd> …
    F7`) is fully documented by E-mu Systems in a public specification —
    see [LICENSE](LICENSE) for the exact document and how its facts are
-   used. This is what eosremote implements today.
+   used. This is what eosed implements today.
 2. **The undocumented panel/remote-control protocol** (`F0 18 7F 00 00 …
    F7`) — used by tools that mirror the device's own LCD and inject
    front-panel button presses — was never published by E-mu. Only
-   fragments are known publicly. **eosremote does not implement this
+   fragments are known publicly. **eosed does not implement this
    protocol.** Where `docs/RESOLUTION_NOTES.md` records anything about
    it, that is preliminary reverse-engineering notes, not a verified
    implementation.
@@ -86,12 +86,12 @@ Even within the documented protocol, **several "Number Of X" query
 commands do not behave as their names or the specification's wording
 suggest** — confirmed only by cross-checking against real hardware and
 saved dump files, not derivable from the specification text alone. See
-`docs/RESOLUTION_NOTES.md` §11/§12 for the specifics; eosremote's own
+`docs/RESOLUTION_NOTES.md` §11/§12 for the specifics; eosed's own
 code no longer trusts these fields and instead walks live device state
 directly, but any other implementation working from the same
 specification should not assume those fields are plain counts either.
 
-The author of eosremote is not affiliated with, endorsed by, or otherwise
+The author of eosed is not affiliated with, endorsed by, or otherwise
 connected to **E-mu Systems / Creative Technology Ltd.**
 
 ## No Warranty
@@ -112,7 +112,7 @@ terms.
 
 ## Hardware Risk
 
-eosremote talks to vintage hardware over MIDI System Exclusive. Driving
+eosed talks to vintage hardware over MIDI System Exclusive. Driving
 vintage instruments this way carries inherent risk, above and beyond the
 No Warranty terms above.
 
@@ -134,13 +134,13 @@ specification states the device screen does not reflect a remote edit
 until the preset is touched from the front panel. **Do not assume the
 hardware's LCD agrees with what this tool shows.**
 
-Before and while using eosremote with real hardware:
+Before and while using eosed with real hardware:
 
 1. **Keep good, current backups** of all RAM presets, samples, and
    attached media on the E4/E4XT, so you can recover from an unintended
    change.
 2. **Only one session drives the hardware at a time.** Do not run
-   eosremote (or `eoscli`) against an E4/E4XT that another session, a
+   eosed (or `eoscli`) against an E4/E4XT that another session, a
    probe script, or the front panel may be actively using — ALSA MIDI on
    Linux does **not** enforce exclusive port access, so nothing at the
    OS level will stop or warn about a real conflict; this is a discipline
@@ -157,7 +157,7 @@ or any other adverse effects resulting from the use of this software.
 
 ## Tested Environment
 
-As of this writing, eosremote's protocol and TUI have been developed
+As of this writing, eosed's protocol and TUI have been developed
 against the manufacturer's specification, an extensive synthetic
 (`--demo`/fake-bridge) test suite, **and repeated live sessions against a
 real E-mu E4XT Ultra** running EOS firmware. Live-confirmed so far:

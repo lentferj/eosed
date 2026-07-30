@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright (C) 2026  eosremote contributors
+# SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 #
-# This file is part of eosremote.
+# This file is part of eosed.
 # The throttled-output queue, the MultiIn merged-input facade, and the
 # rtmidi-backend-client leak fix are ported from the sibling k2kremote
 # project's k2kremote/midi_bridge.py, which itself ports them from mpc2emu
@@ -12,12 +12,12 @@
 # standard, spec'd MIDI Device Inquiry (see eos.messages), so autodetect
 # probes with that rather than a device-specific screen-request heuristic.
 #
-# eosremote is free software: you can redistribute it and/or modify it
+# eosed is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 2 of the License, or
 # (at your option) any later version.
 #
-# eosremote is distributed in the hope that it will be useful, but
+# eosed is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
@@ -65,7 +65,7 @@ DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's Bridge
 
 
 # --- config.toml: a flat, local, gitignored key/value store -----------------
-# Shared by the port cache below and eosremote.app's view-mode preference.
+# Shared by the port cache below and eosed.app's view-mode preference.
 # Read-modify-write (not a blind overwrite) so unrelated keys survive each
 # other's saves — this file holds more than one independent setting.
 
@@ -83,7 +83,7 @@ def _read_config_dict(path: str) -> dict:
 
 
 def _write_config_dict(data: dict, path: str) -> None:
-    lines = ["# eosremote local config — gitignored, safe to delete."]
+    lines = ["# eosed local config — gitignored, safe to delete."]
     for key, value in data.items():
         if isinstance(value, bool):
             lines.append(f"{key} = {'true' if value else 'false'}")
@@ -123,7 +123,7 @@ def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_P
 
 
 # --- remembered TUI view mode ------------------------------------------------
-# eosremote.app.EosRemoteApp's compact-vs-extended pane layout, persisted so
+# eosed.app.EosRemoteApp's compact-vs-extended pane layout, persisted so
 # the choice survives a restart (see docs/RESOLUTION_NOTES.md).
 
 def load_compact_view(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
@@ -138,7 +138,7 @@ def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
 
 
 # --- sample-usage reverse-lookup early-stop threshold ------------------------
-# eosremote.app.EosRemoteApp's "which presets use this sample" scan
+# eosed.app.EosRemoteApp's "which presets use this sample" scan
 # (action_find_sample_usage) bails out after this many consecutive
 # no-voices presets, since a full 0-999 sweep can take several minutes.
 # User-edited in config.toml, not written by the app itself: either an int
@@ -155,14 +155,14 @@ def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
     return None
 
 
-# --- "cache all data" sweep (eosremote.app's 'a' key / startup option) -------
+# --- "cache all data" sweep (eosed.app's 'a' key / startup option) -------
 # A full bank sweep (same walk as the sample-usage lookup above, but keeping
 # everything it fetches instead of just the sample->preset mapping) is
 # expensive — several minutes on a fully-populated bank — so both how deep it
 # goes and whether it runs unattended at startup are user-edited, not
 # app-written, same convention as sample_usage_early_stop above. Never
 # persisted to disk *by* the app: the cache itself is deliberately in-memory
-# only (see eosremote.app.EosRemoteApp's cache fields) since a front-panel
+# only (see eosed.app.EosRemoteApp's cache fields) since a front-panel
 # edit is invisible to us and a stale disk cache would confidently lie.
 
 def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
@@ -665,7 +665,7 @@ class EosBridge:
     #   a third bank (both front-panel-confirmed to have 1 real voice each,
     #   both playing audible sound, both reading raw=1 -- which the "-1"
     #   fix would report as 0 real voices). Not a fixed offset at all, same
-    #   failure mode as voice_num_szones. eosremote.app never uses this
+    #   failure mode as voice_num_szones. eosed.app never uses this
     #   method's return value to bound a loop; it walks voice indices
     #   directly instead (see _voice_sample_info's docstring). Kept here,
     #   uncorrected (raw passthrough), only for API completeness.
@@ -704,7 +704,7 @@ class EosBridge:
         voice needed +1, another needed +3 — see docs/RESOLUTION_NOTES.md
         §11). The sibling mpc2emu project independently found the analogous
         on-disk "n_zones" field equally unreliable/redundant for this same
-        device family. ``eosremote.app._voice_sample_info`` does not use
+        device family. ``eosed.app._voice_sample_info`` does not use
         this method at all — it detects "is this voice a multisample" from
         the spec-documented 3FFFh sentinel on the voice's own
         ``E4_GEN_SAMPLE`` instead, then walks zones until one reads 0.
