@@ -1613,3 +1613,216 @@ async def test_demo_never_touches_rtmidi(monkeypatch):
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         assert await _wait_for(pilot, lambda: table.row_count)
+
+
+# --- undo log / change history ------------------------------------------------
+
+async def _edit_param(pilot, app, row: int, new_value: str) -> None:
+    """Drive the Parameters pane's edit flow for the parameter at ``row``."""
+    params = app.query_one("#params")
+    await _wait_for(pilot, lambda: params.row_count)
+    await pilot.click("#params")
+    params.move_cursor(row=row)
+    await pilot.press("enter")
+    assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+    app.screen_stack[-1].query_one("#value").value = ""
+    await pilot.click("#value")
+    for ch in new_value:
+        await pilot.press(ch)
+    await pilot.press("enter")
+    assert await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
+
+
+async def test_edit_records_a_change_and_shows_the_counter():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        assert app._changes == []
+
+        await _edit_param(pilot, app, 0, "5")   # id 0 = E4_PRESET_TRANSPOSE
+        assert await _wait_for(pilot, lambda: len(app._changes) == 1)
+        change = app._changes[0]
+        assert (change.param_id, change.old, change.new) == (0, 0, 5)
+        assert change.scope == "global"
+        # The count lives in the header subtitle, not the status line, so a
+        # later scan/load cannot scroll it away.
+        assert "Δ1" in app.sub_title
+
+
+async def test_undo_restores_the_previous_value_and_reports_it():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+        assert app.bridge.get_parameter(0) == 5
+
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: not app._changes)
+        assert app.bridge.get_parameter(0) == 0
+        # "reverted X from b to a", per the status-line contract
+        assert "reverted" in app.last_status
+        assert "E4_PRESET_TRANSPOSE" in app.last_status
+        assert "from 5 to 0" in app.last_status
+        assert "Δ" not in app.sub_title  # counter disappears at zero
+
+
+async def test_undo_is_step_by_step_and_undo_all_clears_everything():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+        await _edit_param(pilot, app, 0, "7")
+        await _wait_for(pilot, lambda: len(app._changes) == 2)
+        assert app.bridge.get_parameter(0) == 7
+
+        await pilot.press("z")  # one step back, not all the way
+        assert await _wait_for(pilot, lambda: len(app._changes) == 1)
+        assert app.bridge.get_parameter(0) == 5
+
+        await _edit_param(pilot, app, 0, "9")
+        await _wait_for(pilot, lambda: len(app._changes) == 2)
+        await pilot.press("Z")  # undo all, back to as-loaded
+        assert await _wait_for(pilot, lambda: not app._changes)
+        assert app.bridge.get_parameter(0) == 0
+        assert "back to as loaded" in app.last_status
+
+
+async def test_undo_replays_in_reverse_order():
+    # Two edits to *different* parameters, so undoing in the wrong order
+    # would still leave both at their original values and hide the bug --
+    # the order is asserted through the log itself.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+        await _edit_param(pilot, app, 1, "3")
+        await _wait_for(pilot, lambda: len(app._changes) == 2)
+
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: len(app._changes) == 1)
+        # the *second* edit was undone first
+        assert "E4_PRESET_VOLUME" in app.last_status
+        assert app._changes[0].param_id == 0
+
+
+async def test_history_overlay_lists_every_change():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+        await _edit_param(pilot, app, 1, "3")
+        await _wait_for(pilot, lambda: len(app._changes) == 2)
+
+        await pilot.press("h")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        table = app.screen_stack[-1].query_one("#history")
+        assert table.row_count == 2
+        # columns: # | Scope | Parameter | Old | New
+        assert table.get_row("1") == ["1", "global", "E4_PRESET_TRANSPOSE", "0", "5"]
+        assert table.get_row("2")[2] == "E4_PRESET_VOLUME"
+
+        await pilot.press("escape")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
+
+
+async def test_history_overlay_opens_with_no_changes():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await pilot.press("h")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        assert app.screen_stack[-1].query_one("#history").row_count == 1  # the placeholder row
+
+
+async def test_selecting_a_different_preset_discards_the_undo_log():
+    # Every write goes to whatever PRESET_SELECT points at, so a log for a
+    # preset that is no longer selected could not be replayed safely.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app, row=0)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+
+        await _select_preset(pilot, app, row=1)
+        assert app._changes == []
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: "nothing to undo" in app.last_status)
+
+
+async def test_reselecting_the_same_preset_keeps_the_undo_log():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app, row=0)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+
+        await _select_preset(pilot, app, row=0)  # same preset again
+        assert len(app._changes) == 1
+
+
+async def test_undo_is_gated_behind_write_mode():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+
+        await pilot.press("w")  # disarm writes
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: "writes disabled" in app.last_status)
+        assert len(app._changes) == 1        # nothing undone
+        assert app.bridge.get_parameter(0) == 5
+
+
+async def test_no_op_edit_is_not_recorded():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await _edit_param(pilot, app, 0, "0")  # id 0 already reads 0
+        assert await _wait_for(pilot, lambda: "unchanged" in app.last_status)
+        assert app._changes == []
+
+
+async def test_undo_of_a_voice_scoped_edit_restores_the_voice_selection():
+    # A parameter id means "this voice's field" only while VOICE_SELECT
+    # points at it, so the undo has to re-select before writing back.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        await _select_voice(pilot, app)
+        assert await _wait_for(pilot, lambda: app.current_voice == 0)
+
+        await _edit_param(pilot, app, 0, "5")
+        assert await _wait_for(pilot, lambda: len(app._changes) == 1)
+        change = app._changes[0]
+        assert change.voice == 0 and change.scope == "V1"
+
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: not app._changes)
+        assert "[V1]" in app.last_status
+
+
+async def test_history_shows_the_scope_each_change_was_made_under():
+    # The same parameter id edited under two different selections is two
+    # different fields, so the history has to say which -- a row that only
+    # named the parameter would be ambiguous.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test(size=(120, 32)) as pilot:
+        await _select_preset(pilot, app)
+        await _edit_param(pilot, app, 0, "5")           # global scope
+        await _wait_for(pilot, lambda: len(app._changes) == 1)
+        await _select_voice(pilot, app)
+        assert await _wait_for(pilot, lambda: app.current_voice == 0)
+        await _edit_param(pilot, app, 0, "3")           # voice scope
+        await _wait_for(pilot, lambda: len(app._changes) == 2)
+
+        await pilot.press("h")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        table = app.screen_stack[-1].query_one("#history")
+        assert [table.get_row(str(n))[1] for n in (1, 2)] == ["global", "V1"]

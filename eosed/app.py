@@ -54,6 +54,7 @@ from __future__ import annotations
 import argparse
 import math
 import threading
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.text import Text
@@ -196,6 +197,80 @@ _MULTISAMPLE_SENTINEL = 0x3FFF  # spec: voice-level E4_GEN_SAMPLE == this means 
 _NO_SUCH_VOICE_MARKER = 0x3FFE  # empirically: this voice index does not exist on this preset
 _MAX_ZONE_SCAN = 32  # safety cap only — see the docstring below
 _MAX_VOICE_SCAN = 64  # safety cap only — preset_num_voices cannot be trusted at all, see below
+
+
+@dataclass(frozen=True)
+class _Change:
+    """One recorded write to the current preset, enough to replay it backwards.
+
+    ``scope`` is the selection the edit was made under. This protocol is
+    stateful -- a parameter id means "this voice's" or "this link's" field
+    depending on what VOICE_SELECT/LINK_SELECT point at (see
+    docs/RESOLUTION_NOTES.md §11) -- so an undo has to restore the same
+    selection before writing the old value back, or it lands on whatever
+    happens to be selected now. ``param_id`` is None for a preset rename,
+    where ``old``/``new`` are the names.
+    """
+
+    param_id: Optional[int]
+    old: object
+    new: object
+    voice: Optional[int]
+    link: Optional[int]
+    scope: str
+
+    @property
+    def label(self) -> str:
+        if self.param_id is None:
+            return "preset name"
+        return p.PARAMETERS[self.param_id].name
+
+    def describe(self, value: object) -> str:
+        if self.param_id is None:
+            return repr(value)
+        return p.describe_value(p.PARAMETERS[self.param_id], int(value))
+
+
+class HistoryScreen(ModalScreen[None]):
+    """Read-only list of this preset's changes, newest last (see action_history)."""
+
+    BINDINGS = [Binding("escape", "close", "Close"), Binding("h", "close", "Close", show=False)]
+
+    def __init__(self, preset: Optional[int], changes: List[_Change]):
+        super().__init__()
+        self._preset = preset
+        self._changes = changes
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static(f"Changes to preset {self._preset} — {len(self._changes)} "
+                   f"({'z' if self._changes else 'escape'} "
+                   f"{'undoes the last one, ' if self._changes else ''}escape closes)",
+                   id="history_title"),
+            _FillWidthDataTable(id="history"),
+            id="dialog", classes="wide",
+        )
+
+    def on_mount(self) -> None:
+        table = self.query_one("#history", _FillWidthDataTable)
+        # Scope gets its own column rather than a "[V1]" suffix on the
+        # parameter name: it is the selection the edit was made under, and
+        # the same parameter id edited under two different voices is two
+        # genuinely different fields (see _Change's docstring). Reading that
+        # off a suffix means re-parsing it by eye on every row.
+        table.add_columns("#", "Scope", "Parameter", "Old", "New")
+        table.cursor_type = "row"
+        for number, change in enumerate(self._changes, start=1):
+            table.add_row(str(number), change.scope, change.label,
+                          change.describe(change.old), change.describe(change.new),
+                          key=str(number))
+        if not self._changes:
+            table.add_row("—", "", "no changes yet", "", "")
+        table.call_after_refresh(table._stretch_last_column)
+        table.focus()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
 
 
 class _BankState:
@@ -528,6 +603,12 @@ class EosRemoteApp(App):
         width: 64; height: auto; border: round $accent; padding: 1 2;
         background: $surface; align: center middle;
     }
+    /* The history overlay is a 4-column table (#, parameter, old, new) and
+       a parameter name plus its scope alone runs to ~26 chars, so the
+       64-wide dialog the single-field prompts use would truncate it.
+       Capped at 90% so it still fits a narrow terminal. */
+    #dialog.wide { width: 84; max-width: 90%; }
+    #history { height: auto; max-height: 20; }
     #tables { height: 1fr; }
     #presets { width: 22%; height: 1fr; }
     #voices  { width: 13%; height: 1fr; }
@@ -565,6 +646,9 @@ class EosRemoteApp(App):
         Binding("escape", "back_to_preset", "Back to preset"),
         Binding("m", "master_menu", "Master"),
         Binding("w", "toggle_write_mode", "Write mode"),
+        Binding("z", "undo", "Undo"),
+        Binding("Z", "undo_all", "Undo all"),
+        Binding("h", "history", "History"),
     ]
 
     def __init__(self, bridge, *, allow_write: bool, demo: bool,
@@ -702,6 +786,19 @@ class EosRemoteApp(App):
         configured_send_pc = (
             None if self.demo else bridge_mod.load_send_pc_on_preset_select(self._view_config_path))
         self._send_pc_on_preset_select: bool = True if configured_send_pc is None else configured_send_pc
+
+        # Undo log for whichever preset is currently selected, oldest first.
+        # Deliberately in-memory only, and cleared the moment a different
+        # preset is selected: a remote edit is not persistent anyway -- it
+        # lives in the device's RAM until the bank is saved to disk *on the
+        # hardware*, so reloading the bank or power-cycling is the real
+        # "undo everything" and nothing here needs to survive a restart to
+        # be safe. Not a cache, so _invalidate_write_sensitive_caches must
+        # never touch it.
+        self._changes: List[_Change] = []
+        # See _take_pending_status: a confirmation that must survive the
+        # pane refresh its own action kicks off.
+        self._pending_status: Optional[str] = None
 
         self.last_status: str = ""  # exposed for tests
 
@@ -1205,6 +1302,14 @@ class EosRemoteApp(App):
 
     # -- preset selection: voice list + global params + preset-wide samples --
     def select_preset(self, preset: int) -> None:
+        # The undo log is per-preset and in-memory only, so switching preset
+        # discards it -- there is no way to undo an edit to preset 3 while
+        # preset 7 is selected, since every write goes to whatever
+        # PRESET_SELECT currently points at. Re-selecting the *same* preset
+        # (a plain re-click, or coming back from a voice/link) keeps it:
+        # nothing was actually left.
+        if preset != self.current_preset:
+            self._clear_changes()
         self.current_preset = preset
         self.current_voice = None
         self.current_link = None
@@ -1261,7 +1366,9 @@ class EosRemoteApp(App):
         self._show_voices(voice_count, zone_counts)
         self._show_params(ids, values, "global")
         self._show_samples(sample_rows)
-        self.set_status(f"preset {preset}: {voice_count} voice(s), {len(sample_rows)} sample(s) used")
+        self.set_status(self._take_pending_status()
+                        or f"preset {preset}: {voice_count} voice(s), "
+                           f"{len(sample_rows)} sample(s) used")
 
     def _show_voices(self, voice_count: int, zone_counts: Dict[int, int]) -> None:
         table = self.query_one("#voices", _FillWidthDataTable)
@@ -1366,8 +1473,9 @@ class EosRemoteApp(App):
                            sample_rows: List[Tuple[int, str, str]]) -> None:
         self._show_params(ids, values, f"voice V{voice + 1}")
         self._show_samples(sample_rows)
-        self.set_status(f"preset {self.current_preset}: voice V{voice + 1}, "
-                        f"{len(sample_rows)} sample(s) used")
+        self.set_status(self._take_pending_status()
+                        or f"preset {self.current_preset}: voice V{voice + 1}, "
+                           f"{len(sample_rows)} sample(s) used")
 
     def action_browse_links(self) -> None:
         if self.current_preset is None:
@@ -1424,6 +1532,11 @@ class EosRemoteApp(App):
 
     def _show_link_detail(self, link: int, ids: List[int], values: Dict[int, int]) -> None:
         self._show_params(ids, values, f"link L{link + 1}")
+        # _show_params set its own status; re-assert a pending confirmation
+        # over it, same reason as the preset/voice views above.
+        pending = self._take_pending_status()
+        if pending is not None:
+            self.set_status(pending)
 
     def action_back_to_preset(self) -> None:
         if self._scan_active:
@@ -1842,10 +1955,137 @@ class EosRemoteApp(App):
         def on_result(new_value: Optional[int]) -> None:
             if new_value is None:
                 return
-            self._apply_edit(param.id, new_value)
+            if new_value == current:
+                # Not a change; recording it would pad the undo log with
+                # no-ops the user never actually made.
+                self.set_status(f"{param.name} already {current} — unchanged")
+                return
+            self._apply_edit(param.id, new_value, current)
 
         self.push_screen(
             EditValueScreen(param, current, rng.minimum, rng.maximum, rng.default), on_result)
+
+    # -- undo log -------------------------------------------------------------
+    def _current_scope(self) -> Tuple[Optional[int], Optional[int], str]:
+        """(voice, link, label) for the selection an edit is about to be made under."""
+        if self.current_voice is not None:
+            return self.current_voice, None, f"V{self.current_voice + 1}"
+        if self.current_link is not None:
+            return None, self.current_link, f"L{self.current_link + 1}"
+        return None, None, "global"
+
+    def _record_change(self, param_id: Optional[int], old: object, new: object) -> None:
+        voice, link, scope = self._current_scope()
+        self._changes.append(_Change(param_id, old, new, voice, link, scope))
+        self._update_change_indicator()
+
+    def _clear_changes(self) -> None:
+        self._changes = []
+        self._update_change_indicator()
+
+    def _update_change_indicator(self) -> None:
+        # The header subtitle, not the status line: the status line is
+        # transient (every load/scan overwrites it) and a pending-changes
+        # count is exactly the sort of thing that must not scroll away.
+        count = len(self._changes)
+        if self.current_preset is None:
+            self.sub_title = ""
+        elif count:
+            self.sub_title = f"preset {self.current_preset} · Δ{count}"
+        else:
+            self.sub_title = f"preset {self.current_preset}"
+
+    def action_history(self) -> None:
+        self.push_screen(HistoryScreen(self.current_preset, list(self._changes)))
+
+    def action_undo(self) -> None:
+        self._start_undo(1)
+
+    def action_undo_all(self) -> None:
+        self._start_undo(len(self._changes))
+
+    def _start_undo(self, count: int) -> None:
+        if not self._changes:
+            self.set_status("nothing to undo")
+            return
+        if not self.allow_write:
+            # An undo is itself a write, so it is gated exactly like one.
+            self.set_status("writes disabled -- press 'w' to arm write mode")
+            return
+        self._undo_changes(min(count, len(self._changes)))
+
+    @work(thread=True)
+    def _undo_changes(self, count: int) -> None:
+        preset = self.current_preset
+        reverted: List[_Change] = []
+        try:
+            with self._bridge_lock:
+                self.bridge.set_parameter(_PRESET_SELECT, preset)
+                for _ in range(count):
+                    if not self._changes:
+                        break
+                    change = self._changes[-1]
+                    # Restore the selection this edit was made under before
+                    # writing -- see _Change's docstring.
+                    if change.voice is not None:
+                        self.bridge.set_parameter(_VOICE_SELECT, change.voice)
+                    elif change.link is not None:
+                        self.bridge.set_parameter(_LINK_SELECT, change.link)
+                    if change.param_id is None:
+                        self.bridge.set_preset_name(preset, str(change.old))
+                    else:
+                        self.bridge.set_parameter(change.param_id, int(change.old))
+                    # Popped only after the write succeeded, so a failure
+                    # part-way leaves the log describing what is still applied.
+                    self._changes.pop()
+                    reverted.append(change)
+        except Exception as exc:
+            self.call_from_thread(self._finish_undo, reverted, f"undo failed: {exc}")
+            return
+        self.call_from_thread(self._finish_undo, reverted, None)
+
+    def _finish_undo(self, reverted: List[_Change], error: Optional[str]) -> None:
+        self._invalidate_write_sensitive_caches()
+        self._update_change_indicator()
+        if error is not None:
+            message = error
+        elif len(reverted) == 1:
+            change = reverted[0]
+            scope = f" [{change.scope}]" if change.scope != "global" else ""
+            message = (f"reverted {change.label}{scope} from "
+                       f"{change.describe(change.new)} to {change.describe(change.old)}"
+                       f" — Δ{len(self._changes)} left")
+        elif reverted:
+            message = (f"reverted {len(reverted)} change(s) on preset "
+                       f"{self.current_preset} — back to as loaded")
+        else:
+            message = "nothing to undo"
+        # Shown now *and* armed for the refresh below. Re-reading the pane is
+        # a worker, and its completion sets its own "preset N: ..." status --
+        # which would silently swallow the confirmation of what was just
+        # reverted, the same race _show_bank_page's `status` parameter exists
+        # to avoid. Setting both covers either ordering.
+        self.set_status(message)
+        self._pending_status = message
+        # Re-read whatever pane is showing so it reflects the reverted values
+        # rather than the ones the user just undid.
+        self._reload_current_view()
+
+    def _take_pending_status(self) -> Optional[str]:
+        """One-shot status set by an action whose confirmation must outlive
+        the pane refresh it triggers (see _finish_undo)."""
+        status, self._pending_status = self._pending_status, None
+        return status
+
+    def _reload_current_view(self) -> None:
+        if self.current_preset is None:
+            return
+        if self.current_voice is not None:
+            self._load_voice_detail(self.current_preset, self.current_voice)
+        elif self.current_link is not None:
+            self._load_link_detail(self.current_preset, self.current_link)
+        else:
+            self._load_preset_overview(self.current_preset)
 
     def _invalidate_write_sensitive_caches(self) -> None:
         # Any real write could change which sample a voice/zone points at,
@@ -1861,7 +2101,7 @@ class EosRemoteApp(App):
         self._voice_details = {}
 
     @work(thread=True)
-    def _apply_edit(self, param_id: int, value: int) -> None:
+    def _apply_edit(self, param_id: int, value: int, old_value: Optional[int] = None) -> None:
         ids = self._current_param_ids
         try:
             with self._bridge_lock:
@@ -1871,6 +2111,10 @@ class EosRemoteApp(App):
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
         self._invalidate_write_sensitive_caches()
+        if old_value is not None:
+            # Recorded on the UI thread so the header counter and the log
+            # stay consistent with each other.
+            self.call_from_thread(self._record_change, param_id, old_value, value)
         self.call_from_thread(self._show_params, ids, values, self._current_param_label)
         self.call_from_thread(self.set_status, f"set id {param_id} = {value}")
 
@@ -1890,6 +2134,15 @@ class EosRemoteApp(App):
         if name is None:
             return
         number = self.current_preset if self.bank == "preset" else self.current_sample
+        previous = self._current_item_name()
+        if name == previous:
+            self.set_status("name unchanged")
+            return
+        # Only a *preset* rename joins the undo log: the log is scoped to the
+        # selected preset, and a sample's name is not part of it (a sample is
+        # shared by every preset that plays it).
+        if self.bank == "preset" and number == self.current_preset:
+            self._record_change(None, previous, name)
         self._apply_rename(self.bank, number, name)
 
     @work(thread=True)

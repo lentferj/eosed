@@ -242,6 +242,29 @@ keystroke.</sub></p>
   alone. No write path has been exercised against real hardware as
   thoroughly as the read paths yet — see [TODO.md](TODO.md).
 
+- **Undo (`z`), undo-all (`Z`), and a change history (`h`).** Every
+  parameter edit and preset rename made in the session is logged with the
+  value it replaced *and* the selection it was made under (voice/link/
+  global) — the protocol is stateful, so an undo re-selects that scope
+  before writing the old value back, otherwise it would land on whatever
+  is selected now. `z` steps back one change at a time, reporting each in
+  the status line (`reverted E4_PRESET_VOLUME from 5 to 0`); `Z` returns
+  the preset to how it was when loaded; `h` opens a `# | scope | parameter
+  | old | new` table of everything so far — scope is a column of its
+  own, since the same parameter id edited under two different voices is
+  two genuinely different fields. A pending-change count shows in the
+  header (`preset 12 · Δ3`) rather than the status line, which any load or
+  scan would otherwise scroll away.
+
+  The log is **in-memory and per-preset**: selecting a different preset
+  discards it, since every write goes to whatever `PRESET_SELECT` points
+  at and a log for an unselected preset could not be replayed safely. That
+  is not a limitation so much as a reflection of how the hardware works —
+  a remote edit only lives in the device's RAM until you save the bank to
+  disk *on the machine itself*, so reloading the bank or power-cycling is
+  the real "undo everything", and nothing here needs to survive a restart
+  to be safe.
+
 Not yet implemented: NEW-format dump/restore, editing a raw sample's own
 properties (loop points, root key, sample rate — this protocol has no
 generic parameter access to those; see `docs/RESOLUTION_NOTES.md` §10),
