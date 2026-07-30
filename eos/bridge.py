@@ -802,6 +802,17 @@ class EosBridge:
                     self._send(m.Nak(packet_number=message.packet_number,
                                      device_id=self.device_id).encode())
                     frame = self._receive(timeout)
+                    # A device may answer a NAK by giving up rather than
+                    # resending -- decoding that as a data message would
+                    # raise a bare ValueError out of a checksum retry, which
+                    # reads like a codec bug rather than "the device ended
+                    # the transfer".
+                    _, retry_command, _ = m.parse_frame(frame)
+                    if retry_command == m.Command.EOF:
+                        return bytes(data[:header.byte_count])
+                    if retry_command == m.Command.CANCEL:
+                        raise DeviceCancelled(
+                            f"device cancelled the dump of preset {preset} after a NAK")
                     message = m.OldDumpMessage.decode(frame)
                     if message.verify():
                         break
@@ -811,7 +822,11 @@ class EosBridge:
             data.extend(message.data)
             self._send(m.Ack(packet_number=message.packet_number, device_id=self.device_id).encode())
 
-        return bytes(data)
+        # Trim to the count the header promised: the final packet carries
+        # "256 Bytes, or LESS" per the spec, but nothing stops a device from
+        # padding it out to a full packet, and silently returning the padding
+        # would shift every offset a caller computes into the tail.
+        return bytes(data[:header.byte_count])
 
     # -- preset dump (NEW format) -------------------------------------------
     def dump_preset_new(self, preset: int, *, timeout: Optional[float] = None,
@@ -845,6 +860,14 @@ class EosBridge:
                     self._send(m.NewNak(packet_number=message.packet_number,
                                         device_id=self.device_id).encode())
                     frame = self._receive(timeout)
+                    # Same as the OLD path: the device may end the transfer
+                    # in response to a NAK instead of resending.
+                    _, retry_command, _ = m.parse_frame(frame)
+                    if retry_command == m.Command.EOF:
+                        return header, bytes(data[:header.total_bytes])
+                    if retry_command == m.Command.CANCEL:
+                        raise DeviceCancelled(
+                            f"device cancelled the dump of preset {preset} after a NAK")
                     message = m.NewDumpMessage.decode(frame)
                     if message.verify():
                         break
@@ -855,7 +878,8 @@ class EosBridge:
             self._send(m.NewAck(packet_number=message.packet_number,
                                 device_id=self.device_id).encode())
 
-        return header, bytes(data)
+        # Trimmed for the same reason as the OLD path above.
+        return header, bytes(data[:header.total_bytes])
 
     # -- destructive utilities (fire-and-forget; see DESTRUCTIVE_COMMANDS) --
     # The spec defines no acknowledgement format for any of these four

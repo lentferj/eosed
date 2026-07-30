@@ -854,3 +854,57 @@ def test_send_program_change_rejects_out_of_range_channel():
         bridge.send_program_change(0)
 
 
+def test_dump_preset_old_trims_padding_to_header_byte_count():
+    # The spec says the last packet holds "256 Bytes, or LESS"; a device that
+    # pads it to a full packet must not leak that padding into the result,
+    # or every offset a caller computes into the tail shifts.
+    payload = bytes(range(100))
+    padded = payload + bytes(28)
+
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP_REQUEST:
+            return m.OldDumpHeader(byte_count=len(payload)).encode()
+        if command == m.Command.ACK and m.Ack.decode(frame).packet_number == 0:
+            return m.OldDumpMessage(packet_number=1, data=padded).encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.dump_preset_old(0) == payload
+
+
+def test_dump_preset_old_handles_eof_in_response_to_a_nak():
+    # A device may answer a NAK by ending the transfer rather than resending.
+    # That used to hit OldDumpMessage.decode and raise a bare ValueError out
+    # of a checksum retry, which reads like a codec bug.
+    good = bytes(range(50))
+
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP_REQUEST:
+            return m.OldDumpHeader(byte_count=200).encode()
+        if command == m.Command.ACK:
+            # a packet whose checksum does not match its data
+            return m.OldDumpMessage(packet_number=1, data=good, checksum_byte=0x01).encode()
+        if command == m.Command.NAK:
+            return m.EndOfFile().encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.dump_preset_old(0) == b""  # ended cleanly, nothing accumulated
+
+
+def test_dump_preset_old_raises_device_cancelled_when_nak_is_answered_with_cancel():
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP_REQUEST:
+            return m.OldDumpHeader(byte_count=200).encode()
+        if command == m.Command.ACK:
+            return m.OldDumpMessage(packet_number=1, data=bytes(10), checksum_byte=0x01).encode()
+        if command == m.Command.NAK:
+            return m.Cancel().encode()
+        return None
+
+    bridge = _bridge_with(handler)
+    with pytest.raises(bridge_mod.DeviceCancelled):
+        bridge.dump_preset_old(0)
