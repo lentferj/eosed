@@ -166,9 +166,24 @@ _GEN_SAMPLE = p.lookup("E4_GEN_SAMPLE").id
 
 
 def _group_param_ids(group: str) -> List[int]:
-    prefix = {"voice": "voice.", "global": "global", "link": "link"}[group]
-    return sorted(pid for pid, param in p.PARAMETERS.items() if param.group.startswith(prefix))
+    """Every parameter id in one pane's group, ascending.
 
+    Memoized: the id set is derived from a table that never changes at
+    runtime, but this was being recomputed (a full scan + sort of all ~267
+    parameters) once per preset in _load_preset_overview and once per link
+    in _load_link_detail. Callers treat the result as read-only; a copy is
+    returned so a caller that mutates it can't corrupt the shared entry.
+    """
+    cached = _GROUP_PARAM_IDS.get(group)
+    if cached is None:
+        prefix = {"voice": "voice.", "global": "global", "link": "link"}[group]
+        cached = sorted(pid for pid, param in p.PARAMETERS.items()
+                        if param.group.startswith(prefix))
+        _GROUP_PARAM_IDS[group] = cached
+    return list(cached)
+
+
+_GROUP_PARAM_IDS: Dict[str, List[int]] = {}
 
 _VOICE_PARAM_IDS = _group_param_ids("voice")  # the 146-id group, same every voice/preset
 
@@ -967,8 +982,17 @@ class EosRemoteApp(App):
     @work(thread=True)
     def _extend_bank_page(self, bank: str) -> None:
         state = self._bank_state(bank)
-        extend_range = range(state.cache_range.stop,
-                             min(state.cache_range.stop + BROWSER_EXTEND_CHUNK,
+        # Re-read on this thread rather than trusting the check
+        # _maybe_extend_bank_page did on the UI thread: a page load
+        # completing in between resets cache_range (to a fresh window, or to
+        # None), and _extending only guards against a second *extend*, not
+        # against that.
+        cache_range = state.cache_range
+        if cache_range is None:
+            self._extending[bank] = False
+            return
+        extend_range = range(cache_range.stop,
+                             min(cache_range.stop + BROWSER_EXTEND_CHUNK,
                                 SAMPLE_USAGE_SCAN_RANGE.stop))
         try:
             cache = self._catalog_cache[bank]
@@ -986,9 +1010,14 @@ class EosRemoteApp(App):
 
     def _append_bank_rows(self, bank: str, extend_range: range, names: Dict[int, str]) -> None:
         state = self._bank_state(bank)
+        self._extending[bank] = False
+        if state.cache_range is None or state.cache_range.stop != extend_range.start:
+            # A page load landed while this extend was in flight, so these
+            # rows no longer continue what's on screen. Dropping them is
+            # right: appending would leave a gap or a duplicate run.
+            return
         state.cache.update(names)
         state.cache_range = range(state.cache_range.start, extend_range.stop)
-        self._extending[bank] = False
         if bank != self.bank:
             return  # switched banks while this was loading -- cache is still updated for later
         table = self.query_one("#presets", _FillWidthDataTable)
@@ -1408,7 +1437,8 @@ class EosRemoteApp(App):
         self._show_or_reload_preset_overview()
 
     # -- samples pane: resolve raw sample numbers to names -------------------
-    def _resolve_sample_rows(self, by_voice: Dict[int, List[int]]) -> List[Tuple[int, str, str]]:
+    def _resolve_sample_rows(self, by_voice: Dict[int, List[int]],
+                             memo: Optional[Dict[int, str]] = None) -> List[Tuple[int, str, str]]:
         # Assumes self._bridge_lock is already held (called from within the
         # same worker/lock scope as the voice/param reads above).
         # A set, not a list: a voice with several zones that happen to share
@@ -1424,11 +1454,15 @@ class EosRemoteApp(App):
         for number in sorted(users):
             if number in sample_cache:
                 name = sample_cache[number]  # already known from a cache-all sweep — no MIDI
+            elif memo is not None and number in memo:
+                name = memo[number]  # already resolved earlier in this same sweep — no MIDI
             else:
                 try:
                     name = self.bridge.get_sample_name(number)
                 except Exception:
                     name = ""
+                if memo is not None:
+                    memo[number] = name
             voices_label = ",".join(f"V{v + 1}" for v in sorted(users[number]))
             rows.append((number, name, voices_label))
         return rows
@@ -1601,11 +1635,26 @@ class EosRemoteApp(App):
 
         preset_names: Dict[int, str] = {}
         overviews: Dict[int, Tuple] = {}
+        # Sample names resolved during this sweep, shared across every preset
+        # it visits. Without it _resolve_sample_rows consulted only
+        # _catalog_cache["sample"], which this sweep does not populate until
+        # _promote_sweep_result runs at the very end — so a bank where many
+        # presets reuse the same samples re-asked the device for the same
+        # handful of names once per preset, for the whole walk.
+        sample_name_memo: Dict[int, str] = {}
         sample_index: Dict[int, List[Tuple[int, str]]] = {}
         voice_details: Dict[Tuple[int, int], Tuple[List[int], Dict[int, int]]] = {}
         consecutive_empty = 0
         stopped_early = False
         stopped_at = SAMPLE_USAGE_SCAN_RANGE.start
+        # Bound up front, not inside the loop body: an exception escaping the
+        # walk (the PRESET_SELECT write below is outside the per-preset try)
+        # used to leave these unbound, so the `return` at the end raised
+        # UnboundLocalError and buried whatever the real failure was.
+        cancelled = False
+        sample_names: Dict[int, str] = {}
+        sample_stopped_early = False
+        sample_stopped_at = SAMPLE_USAGE_SCAN_RANGE.start
         try:
             with self._bridge_lock:
                 for preset in SAMPLE_USAGE_SCAN_RANGE:
@@ -1616,7 +1665,16 @@ class EosRemoteApp(App):
                         self.set_status,
                         f"caching preset {preset}/{last} ({depth} — "
                         f"'escape' to cancel) ...")
-                    self.bridge.set_parameter(_PRESET_SELECT, preset)
+                    try:
+                        self.bridge.set_parameter(_PRESET_SELECT, preset)
+                    except Exception as exc:
+                        # Was outside any try: a transport failure here (a
+                        # dropped port, say) aborted the whole sweep with a
+                        # bare traceback in a worker thread and no status
+                        # line, since neither caller wraps this method.
+                        self.call_from_thread(self.set_status, f"scan aborted at preset {preset}: {exc}")
+                        cancelled = True
+                        break
                     # Name lookup and the voice walk are independent signals
                     # (see docs/RESOLUTION_NOTES.md §12) — kept in separate
                     # try blocks so a name-lookup failure (a real possibility
@@ -1660,7 +1718,7 @@ class EosRemoteApp(App):
                             found_voices = voice_count > 0
                             global_values = (self.bridge.get_parameters(global_ids)
                                              if depth == "full" else None)
-                            sample_rows = self._resolve_sample_rows(by_voice)
+                            sample_rows = self._resolve_sample_rows(by_voice, sample_name_memo)
                             overviews[preset] = (voice_count, zone_counts, global_ids,
                                                  global_values, sample_rows)
                             if found_voices:
@@ -1679,9 +1737,6 @@ class EosRemoteApp(App):
                                 break
 
                 cancelled = self._cancel_scan
-                sample_names: Dict[int, str] = {}
-                sample_stopped_early = False
-                sample_stopped_at = SAMPLE_USAGE_SCAN_RANGE.start
                 if not cancelled:
                     # A per-sample loop (not catalog_samples, which has no
                     # early-stop hook of its own) so this honors the same
