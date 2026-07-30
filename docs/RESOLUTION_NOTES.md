@@ -920,3 +920,59 @@ methodology and findings on that side).
 **Not yet checked:** whether the same uniform formula extends below id 53
 or above id 128, and whether the NEW-format dump (`dump_preset_new`) has an
 analogous uniform layout or something else entirely.
+
+## §17 — Name-catalog scans are strictly serial; pipelining them is the big win (open, needs a live probe)
+
+`EosBridge.catalog_presets`/`catalog_samples` and `eosed.app`'s cache-all
+sample-name pass all share one shape: send one name request, **block for its
+reply**, repeat. Every item therefore costs at least one full round trip plus
+`SEND_GAP` (0.05s), so a 0-999 sweep has a **~50 second floor in throttle
+alone**, before any device latency — which is most of why a full sweep is
+"several minutes" and why the early-stop heuristic had to be invented.
+
+**Why pipelining should work:** the reply frames are self-identifying. A
+`PRESET_NAME` (`05h`) / `SAMPLE_NAME` (`09h`) response carries the preset/
+sample number in its own payload, so replies do not need to be matched
+positionally to requests — exactly the property `get_parameters` already
+exploits to batch 64 parameter ids per request and sort the answers out by
+id afterwards. Sending K name requests back-to-back and then collecting K
+replies keyed by their embedded number would collapse K round trips into one
+pipeline depth.
+
+**Why it is NOT implemented yet:** nothing in the spec says the device
+queues more than one outstanding request, and the failure mode if it does not
+is silent and ugly — dropped replies read as "this preset has no name", which
+is indistinguishable from an empty slot and would quietly corrupt exactly the
+catalogs this is meant to speed up. That is a wire-behaviour question about
+real hardware, and per CLAUDE.md it must be captured, not assumed.
+
+**Probe to run (single session, hardware rule applies):**
+
+1. With an `aseqdump`-style sniffer on the E4XT's route, send 4 `PresetName
+   Request` frames back-to-back with **no** intervening read, for four
+   presets with known, distinct names.
+2. Count the replies. Four replies, each carrying the right number, means the
+   device queues and pipelining is safe — record the maximum depth that still
+   returns everything (retry with 8, 16, 32).
+3. Fewer than four replies, or replies with wrong/duplicated numbers, means
+   it does not queue: keep the serial loop and close this out as "won't fix",
+   noting the tested depth.
+4. Repeat for `SampleNameRequest` (`0Ah`) separately — do not assume the two
+   behave alike, the same lesson §11/§12 already taught for the "Number Of X"
+   family.
+
+**If step 2 succeeds**, the change is contained: give `catalog_presets`/
+`catalog_samples` a `pipeline_depth` parameter defaulting to 1 (today's exact
+behaviour), send that many requests before collecting, and match each reply
+via `PresetName.decode(...).preset`. Skipped numbers still fall out as
+"absent" the same way they do now. Keep the default at 1 until the probe says
+otherwise.
+
+**Related, deliberately left alone:** `_run_full_sweep` holds `_bridge_lock`
+for the entire multi-minute walk, so every other worker blocks behind it.
+That looks like a responsiveness bug but is load-bearing — this protocol is
+*stateful* (`PRESET_SELECT`/`VOICE_SELECT`/`SAMPLE_ZONE_SELECT` are device-
+side selections, see §11), so letting another request interleave mid-sweep
+would silently re-point the selection under the walk and produce wrong data,
+which is far worse than an unresponsive pane. Any change here needs a
+selection save/restore around each released segment, not just finer locking.
