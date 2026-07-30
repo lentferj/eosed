@@ -225,6 +225,19 @@ new one.</sub></p>
   screen for the destructive utilities (Delete Preset, Erase RAM
   Bank/Presets/Samples — never bound to a single keypress).
 
+- **Three ways to change a value.** `Enter` opens the dialog above and you
+  type a number. Inside that dialog the arrow keys step the value (`↑`/`↓`
+  by 1, `PageUp`/`PageDown` by 10) instead of retyping it. And straight
+  from the Parameters pane, `+`/`-` nudge the highlighted parameter by one
+  step with no dialog at all (`=` works as `+`, so it needs no shift key).
+  Arrow keys are deliberately *not* bound in the pane itself — they move
+  the row cursor, which is the one navigation the app can't give up.
+
+  Nudges clamp to the device's own reported min/max, and a run of
+  consecutive nudges to the same parameter collapses into a single undo
+  entry keeping the value the run started from — holding `+` for ten steps
+  is one edit as far as `z` and the history are concerned.
+
 <p align="center">
   <img src="docs/screenshots/master_menu.svg" alt="eosed's Master menu: a two-step arm-then-fire confirmation for destructive operations, with Delete preset armed" width="900">
 </p>

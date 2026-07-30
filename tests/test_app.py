@@ -1826,3 +1826,143 @@ async def test_history_shows_the_scope_each_change_was_made_under():
         assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
         table = app.screen_stack[-1].query_one("#history")
         assert [table.get_row(str(n))[1] for n in (1, 2)] == ["global", "V1"]
+
+
+# --- +/- nudge and in-dialog stepping -----------------------------------------
+
+async def test_plus_and_minus_nudge_the_highlighted_parameter():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)  # id 0 = E4_PRESET_TRANSPOSE, starts at 0
+
+        await pilot.press("+")
+        assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == 1)
+        await pilot.press("=")  # same as '+', without needing shift
+        assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == 2)
+        await pilot.press("-")
+        assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == 1)
+        assert "E4_PRESET_TRANSPOSE" in app.last_status
+
+
+async def test_nudging_clamps_to_the_device_reported_range():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+
+        # E4_PRESET_TRANSPOSE's maximum is 24; park just below it.
+        app.bridge.set_parameter(0, 24)
+        await pilot.press("+")
+        assert await _wait_for(pilot, lambda: "already at its maximum" in app.last_status)
+        assert app.bridge.get_parameter(0) == 24
+        assert app._changes == []  # a refused nudge is not a change
+
+
+async def test_consecutive_nudges_collapse_into_one_undo_entry():
+    # Holding '+' is one edit as far as the user is concerned; ten log
+    # entries would make both 'z' and the history useless for it.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+
+        for _ in range(3):
+            await pilot.press("+")
+        assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == 3)
+        assert len(app._changes) == 1
+        # ... and it keeps the value the run STARTED from, so one undo
+        # returns the whole run.
+        assert (app._changes[0].old, app._changes[0].new) == (0, 3)
+
+        await pilot.press("z")
+        assert await _wait_for(pilot, lambda: not app._changes)
+        assert app.bridge.get_parameter(0) == 0
+
+
+async def test_nudging_a_different_parameter_starts_a_new_undo_entry():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+
+        params.move_cursor(row=0)
+        await pilot.press("+")
+        assert await _wait_for(pilot, lambda: len(app._changes) == 1)
+        params.move_cursor(row=1)
+        await pilot.press("+")
+        assert await _wait_for(pilot, lambda: len(app._changes) == 2)
+
+
+async def test_nudge_is_gated_behind_write_mode():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+
+        await pilot.press("w")  # disarm
+        await pilot.press("+")
+        assert await _wait_for(pilot, lambda: "writes disabled" in app.last_status)
+        assert app.bridge.get_parameter(0) == 0
+
+
+async def test_nudge_ignores_rows_that_are_not_parameters():
+    # select_sample borrows the Parameters pane for read-only info, keyed by
+    # something that isn't a parameter id.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
+        await pilot.press("s")  # sample bank
+        app.select_sample(0)
+        await pilot.pause()
+        await pilot.click("#params")
+        await pilot.press("+")
+        await pilot.pause(0.2)
+        assert app._changes == []  # no crash, nothing recorded
+
+
+async def test_edit_dialog_arrow_keys_step_the_value():
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        await pilot.click("#params")
+        params.move_cursor(row=0)
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+
+        field = app.screen_stack[-1].query_one("#value")
+        assert field.value == "0"
+        await pilot.press("up")
+        assert field.value == "1"
+        await pilot.press("pageup")
+        assert field.value == "11"
+        await pilot.press("down")
+        assert field.value == "10"
+        await pilot.press("pagedown")
+        assert field.value == "0"
+        # stepping below the minimum clamps rather than wrapping
+        await pilot.press("pagedown")
+        assert field.value == "-10"
+        for _ in range(3):
+            await pilot.press("pagedown")
+        assert field.value == "-24"  # E4_PRESET_TRANSPOSE's minimum
+
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
+        assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == -24)

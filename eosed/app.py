@@ -54,7 +54,7 @@ from __future__ import annotations
 import argparse
 import math
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.text import Text
@@ -364,9 +364,21 @@ class GotoScreen(ModalScreen[Optional[int]]):
 
 
 class EditValueScreen(ModalScreen[Optional[int]]):
-    """Show a parameter's current value + device range; ask for a new value."""
+    """Show a parameter's current value + device range; ask for a new value.
 
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+    Inside this dialog the arrow keys *are* free (there is no row cursor to
+    steal them from, unlike the Parameters pane behind it), so up/down step
+    the value by 1 and page up/down by 10 — for a parameter whose useful
+    range is a handful of steps, that beats retyping the number.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("up", "step(1)", "＋1", show=False),
+        Binding("down", "step(-1)", "−1", show=False),
+        Binding("pageup", "step(10)", "＋10", show=False),
+        Binding("pagedown", "step(-10)", "−10", show=False),
+    ]
 
     def __init__(self, param: p.Parameter, current: int,
                 minimum: int, maximum: int, default: Optional[int]):
@@ -402,6 +414,18 @@ class EditValueScreen(ModalScreen[Optional[int]]):
         if not (self.minimum <= value <= self.maximum):
             return
         self.dismiss(value)
+
+    def action_step(self, delta: int) -> None:
+        field = self.query_one("#value", Input)
+        try:
+            base = int(field.value.strip())
+        except ValueError:
+            base = self.current  # mid-edit garbage: step from the real value
+        value = max(self.minimum, min(self.maximum, base + delta))
+        field.value = str(value)
+        # Keep the caret at the end, so typing after stepping appends rather
+        # than landing wherever the previous text left it.
+        field.cursor_position = len(field.value)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -649,6 +673,11 @@ class EosRemoteApp(App):
         Binding("z", "undo", "Undo"),
         Binding("Z", "undo_all", "Undo all"),
         Binding("h", "history", "History"),
+        # Arrow keys can't be used here -- they move the row cursor in every
+        # pane, which is the one navigation the app can't give up. "=" is
+        # accepted alongside "+" so nudging up doesn't need the shift key.
+        Binding("plus,equals_sign", "nudge_up", "Value +1"),
+        Binding("minus", "nudge_down", "Value -1"),
     ]
 
     def __init__(self, bridge, *, allow_write: bool, demo: bool,
@@ -799,6 +828,12 @@ class EosRemoteApp(App):
         # See _take_pending_status: a confirmation that must survive the
         # pane refresh its own action kicks off.
         self._pending_status: Optional[str] = None
+        # Device-reported min/max/default per parameter id. Fetched lazily and
+        # kept for the session: authoritative over the static table, but it
+        # does not change under us, and re-asking on every nudge would triple
+        # that key's round trips. Cleared with the write-sensitive caches
+        # anyway, so a Master action cannot leave a stale range behind.
+        self._param_ranges: Dict[int, m.ParameterRange] = {}
 
         self.last_status: str = ""  # exposed for tests
 
@@ -1935,6 +1970,94 @@ class EosRemoteApp(App):
             return  # not a real parameter row (e.g. the sample-info display)
         self._start_edit(param_id)
 
+    # -- nudge the highlighted parameter by one step -------------------------
+    def action_nudge_up(self) -> None:
+        self._start_nudge(+1)
+
+    def action_nudge_down(self) -> None:
+        self._start_nudge(-1)
+
+    def _start_nudge(self, delta: int) -> None:
+        param_id = self._selected_param_id()
+        if param_id is None:
+            return
+        if not self.allow_write:
+            self.set_status("writes disabled -- press 'w' to arm write mode")
+            return
+        self._nudge(param_id, delta)
+
+    def _selected_param_id(self) -> Optional[int]:
+        """The parameter id under the Parameters pane's cursor, if it is one.
+
+        Rows in that pane are not always parameters -- select_sample and the
+        sample-usage results borrow it for read-only display, keyed by
+        something that isn't an id.
+        """
+        try:
+            table = self.query_one("#params", DataTable)
+        except NoMatches:
+            return None
+        if table.row_count == 0:
+            return None
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        if row_key.value is None:
+            return None
+        try:
+            return int(row_key.value)
+        except ValueError:
+            return None
+
+    @work(thread=True)
+    def _nudge(self, param_id: int, delta: int) -> None:
+        param = p.PARAMETERS[param_id]
+        ids = self._current_param_ids
+        try:
+            with self._bridge_lock:
+                current = self.bridge.get_parameter(param_id)
+                # The device's own 03h/04h range is authoritative over the
+                # static table (this module's standing rule), but it does not
+                # change under us -- so it is fetched once per parameter and
+                # kept, otherwise every single nudge would cost three round
+                # trips instead of two.
+                rng = self._param_ranges.get(param_id)
+                if rng is None:
+                    rng = self.bridge.get_parameter_range(param_id)
+                    self._param_ranges[param_id] = rng
+                target = max(rng.minimum, min(rng.maximum, current + delta))
+                if target == current:
+                    edge = "maximum" if delta > 0 else "minimum"
+                    self.call_from_thread(
+                        self.set_status,
+                        f"{param.name} already at its {edge} ({current})")
+                    return
+                self.bridge.set_parameter(param_id, target)
+                values = self.bridge.get_parameters(ids)
+        except Exception as exc:
+            self.call_from_thread(self.set_status, f"error: {exc}")
+            return
+        self._invalidate_write_sensitive_caches()
+        self.call_from_thread(self._record_nudge, param_id, current, target)
+        self.call_from_thread(self._show_params, ids, values, self._current_param_label)
+        self.call_from_thread(
+            self.set_status,
+            f"{param.name} = {p.describe_value(param, target)} (was {current})")
+
+    def _record_nudge(self, param_id: int, old: int, new: int) -> None:
+        # Consecutive nudges of the same parameter in the same scope collapse
+        # into one undo entry: holding '+' for ten steps is one edit as far
+        # as the user is concerned, and ten separate entries would make both
+        # the history and 'z' close to useless for it. The entry keeps its
+        # ORIGINAL `old`, so undoing it returns to where the run started.
+        voice, link, scope = self._current_scope()
+        if self._changes:
+            last = self._changes[-1]
+            if (last.param_id == param_id and last.voice == voice
+                    and last.link == link and last.new == old):
+                self._changes[-1] = replace(last, new=new)
+                self._update_change_indicator()
+                return
+        self._record_change(param_id, old, new)
+
     @work(thread=True)
     def _start_edit(self, param_id: int) -> None:
         param = p.PARAMETERS[param_id]
@@ -2099,6 +2222,7 @@ class EosRemoteApp(App):
         self._catalog_cache = {"preset": {}, "sample": {}}
         self._catalog_scanned_upto = {"preset": 0, "sample": 0}
         self._voice_details = {}
+        self._param_ranges = {}
 
     @work(thread=True)
     def _apply_edit(self, param_id: int, value: int, old_value: Optional[int] = None) -> None:
