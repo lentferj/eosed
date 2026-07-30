@@ -317,11 +317,34 @@ _PARAMS: List[Parameter] = [
     _p(256, "E4_LINK_FILTER_CTRL_A", "link.filter", 0, 1, default=0),
     _p(257, "E4_LINK_FILTER_CTRL_B", "link.filter", 0, 1, default=0),
     _p(258, "E4_LINK_FILTER_CTRL_C", "link.filter", 0, 1, default=0),
-    # The spec states 29 total Link parameters (58 bytes/link in a preset
-    # dump): the 13 above (ids 23-35) plus 16 filter-enable-style flags in
-    # this range. Capture of the source PDF stopped at id 258
-    # (E4_LINK_FILTER_CTRL_C); further ids in this range (e.g. a CTRL_D) are
-    # not transcribed. See docs/RESOLUTION_NOTES.md §2.
+    _p(259, "E4_LINK_FILTER_CTRL_D", "link.filter", 0, 1, default=0),
+    _p(260, "E4_LINK_FILTER_CTRL_E", "link.filter", 0, 1, default=0),
+    _p(261, "E4_LINK_FILTER_CTRL_F", "link.filter", 0, 1, default=0),
+    _p(262, "E4_LINK_FILTER_CTRL_G", "link.filter", 0, 1, default=0),
+    _p(263, "E4_LINK_FILTER_CTRL_H", "link.filter", 0, 1, default=0),
+    _p(264, "E4_LINK_FILTER_SWITCH_1", "link.filter", 0, 1, default=0),
+    _p(265, "E4_LINK_FILTER_SWITCH_2", "link.filter", 0, 1, default=0),
+    _p(266, "E4_LINK_FILTER_THUMB", "link.filter", 0, 1, default=0),
+    # ids 251-266 are the spec's "0 = filter off / 1 = filter on" block; with
+    # the 13 at ids 23-35 that makes the 29 Link parameters (58 bytes/link)
+    # the dump format's own byte count calls for — the two now agree.
+
+    # -- MASTER, continued (ids 267-271) ---------------------------------------
+    # 267-270 sit inside the spec's own "/** ULTRA ONLY PARAMETERS **/" fence
+    # — an E4XT/E6400 Ultra has them, a plain E4/E4XT does not. Our unit IS an
+    # Ultra (member code (7,5), see docs/RESOLUTION_NOTES.md §7), so these are
+    # expected to be live here; on a non-Ultra the device's own 03h/04h
+    # min/max/default request is the authoritative "does this exist" check,
+    # same as this module's docstring says for every other id.
+    _p(267, "MASTER_WORD_CLOCK_IN", "master", 0, 4,
+       notes="Ultra only; see WORD_CLOCK_IN_LABELS"),
+    _p(268, "MASTER_WORD_CLOCK_PHASE_IN", "master", 0, 511,
+       notes="Ultra only; 0.00-359.30 degrees in 512 increments"),
+    _p(269, "MASTER_WORD_CLOCK_PHASE_OUT", "master", 0, 511,
+       notes="Ultra only; 0.00-359.30 degrees in 512 increments"),
+    _p(270, "MASTER_OUTPUT_DITHER", "master", 0, 1, notes="Ultra only; 0=off, 1=on"),
+    # 271 is outside the Ultra-only fence — plain E4s have it too.
+    _p(271, "MASTER_AUDITION_KEY", "master", 0, 127),
 ]
 
 PARAMETERS: Dict[int, Parameter] = {p.id: p for p in _PARAMS}
@@ -378,6 +401,12 @@ SUBMIX_LABELS: Dict[int, str] = {
 
 OUTPUT_FORMAT_LABELS: Dict[int, str] = {0: "analog", 1: "AES pro", 2: "S/PDIF"}
 OUTPUT_CLOCK_LABELS: Dict[int, str] = {0: "44.1kHz", 1: "48kHz"}
+# Ultra-only (MASTER_WORD_CLOCK_IN, id 267). The spec names 4 explicitly and
+# labels the fifth "(future expansion)" — kept as the spec's own wording
+# rather than dropped, so a device reporting 4 shows something meaningful.
+WORD_CLOCK_IN_LABELS: Dict[int, str] = {
+    0: "Internal", 1: "BNC", 2: "AES", 3: "ADAT", 4: "(future expansion)",
+}
 MIDI_MODE_LABELS: Dict[int, str] = {0: "omni", 1: "poly", 2: "multi"}
 CTRL7_CURVE_LABELS: Dict[int, str] = {0: "linear", 1: "squared", 2: "logarithmic"}
 
@@ -576,6 +605,8 @@ def _known_value_name(param: Parameter, value: int) -> Optional[str]:
         return OUTPUT_FORMAT_LABELS.get(value)
     if name == "MASTER_OUTPUT_CLOCK":
         return OUTPUT_CLOCK_LABELS.get(value)
+    if name == "MASTER_WORD_CLOCK_IN":
+        return WORD_CLOCK_IN_LABELS.get(value)
     if name == "MIDIGLO_MIDI_MODE":
         return MIDI_MODE_LABELS.get(value)
     if name == "MIDIGLO_CTRL7_CURVE":

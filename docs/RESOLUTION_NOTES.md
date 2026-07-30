@@ -63,6 +63,34 @@ shows.
 report a parameter's live range — always prefer this at runtime over the
 table's static min/max where the two might drift across EOS versions.
 
+**Follow-up (2026-07-30): the transcription was incomplete, and the stated
+reason for it was wrong.** `eos/params.py` carried a comment claiming the PDF
+capture "stopped at id 258 (`E4_LINK_FILTER_CTRL_C`)" and that further ids in
+that range were unavailable. Re-extracting the source PDF with `pdftotext
+-layout` and diffing the result against `PARAMETERS` programmatically showed
+13 spec'd ids simply missing, all of them plainly present in the document:
+
+- **259-266** — `E4_LINK_FILTER_CTRL_D`..`_H`, `_SWITCH_1`, `_SWITCH_2`,
+  `_THUMB` (all 0/1, "0 = filter off / 1 = filter on"). With these the LINK
+  group is 29 parameters, matching the dump format's own "58 bytes per Link"
+  figure exactly — previously it was 21 and silently disagreed with §6's byte
+  arithmetic.
+- **267-270** — `MASTER_WORD_CLOCK_IN` (0-4: Internal/BNC/AES/ADAT/future),
+  `MASTER_WORD_CLOCK_PHASE_IN`/`_OUT` (0-511 = 0.00-359.30° in 512
+  increments), `MASTER_OUTPUT_DITHER` (0/1). These sit inside the spec's own
+  `/** ULTRA ONLY PARAMETERS **/` fence — **our unit is an E4XT Ultra**
+  (member code `(7,5)`, §7), so they are expected to be live here.
+- **271** — `MASTER_AUDITION_KEY` (0-127), outside the Ultra-only fence.
+
+All 13 are now in the table, and `tests/test_params.py` pins both the full id
+set (0-271 minus the spec's own gaps) and the 29-parameter LINK count so the
+dump-format disagreement cannot silently reappear. **Not verified live** —
+transcription only, same status as the rest of this section; the Ultra-only
+four in particular should be confirmed with a `03h`/`04h` range request
+before anything relies on them. The general lesson: a "capture stopped here"
+note is a claim about the tooling, not about the document, and is worth
+re-testing rather than inheriting.
+
 ## §3 — Editor protocol ≠ panel/mirror protocol (key distinction, unresolved on our side)
 
 The PDF above documents **only** parameter/preset editing. It contains no

@@ -454,7 +454,7 @@ itself, kept close to the wire so it stays a trustworthy reference.
 | `E4_PRESET_FX_A_AMT_0`–`_3`, `FX_B_AMT_0`–`_3` | 0..100 % | send level to bus Main/Sub1/Sub2/Sub3 |
 | `E4_PRESET_FX_B_ALGORITHM` | 0..27 | see [FX algorithms](#fx-algorithms) |
 
-#### LINK (ids 23–35, plus filter-enable flags at 251–258)
+#### LINK (ids 23–35, plus filter-enable flags at 251–266)
 
 A Link layers another preset on top of the current one across a
 key/velocity range. `LINK_SELECT` (id 224) picks which one.
@@ -468,12 +468,14 @@ key/velocity range. `LINK_SELECT` (id 224) picks which one.
 | `E4_LINK_FINE_TUNE` | −64..64 | |
 | `E4_LINK_KEY_LOW`/`_HIGH` (+`_LOWFADE`/`_HIGHFADE`) | 0..127 | C-2 → G8 |
 | `E4_LINK_VEL_LOW`/`_HIGH` (+ fades) | 0..127 | |
-| `E4_LINK_INTERNAL_EXTERNAL`, `E4_LINK_FILTER_PITCH`/`_MOD`/`_PRESSURE`/`_PEDAL`/`_CTRL_A`/`_B`/`_C` (ids 251–258) | 0/1 | per-modulator filter-enable flags |
+| `E4_LINK_INTERNAL_EXTERNAL` (id 251) | 0..16 | |
+| `E4_LINK_FILTER_PITCH`/`_MOD`/`_PRESSURE`/`_PEDAL` (ids 252–255) | 0/1 | per-modulator filter-enable flags |
+| `E4_LINK_FILTER_CTRL_A`–`_H` (ids 256–263) | 0/1 | 0 = filter off, 1 = filter on |
+| `E4_LINK_FILTER_SWITCH_1`/`_2`, `E4_LINK_FILTER_THUMB` (ids 264–266) | 0/1 | |
 
 The specification states 29 total Link parameters (58 bytes/link in a
-preset dump); the 13 core fields above plus these filter-enable flags
-account for what this project's source PDF capture reached — see
-`docs/RESOLUTION_NOTES.md` §2 for exactly where the transcription stops.
+preset dump): the 13 core fields above plus the 16 filter-enable flags at
+ids 251–266. The table matches that count exactly.
 
 #### VOICE — general (ids 37–56)
 
@@ -604,7 +606,7 @@ discrepancies before trusting it beyond a convenience UI label.
 page-wrap ambiguity in the source and its count matches the manual's own
 stated total exactly — see `FILTER_TYPE_NAMES` in `eos/params.py`.
 
-#### MASTER (ids 183–222) and addressing (223–227)
+#### MASTER (ids 183–222, 267–271) and addressing (223–227)
 
 Global-to-the-device settings, independent of any preset: master
 tuning/transpose/headroom, digital output format/clock, SCSI id/
@@ -616,6 +618,16 @@ curves). The four addressing selectors (`PRESET_SELECT`/`LINK_SELECT`/
 range (223–227) — see [Addressing model](#addressing-model) above — as
 do the MASTER FX bus (228–245) and MultiMode channel/preset/volume/pan/
 submix settings (246–250).
+
+Four more master settings sit past the Link block, inside the
+specification's own `/** ULTRA ONLY PARAMETERS **/` fence — word clock
+source (`MASTER_WORD_CLOCK_IN`, 267: Internal/BNC/AES/ADAT), word clock
+phase in/out (268/269, 0–511 = 0.00–359.30° in 512 increments) and
+`MASTER_OUTPUT_DITHER` (270). An E4XT/E6400 **Ultra** has these; a plain
+E4/E4XT does not, so treat the device's own `03h`/`04h` min/max/default
+reply as the authoritative "does this id exist here" check.
+`MASTER_AUDITION_KEY` (271) is outside that fence and applies to every
+model.
 
 ### Display-conversion curves
 

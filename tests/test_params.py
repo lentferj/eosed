@@ -11,9 +11,18 @@ from eos import params as p
 
 
 def test_parameter_count_matches_expected_gaps():
-    # ids 0-258 minus the spec's own "not used" gaps (22, 36, 196, 197, 200).
-    expected_ids = set(range(0, 259)) - {22, 36, 196, 197, 200}
+    # ids 0-271 (the last one the spec defines, MASTER_AUDITION_KEY) minus
+    # the spec's own "not used" gaps (22, 36, 196, 197, 200).
+    expected_ids = set(range(0, 272)) - {22, 36, 196, 197, 200}
     assert set(p.PARAMETERS) == expected_ids
+
+
+def test_link_parameter_count_matches_dump_format():
+    # The spec's dump format states 29 Link parameters, 58 bytes per Link —
+    # ids 23-35 plus the filter-enable flags at 251-266. A mismatch here means
+    # the parameter table and the dump byte count disagree about what a Link is.
+    link_ids = [pid for pid, param in p.PARAMETERS.items() if param.group.startswith("link")]
+    assert len(link_ids) == 29
 
 
 def test_lookup_by_id_and_name_agree():
