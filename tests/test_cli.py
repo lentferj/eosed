@@ -118,3 +118,24 @@ def test_demo_bridge_never_touches_rtmidi(monkeypatch):
     bridge = DemoBridge()
     assert bridge.inquire().model == "E4XT"
     bridge.close()
+
+
+def test_demo_bridges_do_not_share_device_state():
+    # DemoBridge's backing dicts used to be module-level, so one instance
+    # erasing its bank wiped every other instance's too -- process-wide,
+    # order-dependent, and the reason the app tests needed an autouse
+    # save/restore fixture to pass at all.
+    first = DemoBridge()
+    second = DemoBridge()
+
+    first.erase_all_ram_presets()
+    first.set_sample_name(0, "Renamed")
+    first.set_parameter(1, 42)
+
+    assert first.preset_names == {}
+    assert second.preset_names, "second bridge lost its presets to the first"
+    assert second.get_sample_name(0) == "Demo Kick"
+    assert second.get_parameter(1) == 0
+
+    # ... and a bridge built after the damage still starts from the defaults.
+    assert DemoBridge().preset_names == second.preset_names

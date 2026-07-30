@@ -19,16 +19,24 @@ from typing import Callable, Dict, Optional
 from eos import messages as m
 from eos import params as p
 
-_DEMO_PRESET_NAMES: Dict[int, str] = {
+# Starting state only — each DemoBridge copies these into its own instance
+# attributes (see __init__). They are NEVER mutated: a DemoBridge models a
+# device whose presets can be renamed, erased and edited, and when that state
+# lived in these module-level dicts every instance in a process shared one
+# device. A single `erase_all_ram_presets()` (or even a `set_parameter`) then
+# leaked into every later DemoBridge — which is exactly why tests needed an
+# autouse save/restore fixture to work at all. Two demo sessions in one
+# process are now genuinely independent.
+_DEFAULT_PRESET_NAMES: Dict[int, str] = {
     0: "Demo Grand Piano",
     1: "Demo Warm Pad",
     5: "Demo Bass",
 }
-_DEMO_SAMPLE_NAMES: Dict[int, str] = {
+_DEFAULT_SAMPLE_NAMES: Dict[int, str] = {
     0: "Demo Kick",
     1: "Demo Snare",
 }
-_DEMO_PARAM_VALUES: Dict[int, int] = {
+_DEFAULT_PARAM_VALUES: Dict[int, int] = {
     1: 0,      # E4_PRESET_VOLUME
     39: -6,    # E4_GEN_VOLUME
     183: 0,    # MASTER_TUNING_OFFSET
@@ -57,6 +65,11 @@ class DemoBridge:
         self.device_id = m.DEFAULT_DEVICE_ID
         self.inquiry = m.DeviceInquiryReply(
             device_id=0, family_code=m.FAMILY_CODE, member_code=(0x04, 0x05), revision="4.00")
+        # This instance's own mutable "device" state — public, so tests can
+        # assert against it directly instead of reaching into module globals.
+        self.preset_names: Dict[int, str] = dict(_DEFAULT_PRESET_NAMES)
+        self.sample_names: Dict[int, str] = dict(_DEFAULT_SAMPLE_NAMES)
+        self.param_values: Dict[int, int] = dict(_DEFAULT_PARAM_VALUES)
 
     def inquire(self, *, timeout: Optional[float] = None) -> m.DeviceInquiryReply:
         return self.inquiry
@@ -77,24 +90,24 @@ class DemoBridge:
         return m.SampleMemoryResponse(total_mb=32, free_10kb=2000, device_id=self.device_id)
 
     def preset_num_voices(self, preset: int, *, timeout: Optional[float] = None) -> int:
-        return 1 if preset in _DEMO_PRESET_NAMES else 0
+        return 1 if preset in self.preset_names else 0
 
     def preset_num_links(self, preset: int, *, timeout: Optional[float] = None) -> int:
         return 0
 
     def preset_num_szones(self, preset: int, *, timeout: Optional[float] = None) -> int:
-        return 1 if preset in _DEMO_PRESET_NAMES else 0
+        return 1 if preset in self.preset_names else 0
 
     def voice_num_szones(self, preset: int, voice: int, *, timeout: Optional[float] = None) -> int:
         return 1
 
     def get_parameter(self, param_id: int, *, timeout: Optional[float] = None) -> int:
-        if param_id == _GEN_SAMPLE_ID and _DEMO_PARAM_VALUES.get(_VOICE_SELECT_ID, 0) != 0:
+        if param_id == _GEN_SAMPLE_ID and self.param_values.get(_VOICE_SELECT_ID, 0) != 0:
             return _NO_SUCH_VOICE_MARKER
-        return _DEMO_PARAM_VALUES.get(param_id, 0)
+        return self.param_values.get(param_id, 0)
 
     def get_parameters(self, param_ids, *, timeout: Optional[float] = None) -> Dict[int, int]:
-        return {pid: _DEMO_PARAM_VALUES.get(pid, 0) for pid in param_ids}
+        return {pid: self.param_values.get(pid, 0) for pid in param_ids}
 
     def get_parameter_range(self, param_id: int, *,
                             timeout: Optional[float] = None) -> m.ParameterRange:
@@ -105,7 +118,7 @@ class DemoBridge:
         return m.ParameterRange(param_id, param.minimum, param.maximum, default, self.device_id)
 
     def set_parameter(self, param_id: int, value: int) -> None:
-        _DEMO_PARAM_VALUES[param_id] = value
+        self.param_values[param_id] = value
 
     def set_parameters(self, values) -> None:
         for param_id, value in values:
@@ -113,32 +126,32 @@ class DemoBridge:
 
     # -- destructive utilities: real (in-memory) effect, no hardware risk --
     def delete_preset(self, preset: int) -> None:
-        _DEMO_PRESET_NAMES.pop(preset, None)
+        self.preset_names.pop(preset, None)
 
     def erase_ram_bank(self) -> None:
-        _DEMO_PRESET_NAMES.clear()
+        self.preset_names.clear()
 
     def erase_all_ram_presets(self) -> None:
-        _DEMO_PRESET_NAMES.clear()
+        self.preset_names.clear()
 
     def erase_all_ram_samples(self) -> None:
-        _DEMO_SAMPLE_NAMES.clear()
+        self.sample_names.clear()
 
     def get_preset_name(self, preset: int, *, timeout: Optional[float] = None) -> str:
-        if preset not in _DEMO_PRESET_NAMES:
+        if preset not in self.preset_names:
             raise LookupError(f"demo has no preset {preset}")
-        return _DEMO_PRESET_NAMES[preset]
+        return self.preset_names[preset]
 
     def set_preset_name(self, preset: int, name: str) -> None:
-        _DEMO_PRESET_NAMES[preset] = name
+        self.preset_names[preset] = name
 
     def get_sample_name(self, sample: int, *, timeout: Optional[float] = None) -> str:
-        if sample not in _DEMO_SAMPLE_NAMES:
+        if sample not in self.sample_names:
             raise LookupError(f"demo has no sample {sample}")
-        return _DEMO_SAMPLE_NAMES[sample]
+        return self.sample_names[sample]
 
     def set_sample_name(self, sample: int, name: str) -> None:
-        _DEMO_SAMPLE_NAMES[sample] = name
+        self.sample_names[sample] = name
 
     def catalog_presets(self, preset_range=range(0, 128), *,
                        timeout: Optional[float] = None,
@@ -147,8 +160,8 @@ class DemoBridge:
         for number in preset_range:
             if on_progress is not None:
                 on_progress(number)
-            if number in _DEMO_PRESET_NAMES:
-                result[number] = _DEMO_PRESET_NAMES[number]
+            if number in self.preset_names:
+                result[number] = self.preset_names[number]
         return result
 
     def catalog_samples(self, sample_range=range(0, 128), *,
@@ -158,15 +171,15 @@ class DemoBridge:
         for number in sample_range:
             if on_progress is not None:
                 on_progress(number)
-            if number in _DEMO_SAMPLE_NAMES:
-                result[number] = _DEMO_SAMPLE_NAMES[number]
+            if number in self.sample_names:
+                result[number] = self.sample_names[number]
         return result
 
     def dump_preset_old(self, preset: int, *, timeout: Optional[float] = None,
                         max_retries: int = 3) -> bytes:
-        if preset not in _DEMO_PRESET_NAMES:
+        if preset not in self.preset_names:
             raise LookupError(f"demo has no preset {preset}")
-        name = _name_bytes(_DEMO_PRESET_NAMES[preset])
+        name = _name_bytes(self.preset_names[preset])
         return bytes(name) + bytes(44)  # name + zeroed global parms; no links/voices in the demo
 
     def dump_preset_new(self, preset: int, *, timeout: Optional[float] = None, max_retries: int = 3):

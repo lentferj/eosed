@@ -7,11 +7,9 @@
 
 import asyncio
 
-import pytest
 from textual.widgets import Header
 
 from eos import params as p
-from eosed import demo as demo_mod
 from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
     EosRemoteApp)
@@ -24,22 +22,6 @@ async def _wait_for(pilot, predicate, tries: int = 60, step: float = 0.05) -> bo
         if predicate():
             return True
     return False
-
-
-@pytest.fixture(autouse=True)
-def _reset_demo_state():
-    # DemoBridge's backing dicts are module-level, so tests must not leak
-    # state into each other.
-    saved_presets = dict(demo_mod._DEMO_PRESET_NAMES)
-    saved_samples = dict(demo_mod._DEMO_SAMPLE_NAMES)
-    saved_params = dict(demo_mod._DEMO_PARAM_VALUES)
-    yield
-    demo_mod._DEMO_PRESET_NAMES.clear()
-    demo_mod._DEMO_PRESET_NAMES.update(saved_presets)
-    demo_mod._DEMO_SAMPLE_NAMES.clear()
-    demo_mod._DEMO_SAMPLE_NAMES.update(saved_samples)
-    demo_mod._DEMO_PARAM_VALUES.clear()
-    demo_mod._DEMO_PARAM_VALUES.update(saved_params)
 
 
 async def _select_preset(pilot, app, row: int = 0) -> None:
@@ -1033,20 +1015,20 @@ async def test_master_menu_delete_preset_requires_arm_then_fire():
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
-        assert 0 in demo_mod._DEMO_PRESET_NAMES
+        assert 0 in app.bridge.preset_names
         await pilot.press("m")
         assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
         # escape without arming must not fire anything
         await pilot.press("escape")
         await pilot.pause(0.1)
-        assert 0 in demo_mod._DEMO_PRESET_NAMES
+        assert 0 in app.bridge.preset_names
 
         await pilot.press("m")
         await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
         await pilot.press("1")       # arm delete_preset
         await pilot.press("enter")   # fire
         assert await _wait_for(pilot, lambda: "fired: delete_preset" in app.last_status)
-        assert 0 not in demo_mod._DEMO_PRESET_NAMES
+        assert 0 not in app.bridge.preset_names
 
 
 async def test_master_menu_erase_all_presets():
@@ -1054,14 +1036,14 @@ async def test_master_menu_erase_all_presets():
     async with app.run_test() as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
-        assert demo_mod._DEMO_PRESET_NAMES  # something's there to erase
+        assert app.bridge.preset_names  # something's there to erase
 
         await pilot.press("m")
         assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
         await pilot.press("3")       # arm erase_all_presets
         await pilot.press("enter")   # fire
         assert await _wait_for(pilot, lambda: "fired: erase_all_presets" in app.last_status)
-        assert demo_mod._DEMO_PRESET_NAMES == {}
+        assert app.bridge.preset_names == {}
 
 
 async def test_master_menu_delete_preset_unavailable_without_selection():
@@ -1105,7 +1087,7 @@ async def test_writes_disabled_by_default_blocks_edit_rename_and_master():
         await pilot.press("3")
         await pilot.press("enter")
         assert await _wait_for(pilot, lambda: "disabled" in app.last_status)
-        assert demo_mod._DEMO_PRESET_NAMES  # erase_all_presets did NOT fire
+        assert app.bridge.preset_names  # erase_all_presets did NOT fire
 
 
 async def test_write_mode_toggle_arms_writes_and_colors_the_header():
