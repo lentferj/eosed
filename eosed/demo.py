@@ -175,15 +175,32 @@ class DemoBridge:
                 result[number] = self.sample_names[number]
         return result
 
-    def dump_preset_old(self, preset: int, *, timeout: Optional[float] = None,
-                        max_retries: int = 3) -> bytes:
+    def _dump_body(self, preset: int) -> bytes:
+        """``<name 16><globals 44>`` — the part both dump formats share.
+
+        No links or voices in the demo, so the globals are zeroed and the
+        payload ends there.
+        """
         if preset not in self.preset_names:
             raise LookupError(f"demo has no preset {preset}")
-        name = _name_bytes(self.preset_names[preset])
-        return bytes(name) + bytes(44)  # name + zeroed global parms; no links/voices in the demo
+        return _name_bytes(self.preset_names[preset]) + bytes(44)
+
+    # The two formats differ in whether the *payload* carries the preset
+    # number, and the demo previously got this wrong in both directions by
+    # having NEW reuse OLD's bytes verbatim:
+    #   OLD — `<preset u14><name><globals>`, confirmed live against a real
+    #     E4XT Ultra dump (docs/RESOLUTION_NOTES.md §7). The demo omitted the
+    #     leading number entirely, so `eoscli dump --demo` produced a file
+    #     shifted two bytes against every real capture.
+    #   NEW — `<name><globals>` with the preset number carried in the *header*
+    #     instead (spec, "NEW Dump Data Formats"). Reusing OLD's payload put
+    #     the number in twice.
+    def dump_preset_old(self, preset: int, *, timeout: Optional[float] = None,
+                        max_retries: int = 3) -> bytes:
+        return bytes(m.encode_u14(preset)) + self._dump_body(preset)
 
     def dump_preset_new(self, preset: int, *, timeout: Optional[float] = None, max_retries: int = 3):
-        data = self.dump_preset_old(preset, timeout=timeout)
+        data = self._dump_body(preset)
         header = m.NewDumpHeader(preset=preset, total_bytes=len(data), num_global_params=22,
                                  num_link_params=0, num_voice_params=0, num_zone_params=0,
                                  device_id=self.device_id)

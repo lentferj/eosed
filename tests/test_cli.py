@@ -7,6 +7,7 @@
 
 import pytest
 
+from eos import messages as m
 from eosed import cli
 from eosed.demo import DemoBridge
 
@@ -77,7 +78,13 @@ def test_demo_dump_old_format(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "OLD format dump" in out
     data = output.read_bytes()
-    assert data[:16] == b"Demo Grand Piano"
+    # OLD payload leads with the preset number, then the name — the layout
+    # confirmed live against a real E4XT Ultra dump (RESOLUTION_NOTES §7).
+    # This previously asserted a name-first layout, which is the NEW format's
+    # shape, and so silently locked in a demo fixture that disagreed with
+    # every real capture.
+    assert data[:2] == bytes(m.encode_u14(0))
+    assert data[2:18] == b"Demo Grand Piano"
 
 
 def test_demo_dump_new_format(tmp_path, capsys):
@@ -85,7 +92,9 @@ def test_demo_dump_new_format(tmp_path, capsys):
     cli.main(["--demo", "dump", "0", str(output), "--new-format"])
     out = capsys.readouterr().out
     assert "NEW format dump" in out
-    assert output.exists()
+    # NEW carries the preset number in the header, NOT the payload, so this
+    # one really does start with the name (spec, "NEW Dump Data Formats").
+    assert output.read_bytes()[:16] == b"Demo Grand Piano"
 
 
 def test_demo_dump_missing_preset_exits_nonzero(tmp_path, capsys):
