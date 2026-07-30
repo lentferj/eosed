@@ -61,6 +61,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.widgets import DataTable, Header, Input, Static
@@ -792,6 +793,17 @@ class EosRemoteApp(App):
             self._start_cache_all(self._cache_depth)
 
     def on_unmount(self) -> None:
+        # The very first layout pass fires a resize, which arms the
+        # BROWSER_RESIZE_SETTLE debounce below — so a short-lived app (any
+        # test, or a quick quit) routinely shuts down with one still pending.
+        # Left armed, it fires against a screen whose widgets are already
+        # gone; _settle_browser_resize guards that too, but cancelling here
+        # means the callback simply never runs rather than running and
+        # bailing (and, more importantly, never dispatches a load_bank_page
+        # worker at a point where there is nothing left to display it).
+        if self._resize_timer is not None:
+            self._resize_timer.stop()
+            self._resize_timer = None
         if self.bridge is not None:
             try:
                 self.bridge.close()
@@ -821,7 +833,13 @@ class EosRemoteApp(App):
 
     def _settle_browser_resize(self) -> None:
         self._resize_timer = None
-        new_window = self._desired_browser_window()
+        try:
+            new_window = self._desired_browser_window()
+        except NoMatches:
+            # Torn down between the resize that armed this timer and the
+            # timer firing (on_unmount cancels it, but the callback can
+            # already be queued by then) — there is no pane left to size.
+            return
         if new_window == self.browser_window:
             return
         bank = self.bank

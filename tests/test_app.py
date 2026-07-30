@@ -1303,6 +1303,26 @@ async def test_browser_window_grows_and_shrinks_with_terminal_height():
         assert len(scans) == 1
 
 
+async def test_pending_resize_debounce_survives_teardown():
+    # Regression: the first layout pass fires a resize, which arms the
+    # BROWSER_RESIZE_SETTLE debounce -- so a short-lived app routinely shuts
+    # down with one still pending. It used to fire against the torn-down
+    # screen and raise NoMatches out of the timer, which surfaced as a
+    # *different* test failing intermittently (whichever one happened to be
+    # running when the stray callback landed) rather than as anything
+    # pointing back here. Asserted directly instead of racing the real
+    # timing, which is exactly what made the original flake so hard to place.
+    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test(size=(80, 24)) as pilot:
+        presets = app.query_one("#presets")
+        await _wait_for(pilot, lambda: presets.row_count)
+
+    # on_unmount must have disarmed it ...
+    assert app._resize_timer is None
+    # ... and the callback must be harmless even if it was already queued.
+    app._settle_browser_resize()
+
+
 async def test_scrolling_near_bottom_of_page_extends_with_more_rows():
     # Live-caught: the preset/sample pane only ever showed one fetched
     # window, with 'g' (goto) as the only way to reach past it -- easy not
