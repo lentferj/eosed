@@ -55,6 +55,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import rtmidi  # noqa: E402
 
 from eos import messages as m
+from eos import params as p
 
 # --- defaults ----------------------------------------------------------
 SEND_GAP = 0.05            # conservative; NOT reverse-engineered for EOS (see module docstring)
@@ -176,6 +177,38 @@ def load_cache_depth(path: str = DEFAULT_CONFIG_PATH) -> Optional[str]:
     if isinstance(value, str) and value.strip().lower() in ("names", "structure", "full"):
         return value.strip().lower()
     return None
+
+
+# --- signed parameter values -------------------------------------------------
+def _signed_value(param_id: int, raw: int) -> int:
+    """Sign-extend a parameter value read off the wire, if it is a signed one.
+
+    Parameter values travel as 14-bit two's complement (`encode_s14`), but the
+    device's *value* replies (a Parameter Value Edit reusing command 01h) carry
+    no signedness flag, so `ParameterEdit.decode` can only hand back the raw
+    unsigned word -- E4_PRESET_TRANSPOSE = -12 arrives as 16372. Its sibling
+    03h/04h min/max/default reply *is* decoded signed (`ParameterRange`), so
+    without this the two halves of the same parameter disagree: a range of
+    [-24, 24] against a current value of 16372.
+
+    Confirmed live 2026-07-31 against an E4XT Ultra (rev 4.70): writing -12
+    and -24 to E4_PRESET_TRANSPOSE read back as 16372 and 16360, i.e. exactly
+    `value & 0x3FFF` -- the write path and the device are both correct, only
+    the read side was missing the sign extension.
+
+    Which parameters are signed comes from `eos.params`' own table (a negative
+    `minimum`), the same table that supplies every other per-parameter fact.
+    An id absent from the table, or any value without bit 13 set, is passed
+    through untouched -- which is what keeps the undocumented 3FFEh/3FFFh
+    E4_GEN_SAMPLE sentinels (an unsigned 0..999 parameter) intact.
+    """
+    if not raw & 0x2000:
+        return raw
+    try:
+        param = p.lookup(param_id)
+    except KeyError:
+        return raw
+    return raw - 0x4000 if param.minimum < 0 else raw
 
 
 # --- send Program Change on preset select ------------------------------------
@@ -563,20 +596,36 @@ class EosBridge:
 
     # -- parameters ----------------------------------------------------------
     def get_parameter(self, param_id: int, *, timeout: Optional[float] = None) -> int:
-        """Current value of one parameter (device's reply reuses ParameterEdit's format)."""
+        """Current value of one parameter (device's reply reuses ParameterEdit's
+        format), sign-extended for signed parameters -- see `_signed_value`."""
         req = m.ParameterRequest(param_ids=[param_id], device_id=self.device_id)
         reply = self.send_and_receive(req.encode(), timeout=timeout)
         edit = m.ParameterEdit.decode(reply)
         for pid, value in edit.values:
             if pid == param_id:
-                return value
+                return _signed_value(pid, value)
         raise ValueError(f"reply did not include parameter {param_id}")
 
     def get_parameter_range(self, param_id: int, *,
                             timeout: Optional[float] = None) -> m.ParameterRange:
+        """The device's own min/max/default for one parameter -- authoritative
+        over `eos.params`' transcribed range, which is a different EOS version's.
+
+        Sign-extended through the same `_signed_value` the value read uses, so
+        a parameter's range and its current value can never disagree about
+        signedness (they did before: a range of [-24, 24] against a value of
+        16372).
+        """
         req = m.ParameterRangeRequest(param_id=param_id, device_id=self.device_id)
         reply = self.send_and_receive(req.encode(), timeout=timeout)
-        return m.ParameterRange.decode(reply)
+        raw = m.ParameterRange.decode(reply)
+        return m.ParameterRange(
+            param_id=raw.param_id,
+            minimum=_signed_value(param_id, raw.minimum),
+            maximum=_signed_value(param_id, raw.maximum),
+            default=_signed_value(param_id, raw.default),
+            device_id=raw.device_id,
+        )
 
     def get_parameters(self, param_ids, *, timeout: Optional[float] = None) -> Dict[int, int]:
         """Current value of several parameters in as few round trips as the
@@ -585,6 +634,9 @@ class EosBridge:
         Value Edit SYSEX message for each parameter" — i.e. one reply frame
         per requested id, not one combined frame — so this receives frames
         in a loop until every id in the chunk has been seen.
+
+        Values are sign-extended for signed parameters, exactly as
+        `get_parameter` does — see `_signed_value`.
         """
         param_ids = list(param_ids)
         values: Dict[int, int] = {}
@@ -599,7 +651,7 @@ class EosBridge:
                 edit = m.ParameterEdit.decode(frame)
                 for pid, value in edit.values:
                     if pid in remaining:
-                        values[pid] = value
+                        values[pid] = _signed_value(pid, value)
                         remaining.discard(pid)
         return values
 

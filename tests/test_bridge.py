@@ -11,6 +11,7 @@ import pytest
 
 from eos import bridge as bridge_mod
 from eos import messages as m
+from eos import params as p
 from eos.bridge import EosBridge, MultiIn, ThrottledOut
 
 
@@ -411,6 +412,67 @@ def test_get_parameter():
     assert bridge.get_parameter(1) == 42
 
 
+@pytest.mark.parametrize("param_id, wire, expected", [
+    # E4_PRESET_TRANSPOSE (id 0, range [-24, 24]) -- the exact pair confirmed
+    # live against an E4XT Ultra rev 4.70 on 2026-07-31.
+    (0, -12 & 0x3FFF, -12),
+    (0, -24 & 0x3FFF, -24),
+    (0, 24, 24),
+    (0, 0, 0),
+    # E4_PRESET_CTRL_A (id 2, range [-1, 127]): -1 is the "off" sentinel that
+    # midi_control_display() renders, and read back as 16383 before this fix.
+    (2, 0x3FFF, -1),
+    (2, 64, 64),
+    # E4_GEN_SAMPLE (id 38) is unsigned 0..999, so its undocumented sentinels
+    # must survive untouched even though bit 13 is set -- the whole voice/zone
+    # structure walk keys on these (RESOLUTION_NOTES §11/§12).
+    (38, 0x3FFF, 0x3FFF),   # multisample
+    (38, 0x3FFE, 0x3FFE),   # no such voice
+    (38, 999, 999),
+])
+def test_get_parameter_sign_extends_only_signed_params(param_id, wire, expected):
+    def handler(frame):
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(req.param_ids[0], wire)]).encode()
+
+    bridge = _bridge_with(handler)
+    assert bridge.get_parameter(param_id) == expected
+
+
+def test_get_parameter_passes_through_unknown_ids():
+    # An id absent from eos.params' table has no signedness to consult; the
+    # raw word is the only honest answer.
+    unknown = 4000
+    assert unknown not in p.PARAMETERS
+
+    def handler(frame):
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(req.param_ids[0], 0x3FFF)]).encode()
+
+    bridge = _bridge_with(handler)
+    assert bridge.get_parameter(unknown) == 0x3FFF
+
+
+def test_set_then_get_parameter_round_trips_signed_values():
+    """The two halves of the bridge's parameter API agree: what set_parameter
+    puts on the wire is what get_parameter gives back."""
+    store = {}
+
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PARAMETER_EDIT:
+            for pid, value in m.ParameterEdit.decode(frame).values:
+                store[pid] = value
+            return None
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(pid, store[pid]) for pid in req.param_ids]).encode()
+
+    bridge = _bridge_with(handler)
+    for value in (-24, -1, 0, 5, 24):
+        bridge.set_parameter(0, value)
+        assert bridge.get_parameter(0) == value
+
+
 def test_get_parameter_missing_from_reply_raises():
     def handler(frame):
         return m.ParameterEdit(values=[(999, 1)]).encode()  # wrong id in reply
@@ -427,6 +489,45 @@ def test_get_parameter_range():
     bridge = _bridge_with(handler)
     rng = bridge.get_parameter_range(57)
     assert (rng.minimum, rng.maximum, rng.default) == (0, 127, 64)
+
+
+def test_get_parameter_range_sign_extends_signed_params():
+    # id 0 = E4_PRESET_TRANSPOSE, [-24, 24]: the wire carries -24 as 16360.
+    def handler(frame):
+        return m.ParameterRange(param_id=0, minimum=-24, maximum=24, default=0).encode()
+
+    bridge = _bridge_with(handler)
+    rng = bridge.get_parameter_range(0)
+    assert (rng.minimum, rng.maximum, rng.default) == (-24, 24, 0)
+
+
+def test_get_parameter_range_leaves_large_unsigned_maxima_alone():
+    """id 61 = E4_VOICE_DELAY, unsigned 0..10000. Its maximum has bit 13 set,
+    so an unconditional sign-extension turned it into -6384 -- caught live
+    against an E4XT Ultra rev 4.70 (RESOLUTION_NOTES §18)."""
+    def handler(frame):
+        return m.ParameterRange(param_id=61, minimum=0, maximum=10000, default=0).encode()
+
+    bridge = _bridge_with(handler)
+    rng = bridge.get_parameter_range(61)
+    assert (rng.minimum, rng.maximum) == (0, 10000)
+
+
+def test_parameter_range_and_value_agree_on_signedness():
+    """The bug this pair of fixes closes: a range of [-24, 24] reported
+    alongside a current value of 16372 for the same parameter."""
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PARAMETER_MINMAXDEFAULT_REQUEST:
+            return m.ParameterRange(param_id=0, minimum=-24, maximum=24, default=0).encode()
+        req = m.ParameterRequest.decode(frame)
+        return m.ParameterEdit(values=[(req.param_ids[0], -12 & 0x3FFF)]).encode()
+
+    bridge = _bridge_with(handler)
+    rng = bridge.get_parameter_range(0)
+    value = bridge.get_parameter(0)
+    assert rng.minimum <= value <= rng.maximum
+    assert value == -12
 
 
 def test_set_parameter_is_fire_and_forget():
@@ -596,15 +697,18 @@ def test_catalog_presets_progress_callback():
 def test_get_parameters_single_chunk():
     # spec: response is one ParameterEdit-format frame *per parameter*, not
     # one combined frame -- so the fake device must reply once per request.
-    values = {1: 10, 6: 20, 183: -5 & 0x3FFF}
+    # 183 (MASTER_TUNING_OFFSET) is signed, so it goes out on the wire as
+    # two's complement and must come back sign-extended, not as 16379.
+    on_the_wire = {1: 10, 6: 20, 183: -5 & 0x3FFF}
 
     def handler(frame):
         req = m.ParameterRequest.decode(frame)
-        return [m.ParameterEdit(values=[(pid, values[pid])]).encode() for pid in req.param_ids]
+        return [m.ParameterEdit(values=[(pid, on_the_wire[pid])]).encode()
+                for pid in req.param_ids]
 
     bridge = _bridge_with(handler)
     result = bridge.get_parameters([1, 6, 183])
-    assert result == values
+    assert result == {1: 10, 6: 20, 183: -5}
 
 
 def test_get_parameters_chunks_at_max_requests():

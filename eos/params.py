@@ -177,18 +177,26 @@ _PARAMS: List[Parameter] = [
     _p(92, "E4_VOICE_FILT_GEN_PARM8", "voice.filter", 0, 255, notes="filter-type dependent; see notes above"),
 
     # -- VOICE: filter envelope (ids 93-104) -----------------------------------
+    # The six *_TGTLVL entries here (and the six in the aux envelope below) are
+    # -100..100, NOT the 0..100 the spec table transcribes. Corrected against
+    # the device's own 03h/04h reply and confirmed by writing negative values
+    # and reading them back (E4XT Ultra rev 4.70, 2026-07-31 -- see
+    # docs/RESOLUTION_NOTES.md §18). These two envelopes modulate bipolarly;
+    # the *amp* envelope's TGTLVL really is 0..100, since it is a volume, and
+    # the device agrees -- so this is a genuine transcription error in the
+    # spec's own table, not a firmware-version difference.
     _p(93, "E4_VOICE_FENV_SEG0_RATE", "voice.filter.env", 0, 127, notes="Atk1 Rate"),
-    _p(94, "E4_VOICE_FENV_SEG0_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Atk1 Level"),
+    _p(94, "E4_VOICE_FENV_SEG0_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk1 Level"),
     _p(95, "E4_VOICE_FENV_SEG1_RATE", "voice.filter.env", 0, 127, notes="Dcy1 Rate"),
-    _p(96, "E4_VOICE_FENV_SEG1_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Dcy1 Level"),
+    _p(96, "E4_VOICE_FENV_SEG1_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy1 Level"),
     _p(97, "E4_VOICE_FENV_SEG2_RATE", "voice.filter.env", 0, 127, notes="Rls1 Rate"),
-    _p(98, "E4_VOICE_FENV_SEG2_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Rls1 Level"),
+    _p(98, "E4_VOICE_FENV_SEG2_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls1 Level"),
     _p(99, "E4_VOICE_FENV_SEG3_RATE", "voice.filter.env", 0, 127, notes="Atk2 Rate"),
-    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Atk2 Level"),
+    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk2 Level"),
     _p(101, "E4_VOICE_FENV_SEG4_RATE", "voice.filter.env", 0, 127, notes="Dcy2 Rate"),
-    _p(102, "E4_VOICE_FENV_SEG4_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Dcy2 Level"),
+    _p(102, "E4_VOICE_FENV_SEG4_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy2 Level"),
     _p(103, "E4_VOICE_FENV_SEG5_RATE", "voice.filter.env", 0, 127, notes="Rls2 Rate"),
-    _p(104, "E4_VOICE_FENV_SEG5_TGTLVL", "voice.filter.env", 0, 100, unit="%", notes="Rls2 Level"),
+    _p(104, "E4_VOICE_FENV_SEG5_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls2 Level"),
 
     # -- VOICE: LFOs (ids 105-116) ----------------------------------------------
     _p(105, "E4_VOICE_LFO_RATE", "voice.lfo", 0, 127, notes="see LFO_SHAPES; display table not transcribed, see cnv_lfo_rate()"),
@@ -206,17 +214,17 @@ _PARAMS: List[Parameter] = [
 
     # -- VOICE: aux (LFO2-driven / auxiliary) envelope (ids 117-128) ------------
     _p(117, "E4_VOICE_AENV_SEG0_RATE", "voice.aux.env", 0, 127, notes="Atk1 Rate"),
-    _p(118, "E4_VOICE_AENV_SEG0_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Atk1 Level"),
+    _p(118, "E4_VOICE_AENV_SEG0_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Atk1 Level"),
     _p(119, "E4_VOICE_AENV_SEG1_RATE", "voice.aux.env", 0, 127, notes="Dcy1 Rate"),
-    _p(120, "E4_VOICE_AENV_SEG1_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Dcy1 Level"),
+    _p(120, "E4_VOICE_AENV_SEG1_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Dcy1 Level"),
     _p(121, "E4_VOICE_AENV_SEG2_RATE", "voice.aux.env", 0, 127, notes="Rls1 Rate"),
-    _p(122, "E4_VOICE_AENV_SEG2_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Rls1 Level"),
+    _p(122, "E4_VOICE_AENV_SEG2_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Rls1 Level"),
     _p(123, "E4_VOICE_AENV_SEG3_RATE", "voice.aux.env", 0, 127, notes="Atk2 Rate"),
-    _p(124, "E4_VOICE_AENV_SEG3_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Atk2 Level"),
+    _p(124, "E4_VOICE_AENV_SEG3_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Atk2 Level"),
     _p(125, "E4_VOICE_AENV_SEG4_RATE", "voice.aux.env", 0, 127, notes="Dcy2 Rate"),
-    _p(126, "E4_VOICE_AENV_SEG4_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Dcy2 Level"),
+    _p(126, "E4_VOICE_AENV_SEG4_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Dcy2 Level"),
     _p(127, "E4_VOICE_AENV_SEG5_RATE", "voice.aux.env", 0, 127, notes="Rls2 Rate"),
-    _p(128, "E4_VOICE_AENV_SEG5_TGTLVL", "voice.aux.env", 0, 100, unit="%", notes="Rls2 Level"),
+    _p(128, "E4_VOICE_AENV_SEG5_TGTLVL", "voice.aux.env", -100, 100, unit="%", notes="Rls2 Level"),
 
     # -- VOICE: cords (ids 129-182; 18 cords x SRC/DST/AMT) ---------------------
     *(

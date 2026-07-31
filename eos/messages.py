@@ -190,6 +190,20 @@ def encode_s14(value: int) -> Tuple[int, int]:
     return encode_u14(value & 0x3FFF)
 
 
+def encode_14(value: int) -> Tuple[int, int]:
+    """Encode a 14-bit word that may be signed *or* unsigned.
+
+    Parameter min/max/default fields carry no signedness flag, and a real
+    device mixes both in one reply -- E4_PRESET_TRANSPOSE's minimum is -24
+    while E4_VOICE_DELAY's maximum is 10000, and 14 bits is only wide enough
+    for one interpretation at a time. Accepts either domain and emits the
+    same bit pattern both would.
+    """
+    if not -8192 <= value <= 0x3FFF:
+        raise ValueError(f"value {value} out of 14-bit range")
+    return encode_u14(value & 0x3FFF)
+
+
 def decode_s14(lsb: int, msb: int) -> int:
     value = decode_u14(lsb, msb)
     if value & 0x2000:  # bit 13 set -> negative in 14-bit two's complement
@@ -532,20 +546,31 @@ class ParameterRange:
     device_id: int = DEFAULT_DEVICE_ID
 
     def encode(self) -> bytes:
-        payload = [*encode_u14(self.param_id), *encode_s14(self.minimum),
-                   *encode_s14(self.maximum), *encode_s14(self.default)]
+        payload = [*encode_u14(self.param_id), *encode_14(self.minimum),
+                   *encode_14(self.maximum), *encode_14(self.default)]
         return build_frame(Command.PARAMETER_MINMAXDEFAULT_RESPONSE, payload,
                             device_id=self.device_id)
 
     @classmethod
     def decode(cls, data: Sequence[int]) -> "ParameterRange":
+        """Decode min/max/default as RAW 14-bit words, exactly as
+        :meth:`ParameterEdit.decode` does for values.
+
+        This used to sign-extend all three unconditionally, which silently
+        corrupted every *unsigned* parameter whose range runs past 8191:
+        E4_VOICE_DELAY's real maximum of 10000 came back as -6384 (confirmed
+        live 2026-07-31, E4XT Ultra rev 4.70). The wire carries no signedness
+        flag, so this layer genuinely cannot know -- `eos.bridge` applies it
+        from `eos.params`' table, the single source of truth that also drives
+        value decoding, so the two halves of one parameter cannot disagree.
+        """
         device_id, command, payload = parse_frame(data)
         if command != Command.PARAMETER_MINMAXDEFAULT_RESPONSE:
             raise ValueError(f"not a PARAMETER_MINMAXDEFAULT_RESPONSE frame: {command:#x}")
         param_id = decode_u14(payload[0], payload[1])
-        minimum = decode_s14(payload[2], payload[3])
-        maximum = decode_s14(payload[4], payload[5])
-        default = decode_s14(payload[6], payload[7])
+        minimum = decode_u14(payload[2], payload[3])
+        maximum = decode_u14(payload[4], payload[5])
+        default = decode_u14(payload[6], payload[7])
         return cls(param_id, minimum, maximum, default, device_id)
 
 

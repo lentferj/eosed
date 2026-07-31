@@ -221,6 +221,27 @@ def test_new_dump_message_max_data_enforced():
         m.NewDumpMessage(packet_number=0, data=bytes(300)).encode()
 
 
+def test_parameter_range_decodes_raw_not_sign_extended():
+    """Decoding must not guess signedness: E4_VOICE_DELAY's real maximum of
+    10000 has bit 13 set and used to come back as -6384 (confirmed live,
+    E4XT Ultra rev 4.70 -- RESOLUTION_NOTES §18)."""
+    frame = m.ParameterRange(param_id=61, minimum=0, maximum=10000, default=0).encode()
+    decoded = m.ParameterRange.decode(frame)
+    assert (decoded.minimum, decoded.maximum) == (0, 10000)
+
+
+def test_parameter_range_accepts_signed_and_unsigned_in_one_message():
+    """A real reply mixes both domains across parameters, and encode_14 has to
+    take either -- signed minima and unsigned maxima past 8191."""
+    for value in (-8192, -96, -1, 0, 10, 10000, 0x3FFF):
+        frame = m.ParameterRange(param_id=1, minimum=value, maximum=value,
+                                 default=value).encode()
+        assert m.ParameterRange.decode(frame).minimum == value & 0x3FFF
+
+    with pytest.raises(ValueError):
+        m.ParameterRange(param_id=1, minimum=0x4000, maximum=0, default=0).encode()
+
+
 # --- exhaustive round trip over every concrete message class ---------------
 
 def _instances():
@@ -228,7 +249,10 @@ def _instances():
         m.ParameterEdit(values=[(6, 20)]),
         m.ParameterRequest(param_ids=[1, 2, 3]),
         m.ParameterRangeRequest(param_id=57),
-        m.ParameterRange(param_id=1, minimum=-96, maximum=10, default=0),
+        # Raw 14-bit words, matching what decode() now returns: this layer no
+        # longer guesses signedness (eos.bridge applies it from eos.params).
+        # -96 on the wire is 16288; see test_parameter_range_* below.
+        m.ParameterRange(param_id=1, minimum=16288, maximum=10, default=0),
         m.PresetName(preset=5, name="Grand Piano"),
         m.PresetNameRequest(preset=5),
         m.PresetNameCharUpdate(preset=5, char_index=0, char="G"),

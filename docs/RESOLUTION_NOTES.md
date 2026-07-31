@@ -980,3 +980,113 @@ side selections, see §11), so letting another request interleave mid-sweep
 would silently re-point the selection under the walk and produce wrong data,
 which is far worse than an unresponsive pane. Any change here needs a
 selection save/restore around each released segment, not just finer locking.
+
+## §18 — First full write test: signedness was handled inconsistently on both halves of a parameter (resolved, verified live)
+
+**The occasion.** 2026-07-31, the first session in which anything was
+*written* to the real E4XT Ultra (rev 4.70). Ten scratch presets (P000-P009,
+all "Untitled Preset", each exactly one voice with no sample assigned) were
+created on the front panel for the purpose. Method: 100ms between every SysEx
+send (double the usual `SEND_GAP`, per the standing §15 crash caution), write
+every preset-scoped parameter, read it back, then switch away and return and
+read it again — the second pass being the one that actually tests
+`PRESET_SELECT` scoping rather than an echo of an unchanged selection.
+
+Scoped out deliberately, and still untested live: the Master/erase utilities
+(`71h`/`74h`/`75h`/`76h` — one-shot destroyers, never appropriate for
+unattended automation), the 70 `master.*` parameters (device-global: basic
+channel, tuning, SCSI id — not preset state), and `E4_GEN_SAMPLE` (id 38),
+which re-points a voice at a sample and is the field the structure walk reads
+its own sentinels from, so writing it would move the ground under the test.
+
+**Result: the transport is sound.** 167 parameters × 10 presets × 2 passes =
+3340 comparisons, plus 20 renames, all exact. No dropped replies, no NAKs, no
+device crash of the §15 kind. Values written to one preset survive an
+arbitrary number of selections elsewhere and read back intact.
+
+**The bug, found before the first write.** A parameter's value and its own
+min/max/default were decoded by *different rules*:
+
+* `ParameterEdit.decode` (command 01h, which the device reuses for value
+  replies) decoded values with `decode_u14` — never sign-extended.
+* `ParameterRange.decode` (04h) sign-extended all three fields with
+  `decode_s14` — unconditionally.
+
+So the two halves of the same parameter contradicted each other. Read-only
+reconnaissance showed `E4_PRESET_CTRL_A` sitting at **16383** against its own
+device-reported range of **[-1, 127] default -1** — 16383 being exactly
+`-1 & 0x3FFF`. Proven by the first write performed in this project's history:
+writing -12 and -24 to `E4_PRESET_TRANSPOSE` read back as 16372 and 16360,
+i.e. `value & 0x3FFF` exactly. **The write path and the device were both
+already correct**; only the read side was missing the sign extension.
+
+And the unconditional sign-extension on the range side was the same mistake
+mirrored: it corrupts any *unsigned* parameter whose range runs past 8191.
+`E4_VOICE_DELAY` (id 61, genuinely 0..10000) reported a maximum of **-6384**
+(`10000 - 16384`). That one is not cosmetic — it collapses the parameter's
+usable span to nothing, which is exactly how it slipped through the first
+write pass: the harness picked values inside `[0, -6384]` and "wrote" 0 every
+time. Probed in isolation afterwards, id 61 round-trips every value up to and
+including 10000 perfectly.
+
+**Why it cannot be fixed in `eos.messages`.** The wire carries no signedness
+flag anywhere — not in the value reply, not in the min/max/default reply.
+That layer genuinely cannot know. So both decoders now return **raw 14-bit
+words**, and `eos.bridge._signed_value` applies signedness from `eos.params`'
+table (a negative `minimum`), for values *and* ranges alike. One source of
+truth for both halves, so they cannot drift apart again. An id absent from
+the table, or any word without bit 13 set, passes through untouched — which
+is what keeps `E4_GEN_SAMPLE`'s undocumented `3FFEh`/`3FFFh` sentinels (§11,
+§12) intact, since that parameter's transcribed minimum is 0.
+
+`encode_s14` refused values past 8191 and so could not express id 61's real
+maximum at all; `encode_14` accepts either domain and emits the bit pattern
+both would.
+
+**Verified live after the fix:** the whole matrix re-written and re-read with
+exact signed comparison and no masking anywhere — 1670/1670, of which 376
+comparisons were on negative values, every one of which would have read back
+`+16384` before.
+
+### §18a — Transcribed ranges vs. what rev 4.70 actually reports
+
+With hardware in hand, all 267 parameters' ranges were audited against the
+device (03h/04h is read-only, so this was safe for `master.*` too). **30
+differ** from the spec transcription. They are not all the same kind of thing
+and must not be treated alike:
+
+**Genuine transcription errors — corrected in `eos/params.py`:** the six
+`E4_VOICE_FENV_SEG*_TGTLVL` and six `E4_VOICE_AENV_SEG*_TGTLVL` entries are
+**-100..100**, not the 0..100 transcribed. Confirmed twice over: the device
+reports it, and negative values written to them round-trip exactly. The
+corresponding *amp* envelope levels (`E4_VOICE_VENV_SEG*_TGTLVL`) really are
+0..100 — a volume cannot go negative, and the device agrees — which is what
+makes this a transcription slip rather than a version difference. These 12
+were the only entries changed.
+
+**Almost certainly firmware/model differences — deliberately NOT changed,**
+since the device is already authoritative at runtime (`get_parameter_range`)
+and the table documents the 4.00 spec: `E4_PRESET_FX_B_ALGORITHM` 0..27 →
+0..32, `E4_LINK_PRESET` 0..999 → 0..1999, `E4_VOICE_SUBMIX` -1..3 → 0..7
+(an Ultra has 8 submix outputs), `E4_VOICE_FTYPE` 0..255 → 0..20,
+`E4_VOICE_LFO_SHAPE`/`LFO2_SHAPE` 0..7 → 0..15, `MIDIGLO_BASIC_CHANNEL`
+0..15 → 0..31, `MIDIGLO_VEL_CURVE` 0..13 → 0..23, `MULTIMODE_CHANNEL` 1..16
+→ 1..32, `MULTIMODE_PRESET` -1..999 → -1..1999, `MULTIMODE_SUBMIX` -1..3 →
+-1..7, `MASTER_FX_A_ALGORITHM`/`FX_B_ALGORITHM` min 0 → 1,
+`MASTER_OUTPUT_FORMAT` 0..2 → 1..2, `MASTER_WORD_CLOCK_IN` 0..4 → 0..3,
+`LINK_SELECT` 0..255 → 0..254. Anything reading these off the table for
+display (e.g. the `*_NAMES` label tables in `eos/params.py`) is working from
+the smaller 4.00 set and will have gaps on this firmware — `describe_value`
+already returns `None` for an unknown index rather than exploding.
+
+**Open, and interesting:** `E4_GEN_SAMPLE` reports a minimum of **-8**, not 0.
+That is a strong hint the parameter is genuinely *signed* and that the
+`3FFFh`/`3FFEh` sentinels §11/§12 discovered empirically are simply **-1 and
+-2**, with six further negative special values (-3..-8) never yet observed.
+Do **not** "correct" the table to -8 on that reasoning alone: `_signed_value`
+keys off the table's minimum, so doing so would sign-extend every
+`E4_GEN_SAMPLE` read and break every sentinel comparison in `eosed/app.py`
+(`_MULTISAMPLE_SENTINEL`, `_NO_SUCH_VOICE_MARKER`) at once. The right move is
+to find out what -3..-8 mean first — a preset with several voices in assorted
+states, read voice by voice — and then convert the sentinels and the table
+together, in one change, or not at all.
