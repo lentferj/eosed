@@ -761,8 +761,9 @@ class EosedApp(App):
         Binding("v", "browse_voices", "Voices"),
         Binding("l", "browse_links", "Links"),
         Binding("u", "find_sample_usage", "Find usage"),
-        Binding("c", "clear_sample_usage_cache", "Clear usage cache"),
-        Binding("a", "cache_all", "Cache all"),
+        Binding("c", "cache_structure", "Cache structure"),
+        Binding("C", "cache_everything", "Cache everything"),
+        Binding("x", "clear_sample_usage_cache", "Clear usage cache"),
         Binding("e", "toggle_view", "Extended view"),
         Binding("escape", "back_to_preset", "Back to preset"),
         Binding("m", "master_menu", "Master"),
@@ -894,6 +895,17 @@ class EosedApp(App):
         # as compact_view/sample_usage_early_stop above.
         self._cache_all_on_startup: bool = (
             False if self.demo else bool(bridge_mod.load_cache_all_on_startup(self._view_config_path)))
+        # "structure" instead, and ON by default: it buys the everyday wins
+        # (instant preset selection, bank paging, `u`) for 23 min on a large
+        # bank where a "full" sweep costs 1h 44m (RESOLUTION_NOTES §20).
+        # cache_all_on_startup wins if both are set — it is the explicit
+        # request for the deeper sweep.
+        configured_structure = (
+            None if self.demo
+            else bridge_mod.load_cache_structure_on_startup(self._view_config_path))
+        self._cache_structure_on_startup: bool = (
+            False if self.demo else
+            (True if configured_structure is None else configured_structure))
         configured_depth = None if self.demo else bridge_mod.load_cache_depth(self._view_config_path)
         self._cache_depth: str = configured_depth or "full"
 
@@ -1033,12 +1045,16 @@ class EosedApp(App):
             self._maybe_cache_all_on_startup()
 
     def _maybe_cache_all_on_startup(self) -> None:
-        # No prompt here, deliberately: cache_all_on_startup is an explicit
-        # opt-in in config.toml, and asking on every launch would defeat the
-        # setting. It still announces the estimate, so a long sweep on a big
-        # bank is not a silent surprise -- see _confirm_then_cache_all.
+        # No prompt on either path, deliberately: cache_all_on_startup is an
+        # explicit opt-in, and cache_structure_on_startup is the default —
+        # asking on every launch would make the default an annoyance rather
+        # than a convenience. Both still announce the estimate, so a long
+        # sweep on a big bank is never a silent surprise, and `escape`
+        # cancels either at any point.
         if self._cache_all_on_startup:
             self._confirm_then_cache_all(self._cache_depth, prompt=False)
+        elif self._cache_structure_on_startup:
+            self._confirm_then_cache_all("structure", prompt=False)
 
     def on_unmount(self) -> None:
         # The very first layout pass fires a resize, which arms the
@@ -1792,11 +1808,26 @@ class EosedApp(App):
         self.set_status(f"{summary} — {where}" if matches else summary)
 
     # -- cache-all: one full-bank sweep filling every cache at once ---------
-    def action_cache_all(self) -> None:
+    def action_cache_structure(self) -> None:
+        """`c` — the everyday sweep: names + voice/zone/sample structure.
+
+        Explicitly "structure" rather than the configured `cache_depth`, so
+        the two keys mean fixed, predictable amounts of work. On a large bank
+        this is ~23 min against ~1h 44m for `C` (RESOLUTION_NOTES §20).
+        """
+        self._cache_at_depth("structure")
+
+    def action_cache_everything(self) -> None:
+        """`C` — everything `c` fetches, plus each preset's GLOBAL values and
+        every voice's own parameter group. Much slower; only worth it if you
+        will actually open many voices."""
+        self._cache_at_depth("full")
+
+    def _cache_at_depth(self, depth: str) -> None:
         if self._scan_active:
             self.set_status("a scan is already running ('escape' to cancel)")
             return
-        self._confirm_then_cache_all(self._cache_depth)
+        self._confirm_then_cache_all(depth)
 
     @work(thread=True)
     def _confirm_then_cache_all(self, depth: str, *, prompt: bool = True) -> None:
@@ -1835,16 +1866,18 @@ class EosedApp(App):
 
         detail = (f"{used_kb} KB of preset RAM in use; the sweep reads every "
                   f"preset,\nand at this depth every voice inside it.")
+        # The depth comes from which key was pressed ('c' vs 'C'), not from
+        # self._cache_depth, so it has to travel with the callback.
         self.call_from_thread(
             self.push_screen,
             ConfirmSweepScreen(depth, _humanize_seconds(estimate), detail),
-            self._on_sweep_confirmed)
+            lambda go, depth=depth: self._on_sweep_confirmed(go, depth))
 
-    def _on_sweep_confirmed(self, go: Optional[bool]) -> None:
+    def _on_sweep_confirmed(self, go: Optional[bool], depth: str) -> None:
         if go:
-            self._start_cache_all(self._cache_depth)
+            self._start_cache_all(depth)
         else:
-            self.set_status("cache all cancelled")
+            self.set_status(f"cache ({depth}) cancelled")
 
     @work(thread=True)
     def _start_cache_all(self, depth: str) -> None:

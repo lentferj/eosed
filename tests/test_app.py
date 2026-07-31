@@ -443,14 +443,14 @@ async def test_clear_sample_usage_cache():
         await pilot.press("enter")
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
-        await pilot.press("c")
+        await pilot.press("x")
         assert await _wait_for(pilot, lambda: "no sample-usage cache to clear" in app.last_status)
 
         await pilot.press("u")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=200, step=0.02)
         assert app._sample_usage_scanned_range is not None
 
-        await pilot.press("c")
+        await pilot.press("x")
         assert await _wait_for(pilot, lambda: "cache cleared" in app.last_status)
         assert app._sample_usage_index == {}
         assert app._sample_usage_scanned_range is None
@@ -462,7 +462,7 @@ async def test_clear_sample_usage_cache():
 
 
 async def test_cache_all_names_depth_fills_only_the_name_catalogs():
-    # "names" depth (see action_cache_all / EosedApp._run_full_sweep)
+    # "names" depth (see action_cache_everything / EosedApp._run_full_sweep)
     # has no use for a voice/zone walk at all -- must not populate the
     # preset-overview or sample-usage caches, only the two name catalogs.
     class FakeBridge(DemoBridge):
@@ -480,13 +480,14 @@ async def test_cache_all_names_depth_fills_only_the_name_catalogs():
             return self._SAMPLES[sample]
 
     app = EosedApp(FakeBridge(), allow_write=True, demo=True)
-    app._cache_depth = "names"
     app._sample_usage_early_stop_gap = None  # "names" depth ignores this anyway -- explicit for clarity
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        # No key maps to "names": 'c'/'C' are fixed at structure/full, so this
+        # depth is reachable only via cache_depth + cache_all_on_startup.
+        app._start_cache_all("names")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         assert app._catalog_cache["preset"] == {5: "Foo", 130: "Bar"}
@@ -526,7 +527,7 @@ async def test_cache_all_sample_names_stop_early_after_consecutive_empty_samples
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         # sample 0 has a name, then 10 consecutive misses (samples 1-10)
@@ -624,13 +625,12 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
             return "Demo Kick" if sample == 0 else ""
 
     app = EosedApp(FakeBridge(), allow_write=True, demo=True)
-    app._cache_depth = "structure"
     app._sample_usage_early_stop_gap = None  # this test wants the full, uninterrupted sweep
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        await pilot.press("c")   # 'c' is fixed at "structure" depth
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         assert 0 in app._preset_overviews
@@ -701,7 +701,7 @@ async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         assert app._preset_overviews[0][3] is not None  # globals cached too at "full" depth
@@ -745,7 +745,7 @@ async def test_cancelling_cache_all_promotes_nothing():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        await pilot.press("C")
         await pilot.pause(0.05)
         assert app._scan_active is True
 
@@ -778,6 +778,51 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
                         connect_kwargs={"config_path": config_path})
     assert app2._cache_all_on_startup is False
     assert app2._cache_depth == "full"  # the documented default
+
+
+def test_cache_keys_are_fixed_depths_not_the_configured_one():
+    """'c' and 'C' mean predictable amounts of work regardless of
+    cache_depth, which now only governs the startup sweep."""
+    keys = {b.key: b.action for b in EosedApp.BINDINGS}
+    assert keys["c"] == "cache_structure"
+    assert keys["C"] == "cache_everything"
+    assert keys["x"] == "clear_sample_usage_cache"
+    assert "a" not in keys, "'a' was replaced by the c/C pair"
+
+
+async def test_c_and_C_sweep_at_their_own_depths():
+    """'c' must not fetch GLOBAL values; 'C' must."""
+    for key, expect_globals in (("c", False), ("C", True)):
+        app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+        app._cache_depth = "names"       # deliberately NOT what the keys use
+        app._sample_usage_early_stop_gap = None
+        async with app.run_test() as pilot:
+            table = app.query_one("#presets")
+            await _wait_for(pilot, lambda: table.row_count)
+            await pilot.press(key)
+            assert await _wait_for(pilot, lambda: not app._scan_active,
+                                   tries=400, step=0.02)
+            assert app._preset_overviews, f"{key} should walk structure"
+            _vc, _zc, _gids, global_values, _rows = app._preset_overviews[0]
+            assert (global_values is not None) is expect_globals, (
+                f"{key}: globals present={global_values is not None}, "
+                f"expected {expect_globals}")
+
+
+def test_structure_on_startup_is_the_default_not_cache_all(tmp_path):
+    """The expensive 'full' sweep must not run unprompted; the 23-minute
+    'structure' one is the default (RESOLUTION_NOTES §20)."""
+    config = tmp_path / "config.toml"
+    config.write_text("# empty\n")
+
+    kw = {"connect_kwargs": {"config_path": str(config)}}
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False, **kw)
+    assert app._cache_all_on_startup is False
+    assert app._cache_structure_on_startup is True
+
+    config.write_text("cache_structure_on_startup = false\n")
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False, **kw)
+    assert app._cache_structure_on_startup is False
 
 
 def test_sweep_estimate_scales_with_used_ram_not_preset_count():
@@ -815,7 +860,7 @@ async def test_small_bank_sweeps_without_asking():
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
         assert app._catalog_cache["preset"]        # it really ran
         assert not isinstance(app.screen, ConfirmSweepScreen)
@@ -835,7 +880,7 @@ async def test_big_bank_asks_first_and_no_means_no():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
         app._catalog_cache["preset"].clear()
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: isinstance(app.screen, ConfirmSweepScreen))
 
         await pilot.press("n")
@@ -855,7 +900,7 @@ async def test_big_bank_yes_runs_the_sweep():
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: isinstance(app.screen, ConfirmSweepScreen))
         await pilot.press("y")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
@@ -872,7 +917,7 @@ async def test_a_key_still_works_in_demo_with_no_startup_config():
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
         assert app._catalog_cache["preset"] == {
             0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
@@ -998,7 +1043,7 @@ async def test_editing_a_parameter_invalidates_the_catalog_cache_too():
     # name just as easily as a sample assignment.
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
         assert app._catalog_cache["preset"]  # something got cached
         assert app._catalog_scanned_upto["preset"] > 0
@@ -1333,7 +1378,7 @@ async def test_cache_all_makes_bank_paging_free_of_new_midi():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
 
         scans = []
@@ -1448,7 +1493,7 @@ async def test_extend_reuses_cache_all_data_with_no_new_midi():
         await _wait_for(pilot, lambda: table.row_count)
         initial_count = table.row_count
 
-        await pilot.press("a")
+        await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
         calls_after_sweep = app.bridge.catalog_calls
 

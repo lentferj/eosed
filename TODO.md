@@ -271,7 +271,8 @@ voices/zones got re-walked over MIDI every time it was revisited, and a
 complete sweep couldn't be reused for anything but the one sample that
 triggered it. `EosedApp._run_full_sweep(depth)` is now the single
 shared walk both `u` (always at `"structure"` depth, for one sample) and
-`a` (`action_cache_all`, at the configured depth, for everything) run —
+`c`/`C` (`action_cache_structure`/`action_cache_everything`, at fixed
+"structure"/"full" depths respectively) run —
 returning a dict the caller decides whether to promote into the real
 caches (`EosedApp._promote_sweep_result`) or, for a cancelled sweep,
 discard (same "no way to tell 'not found' from 'not reached'" reasoning
@@ -286,7 +287,17 @@ preset). `cache_all_on_startup = true` runs it automatically right after
 the first bank page loads; both settings are read-only from `config.toml`
 (no `save_*`, matching `sample_usage_early_stop`) and skipped for
 `--demo`, same "demo touches no real local state" convention as the
-other view/scan settings — the `a` key itself still works in demo.
+other view/scan settings — the `c`/`C` keys themselves still work in demo.
+
+**Keys and startup defaults reworked once §20 measured the real cost.**
+`a` (one key, sweeping at the configured `cache_depth`) became two keys at
+*fixed* depths — `c` = "structure", `C` = "full" — so each means a
+predictable amount of work; `cache_depth` now only governs the startup
+sweep. `x` took over "clear usage cache" from `c`. On startup,
+`cache_all_on_startup` stays **off** by default (at `"full"` it is 1h 44m
+on a large bank) and a new `cache_structure_on_startup` defaults **on**
+(~23 min there, and it buys the everyday wins). Neither prompts, both
+announce their estimate, and `escape` cancels either.
 **Deliberately never persisted to disk**: a front-panel edit is invisible
 to this app, so a saved cache could confidently serve data that no longer
 matches the device — every launch genuinely re-scans.
@@ -444,7 +455,7 @@ preset N, partial`/`full sweep to preset N`) — live-caught as a gap once
 the status line's *progress* text (which preset it's currently on) had
 already scrolled past by the time a run finished, leaving no way to tell
 whether an early stop landed somewhere sensible without re-running it.
-`c` (`action_clear_sample_usage_cache`) manually clears
+`x` (`action_clear_sample_usage_cache`) manually clears
 `_sample_usage_index`/`_sample_usage_scanned_range` on demand — previously
 the only way to force a fresh sweep was an actual write.
 
@@ -681,7 +692,7 @@ unchanged — only demo/pytest-verified again here, not re-tried live, since
 this branch's work happened without hardware access.
 
 **Fixed: the key-hint bar now wraps to as many lines as the terminal width
-needs, instead of Textual's built-in `Footer`.** Now that `a` (cache-all)
+needs, instead of Textual's built-in `Footer`.** Now that the cache keys
 joined `q p s g r o v l u c e m` plus `enter`/`escape`, `Footer` (hardcoded
 to `height: 1` with horizontal scroll on overflow, not wrap — see
 `textual/widgets/_footer.py`'s `Footer`/`FooterKey` `DEFAULT_CSS`) was

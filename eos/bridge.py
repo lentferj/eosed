@@ -167,7 +167,29 @@ def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
 # edit is invisible to us and a stale disk cache would confidently lie.
 
 def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
+    """Run a `cache_depth`-deep sweep on connect. Defaults to OFF.
+
+    At the default "full" depth this is measured at 1h 44m on a large
+    commercial bank (docs/RESOLUTION_NOTES.md §20) — far too much to do
+    unprompted, which is why `cache_structure_on_startup` below is the one
+    that defaults on.
+    """
     value = _read_config_dict(path).get("cache_all_on_startup")
+    return value if isinstance(value, bool) else None
+
+
+def load_cache_structure_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
+    """Run a "structure"-depth sweep on connect. Defaults to ON (returns None
+    when unset; the caller supplies the default).
+
+    "structure" is the depth that buys the everyday wins — instant preset
+    selection, bank paging, and `u` for any sample — at 23 min on the same
+    bank where "full" costs 1h 44m, because "full"'s entire premium is a
+    per-voice parameter fetch (6198 of them there) that only pays off if you
+    open many voices. Cancellable with `escape` like any other sweep, and it
+    announces its estimate rather than starting silently.
+    """
+    value = _read_config_dict(path).get("cache_structure_on_startup")
     return value if isinstance(value, bool) else None
 
 

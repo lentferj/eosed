@@ -207,27 +207,35 @@ Four panes, left to right:
   consecutive presets/samples with nothing in them (a heuristic, not a
   guarantee); set `sample_usage_early_stop = "fullscan"` in `config.toml`
   to always sweep completely, or to a specific number to change the
-  threshold. `c` clears the cached result on demand to force a fresh
+  threshold. `x` clears the cached result on demand to force a fresh
   sweep.
-- **`a`** — cache-all: the same full-bank sweep as `u`, but keeps
+- **`c` / `C`** — cache the bank: the same full-bank sweep as `u`, but keeps
   *everything* it fetches instead of just the sample-usage index —
   preset and sample names, each preset's voice/zone/sample structure,
   and (depending on depth) its GLOBAL parameter values and every voice's
   own parameters too — so that browsing afterward (selecting a preset,
   `v`, paging the bank, `u`) is instant with no further MIDI at all,
-  until something is actually written. How deep it goes is `cache_depth`
-  in `config.toml`: `"names"` (just the two name catalogs — fast),
-  `"structure"` (adds the voice/zone/sample walk and the `u` index — the
-  expensive part), or `"full"` (**default** — also each preset's GLOBAL
-  values and every voice's own parameter group, by far the priciest
-  addition). Set `cache_all_on_startup = true` to run it automatically
-  on connect instead of waiting for `a`. **Never persisted to disk** —
+  until something is actually written. The two keys are **fixed depths**,
+  so each means a predictable amount of work: **`c`** sweeps
+  `"structure"` (both name catalogs plus the voice/zone/sample walk and
+  the `u` index) and **`C`** sweeps `"full"` (all of that, plus each
+  preset's GLOBAL values and every voice's own parameter group — by far
+  the priciest addition, and 4.5× slower).
+
+  **A `"structure"` sweep runs automatically on connect** — that is
+  `cache_structure_on_startup`, which defaults to **on**. Set it to
+  `false` to start instantly instead. `cache_all_on_startup = true`
+  runs the deeper `cache_depth` sweep instead (default `"full"`, also
+  `"names"`); it defaults to **off**, because at `"full"` depth that is
+  measured at 1 h 44 min on a large bank. `cache_depth` only affects
+  that startup sweep — it does not change what `c`/`C` do.
+  **Never persisted to disk** —
   rebuilt fresh every launch, deliberately: the E4XT can be edited from
   its own front panel with no way for this app to notice, so a saved
   cache could confidently show data that no longer matches the device.
 
-  On a large bank this takes a **long** time, so `a` asks first (and
-  tells you its estimate) whenever the sweep looks like it will run for
+  On a large bank this takes a **long** time, so `c`/`C` ask first (and
+  tell you the estimate) whenever the sweep looks like it will run for
   more than a minute — see [How long cache-all takes, and when it is
   worth it](#how-long-cache-all-takes-and-when-it-is-worth-it).
 - **Selecting a preset also sends it a MIDI Program Change** (no key
@@ -256,11 +264,11 @@ gap, on a full commercial bank — **990 populated presets, 128 MB of samples,
 6198 voices** (drum kits of 80-94 voices each pull that average up to ~6.3
 voices per preset):
 
-| `cache_depth` | full 0-999 sweep | per 50 presets | what you get |
-|---|---|---|---|
-| `"names"` | 150 s (2.5 min) | ~8 s | preset + sample name catalogs |
-| `"structure"` | 1371 s (23 min) | ~69 s | + voice/zone/sample structure, and the `u` index |
-| `"full"` *(default)* | **6241 s (1 h 44 min)** | ~310 s | + GLOBAL values and every voice's own parameters |
+| depth | key | full 0-999 sweep | per 50 presets | what you get |
+|---|---|---|---|---|
+| `"names"` | — *(startup only)* | 150 s (2.5 min) | ~8 s | preset + sample name catalogs |
+| `"structure"` | **`c`** — *and runs on connect by default* | 1371 s (23 min) | ~69 s | + voice/zone/sample structure, and the `u` index |
+| `"full"` | **`C`** | **6241 s (1 h 44 min)** | ~310 s | + GLOBAL values and every voice's own parameters |
 
 `"full"` is **4.5× `"structure"`** on this bank, because it adds a batched
 146-parameter fetch per *voice* — 6198 of them — where `"structure"` only
@@ -290,9 +298,8 @@ pacing — is already the dominant cost (cutting the send gap from 25 ms to
   voice/zone/sample structure, and the usage index for **every** sample it
   saw, not just the one you asked about. So after one `u`, preset selection,
   bank paging and `u` on any other sample are already instant, and running
-  `a` at `"structure"` depth afterwards would re-do work you have. (The
-  reverse holds too: `a` makes a later `u` instant.) Only `"full"` depth
-  adds anything `u` does not — every voice's own parameter group.
+  `c` afterwards would re-do work you have. (The reverse holds too: `c`
+  makes a later `u` instant.) Only `C` adds anything `u` does not — every voice's own parameter group.
 - **No, for a quick look.** Selecting a handful of presets fetches only what
   it needs; a sweep to look at three presets is pure overhead.
 - **No, if you are about to write.** Any parameter edit, rename or Master
@@ -304,16 +311,18 @@ pacing — is already the dominant cost (cutting the send gap from 25 ms to
   `"full"` mainly pays off if you will actually open many *voices*.
 
 Because a `"full"` sweep of a big bank runs for the better part of an hour,
-`a` **asks first** whenever the estimate exceeds a minute, showing what it
-expects. The estimate comes from **used preset RAM** (one query, before the
+`c`/`C` **ask first** whenever the estimate exceeds a minute, showing what
+they expect. The estimate comes from **used preset RAM** (one query, before the
 sweep starts) rather than preset count — RAM tracks how many voices a bank
 holds, which is what actually costs time, and preset count cannot tell a
 bank of pads from a bank of drum kits. `escape` cancels a running sweep at
 any point; a cancelled sweep caches nothing, since there is no way to tell
 "not found" from "not reached".
 
-`cache_all_on_startup = true` does **not** prompt — you asked for it in
-`config.toml` — but it does announce the estimate in the status line.
+Neither startup sweep prompts — `cache_structure_on_startup` is the default
+and `cache_all_on_startup` is an explicit opt-in, and asking on every launch
+would make both an annoyance rather than a convenience. Both announce their
+estimate in the status line, and `escape` cancels either at any point.
 
 Editing, renaming, and the Master menu:
 
