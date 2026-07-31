@@ -9,7 +9,8 @@ A terminal tool for the E-mu **EOS** sampler family (E4, E4XT, E4XT Ultra,
 E6400, …) driven over MIDI System Exclusive — a command-line explorer
 (`eoscli`) plus a full Textual TUI editor (`eosed`) for the
 documented remote editor/librarian protocol, from the same author as the
-sibling **k2kremote** (Kurzweil K2000/K2000R) and **mpc2emu** projects.
+sibling **[k2kremote](https://github.com/lentferj/k2kremote)** (Kurzweil
+K2000/K2000R) and **[mpc2emu](https://github.com/lentferj/mpc2emu)** projects.
 
 > **Author:** Jan Lentfer &lt;jan.lentfer@web.de&gt;, with AI support
 > (Anthropic Claude) — see [AI assistance](#ai-assistance--human-authorship).
