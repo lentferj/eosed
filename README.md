@@ -196,6 +196,14 @@ Two units left on the *same* id cannot be told apart: their replies are
 byte-identical, and so is one unit heard on two input ports. eosed cannot
 detect that, and commands will reach both. Give them different ids.
 
+> **Only tested synthetically.** All of the above — the ambiguity refusal,
+> `--device-id` selection, and treating one unit heard on two input ports as
+> one device — is covered by tests against fake MIDI ports. **It has never
+> been run with two real machines connected**, because the author has one.
+> Single-device autodetect *is* exercised live constantly. If you have two
+> and it misbehaves, that is a bug worth reporting rather than something
+> already ruled out.
+
 You can also skip discovery entirely by pinning the ports, which is the only
 option if your interface uses different names for send and receive (`--port`
 opens one name for both, so it cannot express that):

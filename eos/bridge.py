@@ -472,6 +472,15 @@ class AmbiguousDevice(RuntimeError):
     reply payloads are byte-identical, and so is one device heard on two
     input ports), so this cannot detect that case. That configuration is a
     protocol violation on the user's side.
+
+    NOT VERIFIED AGAINST HARDWARE. Every multi-device path here -- this
+    exception, device_id selection, and the one-machine-two-ports dedupe --
+    is covered only by tests against fake ports; no two real EOS units have
+    ever been connected at once. Single-device autodetect is exercised live
+    constantly. Treat the multi-device behaviour as designed-and-unit-tested,
+    not as confirmed, and see docs/RESOLUTION_NOTES.md for the project's
+    standing lesson about how often plausible protocol assumptions turned out
+    wrong on contact with real hardware.
     """
 
     def __init__(self, devices):

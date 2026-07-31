@@ -65,6 +65,36 @@ revisiting if §15 is ever closed.
   exactly this reason (`--allow-write` required; see the Editor TUI section
   below).
 
+## Multi-device autodetect — designed and unit-tested, never seen hardware (OPEN)
+
+Autodetect can now tell two connected EOS units apart by their SysEx device
+id, refuse to guess when several answer without one being requested
+(`AmbiguousDevice`), and treat one unit heard on two input ports as one
+device. **None of that has ever run with two real machines connected** — the
+author has one E4XT Ultra. It is covered only by tests against fake ports.
+
+Single-device autodetect is exercised live constantly and is not in doubt.
+
+**To close this**, with two units on one host and *different* device ids set
+(EOS 4.0 manual p. 104):
+
+1. Connect both, run `eoscli inquire` with no `--device-id` — expect a
+   refusal listing both ids, not a connection.
+2. `eoscli --device-id N inquire` for each — expect the right model/revision
+   each time, and confirm against each unit's own front panel.
+3. Check the port cache does not pin the wrong machine across restarts:
+   connect to one, relaunch, confirm it is still that one.
+4. If an interface merges both units onto one input port, confirm they are
+   still distinguished by id rather than collapsed.
+
+**Known undetectable, do not chase:** two units left on the *same* id. The
+replies are byte-identical, and identical to one unit heard on two ports.
+Nothing on the wire separates them.
+
+Worth remembering why this is worth verifying rather than assuming: §11, §12
+and the `preset_num_links` case are three separate occasions where a
+plausible protocol assumption was wrong on contact with hardware.
+
 ## Scripted live automation: `PRESET_SELECT` gotcha + a real device crash (OPEN, 2026-07-28)
 
 A sibling project (mpc2emu) drove this repo's editor protocol unattended for
