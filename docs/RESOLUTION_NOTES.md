@@ -1335,3 +1335,72 @@ data inherits the limits of the walk that produced it, and a bound that was
 adequate for the original question (finding negative sentinel values) is not
 automatically adequate for a later one (counting voices). Worth checking what
 a dataset's collection cap was before computing totals from it.
+
+## §21 — Master/erase actions: verification plan (open, never fired at hardware)
+
+The four destructive utilities are the last unverified commands in this
+project: Preset Delete (`71h`), Erase RAM Bank (`74h`), Erase All RAM Presets
+(`75h`), Erase All RAM Samples (`76h`). They have never been sent to a real
+device. The app reaches them only through a modal arm-then-fire screen, never
+a single keypress, and `--allow-write`/`w` gates them on top of that.
+
+### Established behaviour: EOS does not compact
+
+**EOS never compacts a bank on delete.** Deleting one preset or one sample
+leaves every other slot at the number it already had; the deleted slot simply
+becomes empty. The reason is that slot numbers are load-bearing elsewhere —
+MIDI Program Change and multimode setups address presets *by number*, so
+compacting would silently re-point every sequencer track and multi entry that
+referenced anything above the hole.
+
+**This is established, on the author's direct experience of the machines** —
+front-panel-visible behaviour seen over years of use, not an inference from
+the specification. It is a different class of claim from the "Number Of X"
+count fields (§11/§12), which were plausible readings of a document and wrong
+on contact with hardware; here the hardware *is* the source.
+
+The one part still genuinely open is narrower: whether a **remote** `71h`
+delete behaves identically to a front-panel delete. There is no reason to
+expect otherwise, and the numbering rationale above applies regardless of who
+issues the delete — but "the remote path matches the panel path" is exactly
+the kind of assumption this project has been bitten by before, and step 1
+below checks it for free.
+
+### Bank to test against
+
+Small, and *structurally* varied rather than large. The verification needs:
+
+* **≥3 presets**, so a middle one can be deleted and its neighbours shown
+  intact — and so compaction would be visible if it happened.
+* **presets and samples present at the same time**, which is the only way to
+  separate `75h` from `76h` from `74h`: the discriminating evidence is what
+  each one *spares*, not what it destroys.
+* **distinguishable presets** — differing voice counts are ideal, since a
+  read-back then proves identity rather than mere presence.
+* **small sample payload.** Sample bytes add nothing to the proof and
+  everything to the wait: the sequence needs 3-4 full bank reloads to re-arm,
+  so single-digit MB turns a ~40-minute exercise into a few minutes.
+
+Roughly 5-10 presets and 5-10 samples in under ~10 MB is ample. A gap in the
+preset numbering is *not* needed: EOS does not compact (above), and deleting
+a middle preset demonstrates it either way.
+
+### Order, least destructive first
+
+1. `71h` on a middle preset. Verify: that slot reads `"Empty Preset"` and
+   walks to `-2` voices; **every other preset keeps its own number, name and
+   voice count** (per the section above — this confirms the remote path
+   matches the panel path, it is not an open question about the device);
+   sample memory is unchanged.
+2. Reload. `75h`. Verify: presets gone, **sample memory unchanged and sample
+   names still readable** — the check that separates this from `74h`.
+3. Reload. `76h`. Verify: samples gone, presets still present.
+4. Reload. `74h`. Verify: both gone.
+
+Each step needs its own reload; a half-erased bank cannot verify the next.
+Snapshot `preset_memory()`/`sample_memory()` plus the preset and sample name
+catalogs before each step, so verification is a diff rather than a judgement.
+
+**Do not script this.** Per the project's own rule, a Master action is fired
+by hand, from the TUI's arm-then-fire modal, with the bank known-reloadable —
+which also exercises the real user path rather than just the wire command.
