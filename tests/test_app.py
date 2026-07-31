@@ -1102,8 +1102,10 @@ async def test_edit_value_writes_through_and_refreshes_table():
         assert await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
         assert await _wait_for(pilot, lambda: "set id 0" in app.last_status)
         assert app.bridge.get_parameter(0) == 5
-        # the params table must reflect the new value without a manual refresh
-        assert await _wait_for(pilot, lambda: params.get_row("0")[2] == "5")
+        # the params table must reflect the new value without a manual refresh.
+        # " 5", not "5": the pane renders values sign-aligned, so a positive
+        # value carries a leading space where a negative would put its "-".
+        assert await _wait_for(pilot, lambda: params.get_row("0")[2] == " 5")
 
 
 async def test_edit_value_rejects_out_of_range_input():

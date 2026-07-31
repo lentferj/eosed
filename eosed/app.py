@@ -2143,7 +2143,9 @@ class EosedApp(App):
         for pid in ids:
             param = p.PARAMETERS[pid]
             value = values.get(pid)
-            display = "" if value is None else p.describe_value(param, value)
+            # Aligned form here specifically: this is the one place values are
+            # read as a *column*, so the sign goes outside the digits.
+            display = "" if value is None else p.describe_value_aligned(param, value)
             table.add_row(str(pid), param.name, display, param.unit or "", key=str(pid))
         table.call_after_refresh(table._stretch_last_column)
         self.set_status(f"preset {self.current_preset}: {label} parameters ({len(ids)})")

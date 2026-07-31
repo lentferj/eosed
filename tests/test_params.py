@@ -160,6 +160,39 @@ def test_fx_b_algorithm_name_spot_checks(value, expected):
     assert p.FX_B_ALGORITHM_NAMES[value] == expected
 
 
+def test_describe_value_aligned_puts_the_sign_outside_the_digits():
+    """Every row's first digit must land in the same column, with the minus
+    hanging to its left -- that is what makes the Parameters pane readable as
+    a column of numbers, rather than each value starting wherever."""
+    volume = p.PARAMETERS_BY_NAME["E4_GEN_VOLUME"]        # -96..10
+    pan = p.PARAMETERS_BY_NAME["E4_GEN_PAN"]              # -64..63
+
+    assert p.describe_value_aligned(volume, 0) == " 0"
+    assert p.describe_value_aligned(volume, -6) == "-6"
+    assert p.describe_value_aligned(pan, -64) == "-64"
+    assert p.describe_value_aligned(pan, 63) == " 63"
+
+    # The first digit sits at index 1 regardless of sign or width.
+    for param, value in ((volume, 0), (volume, -6), (volume, -96), (pan, 63)):
+        text = p.describe_value_aligned(param, value)
+        assert text[0] in " -"
+        assert text[1].isdigit(), text
+
+    # The "(Name)" suffix still follows, unchanged.
+    algo = p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"]
+    assert p.describe_value_aligned(algo, 0) == " 0 (Room 1)"
+
+
+def test_describe_value_aligned_never_breaks_on_a_boundary():
+    """Same walk describe_value gets: a label table indexing on the raw value
+    must not explode at min/max/0 in the aligned form either."""
+    for param in p.PARAMETERS.values():
+        for value in (param.minimum, param.maximum, 0):
+            text = p.describe_value_aligned(param, value)
+            assert text[0] in " -", (param.name, value, text)
+            assert text[1].isdigit(), (param.name, value, text)
+
+
 def test_describe_value_fx_algorithm():
     param = p.lookup("E4_PRESET_FX_A_ALGORITHM")
     assert p.describe_value(param, 18) == "18 (Spacious Hall)"

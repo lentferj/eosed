@@ -787,6 +787,29 @@ def describe_value(param: Parameter, value: int) -> str:
     return str(value) if name is None else f"{value} ({name})"
 
 
+def describe_value_aligned(param: Parameter, value: int) -> str:
+    """:func:`describe_value`, but with the sign in a column of its own so a
+    list of these reads as a column of numbers.
+
+    A negative value's "-" is placed *left* of the digits and a positive
+    value gets a space there instead, so the first digit of every row lands
+    in the same column::
+
+         0 (Room 1)
+        -6
+        -64
+         60 (C3)
+        -100
+
+    Ordinary right-alignment would line up the *last* digit instead; this
+    lines up the first, which is what makes a scanned column of mixed-width
+    values readable at a glance in the Parameters pane.
+    """
+    name = _known_value_name(param, value)
+    text = f"{'-' if value < 0 else ' '}{abs(value)}"
+    return text if name is None else f"{text} ({name})"
+
+
 # --- filter Hz/dB display conversions (closed-form; verified against the
 #     spec's own C source) --------------------------------------------------
 
