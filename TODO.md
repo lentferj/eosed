@@ -135,7 +135,7 @@ are multisample sharing the same 3 samples.
   go back) swaps this automatically.
 - **Samples** (`#samples`) — **derived, not a browsable bank**: resolves
   whichever voice(s) are in scope down to the raw sample number(s) they
-  play and looks up each one's name (`EosRemoteApp._resolve_sample_rows`,
+  play and looks up each one's name (`EosedApp._resolve_sample_rows`,
   `_voice_sample_info`). Whole preset in scope (no voice selected) sums
   across every voice, deduped by sample number with a "used by" column
   listing which voice(s) (e.g. `V1,V3`); one voice in scope narrows to just
@@ -220,7 +220,7 @@ whether to fold this into `"full"` depth, add a separate depth level, or
 leave it out for now; chose folding it into `"full"` (it's already the
 "fetch everything" tier). `_run_full_sweep` now also fetches every
 voice's parameter group during the same per-voice walk that already
-determines zone/sample structure — `EosRemoteApp._voice_details`, keyed
+determines zone/sample structure — `EosedApp._voice_details`, keyed
 by `(preset, voice)`, storing `(sample numbers, param values)` so
 `_load_voice_detail` can skip *both* the zone re-walk and the param
 fetch on a cache hit, not just the latter. Structurally the most
@@ -244,7 +244,7 @@ additions, not mutually exclusive:
   loaded rows — by arrow keys, mouse wheel, or anything else that moves
   the cursor, not a dedicated key — fetches and *appends* the next
   `BROWSER_EXTEND_CHUNK = 50` entries in the background
-  (`EosRemoteApp._extend_bank_page`, triggered from
+  (`EosedApp._extend_bank_page`, triggered from
   `on_data_table_row_highlighted` once the cursor is within
   `BROWSER_EXTEND_THRESHOLD = 10` of the end of what's loaded). Reuses
   `_catalog_cache`/`_catalog_scanned_upto` first if a cache-all sweep
@@ -269,11 +269,11 @@ viewed, and `u`'s own full-bank sweep threw away almost everything it
 fetched, keeping only the sample→preset mapping. So the same preset's
 voices/zones got re-walked over MIDI every time it was revisited, and a
 complete sweep couldn't be reused for anything but the one sample that
-triggered it. `EosRemoteApp._run_full_sweep(depth)` is now the single
+triggered it. `EosedApp._run_full_sweep(depth)` is now the single
 shared walk both `u` (always at `"structure"` depth, for one sample) and
 `a` (`action_cache_all`, at the configured depth, for everything) run —
 returning a dict the caller decides whether to promote into the real
-caches (`EosRemoteApp._promote_sweep_result`) or, for a cancelled sweep,
+caches (`EosedApp._promote_sweep_result`) or, for a cancelled sweep,
 discard (same "no way to tell 'not found' from 'not reached'" reasoning
 `u` already had). Three depths, `cache_depth` in `config.toml`:
 `"names"` (preset + sample name catalogs only — cheap, and, having no
@@ -345,7 +345,7 @@ voice/link → `escape` back to the preset-level view used to re-run the
 *entire* walk above from scratch, even though nothing about a voice/link
 drill-down changes what it would recompute — noticeably slow in practice
 against real hardware for anything but a trivial preset. Fixed:
-`EosRemoteApp._preset_overview_cache` holds the last `_load_preset_overview`
+`EosedApp._preset_overview_cache` holds the last `_load_preset_overview`
 result, reused by `action_back_to_preset` when it's for the same preset (no
 MIDI at all); invalidated by every real write, uniformly and on principle
 rather than reasoning out which specific ones are "safe" to leave alone —
@@ -416,7 +416,7 @@ bank — confirmed to genuinely reach 999, not hang or error out partway.
 A *complete* sweep (or one that stops via the early-stop heuristic below,
 as opposed to a user cancellation) records every sample it saw along the
 way, not just the one that triggered it, into
-`EosRemoteApp._sample_usage_index` — every later lookup, for *any* sample,
+`EosedApp._sample_usage_index` — every later lookup, for *any* sample,
 is then instant with no MIDI at all, until a real write invalidates it
 (`_invalidate_write_sensitive_caches`, shared with `_preset_overview_cache`
 and called from `_apply_edit`/`_apply_rename`/`_fire_master_action`
@@ -465,7 +465,7 @@ signal §11 already used for zones, one level up: a voice's own
 doesn't exist, distinct from the `0x3FFF` multisample sentinel. Fixed by
 dropping `preset_num_voices` from every call site (`_load_preset_overview`,
 `_start_browse_voices`, the `u` scan) in favor of walking voice indices
-directly via `EosRemoteApp._voice_sample_info`, which now returns `None`
+directly via `EosedApp._voice_sample_info`, which now returns `None`
 to signal "stop" instead of trusting a count; capped at
 `_MAX_VOICE_SCAN = 256` as a safety bound, same non-trusted-count pattern
 as `_MAX_ZONE_SCAN` (was 64, and real drum kits run to 94 voices — the
@@ -518,10 +518,10 @@ once per voice** — also caught live (preset 0, voice V2, 16 real zones):
 a voice with several zones sharing one underlying sample (a normal
 pattern) showed that voice repeated once per matching zone
 (`V2,V2,V2,V2,V2`) instead of once. Fixed in
-`EosRemoteApp._resolve_sample_rows` (a set instead of a list per sample
+`EosedApp._resolve_sample_rows` (a set instead of a list per sample
 number).
 
-**View toggle (`e`) and its persistence:** `EosRemoteApp.compact_view`
+**View toggle (`e`) and its persistence:** `EosedApp.compact_view`
 defaults to `True` (compact 2-pane: Preset | Parameters) on a fresh install
 with no config yet; toggling is remembered in `config.toml` (see
 `eos.bridge.load_compact_view`/`save_compact_view`, sharing that
@@ -593,7 +593,7 @@ rapid ungapped channel messages. Fixed by inserting the same `SEND_GAP`
 300) — each landed on the exact commanded number. Full account:
 `docs/RESOLUTION_NOTES.md` §14.
 
-`EosRemoteApp` now sends one automatically on every `select_preset` (no
+`EosedApp` now sends one automatically on every `select_preset` (no
 key binding), gated by `self._send_pc_on_preset_select` —
 `send_pc_on_preset_select` in `config.toml`, user-edited like the other
 cache-all-adjacent settings, defaulting to **on** (unlike
@@ -692,7 +692,7 @@ the sibling k2kremote project** (`k2kremote/app.py`'s `wrap_blocks`, same
 author, GPL-2.0-or-later; see `LICENSE`'s third-party table, updated
 accordingly), which solved the identical problem for its own legend.
 Unlike k2kremote's separate `keymap.LEGEND_BLOCKS` table, the legend text
-here is derived directly from `BINDINGS` (`EosRemoteApp._legend_blocks`,
+here is derived directly from `BINDINGS` (`EosedApp._legend_blocks`,
 `f"{key} {description}"` for every binding with `show=True`) — one source
 of truth for both key dispatch and the displayed hint, nothing to keep in
 sync by hand. Re-folds on its own `on_resize`, same per-widget pattern

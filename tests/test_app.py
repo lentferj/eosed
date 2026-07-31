@@ -12,7 +12,8 @@ from textual.widgets import Header
 from eos import params as p
 from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
-    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _voice_sample_info, EosRemoteApp)
+    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _voice_sample_info, ConfirmSweepScreen,
+    EosedApp)
 from eosed.demo import DemoBridge
 
 
@@ -58,18 +59,18 @@ async def _goto(pilot, app, text):
 
 
 async def test_app_mounts_and_lists_presets():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         assert await _wait_for(pilot, lambda: table.row_count)
         # The page size is dynamic (sized to the pane's height, see
-        # EosRemoteApp._desired_browser_window), not a fixed constant.
+        # EosedApp._desired_browser_window), not a fixed constant.
         assert table.row_count == app.browser_window
         assert f"presets 0-{app.browser_window - 1}" in app.last_status
 
 
 async def test_switch_to_samples_bank_and_back():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -92,7 +93,7 @@ async def test_switching_to_samples_bank_clears_preset_detail_panes_immediately(
     # scope while browsing the raw Sample bank -- switching should clear
     # them right away, not leave stale preset/voice data on screen until a
     # sample happens to get selected.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         voices = app.query_one("#voices")
@@ -110,7 +111,7 @@ async def test_switching_to_samples_bank_clears_preset_detail_panes_immediately(
 
 
 async def test_switching_back_to_presets_bank_restores_the_preset_view():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -127,7 +128,7 @@ async def test_switching_back_to_presets_bank_restores_the_preset_view():
 
 
 async def test_selecting_sample_shows_info_in_params_pane_not_stale_data():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         # First view a preset, so the params pane has real, stale-able data.
         await _select_preset(pilot, app)
@@ -158,7 +159,7 @@ async def test_selecting_sample_shows_info_in_params_pane_not_stale_data():
 
 
 async def test_rename_sample():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -183,7 +184,7 @@ async def test_rename_sample():
 
 
 async def test_goto_sample():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -227,7 +228,7 @@ async def test_find_sample_usage_scans_full_range_and_reports_matches():
         def get_preset_name(self, preset, *, timeout=None):
             return self._MATCHING_PRESETS.get(preset, "")
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._sample_usage_early_stop_gap = None  # this test wants the full, uninterrupted sweep
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
@@ -279,7 +280,7 @@ async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
         def get_preset_name(self, preset, *, timeout=None):
             return self._PRESETS.get(preset, (0, ""))[1]
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._sample_usage_early_stop_gap = None  # the two matches are far apart -- want the full sweep
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
@@ -320,7 +321,7 @@ async def test_cancel_sample_usage_scan():
                 return -2  # no such voice -- every preset is empty
             return 0
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._sample_usage_early_stop_gap = None  # testing user-cancel specifically, not the heuristic
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
@@ -369,7 +370,7 @@ async def test_sample_usage_scan_stops_after_consecutive_empty_presets():
         def get_preset_name(self, preset, *, timeout=None):
             return "Only Match" if preset == 0 else ""
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     assert app._sample_usage_early_stop_gap == 10  # the documented default
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
@@ -398,12 +399,12 @@ async def test_sample_usage_early_stop_configurable_via_config_toml(tmp_path):
     # demo=False (with a DemoBridge standing in for a real one) exercises the
     # actual config-reading wiring, matching the pattern used for the view-
     # toggle persistence tests -- --demo itself never reads config.toml.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
                        connect_kwargs={"config_path": config_path})
     assert app._sample_usage_early_stop_gap == 3
 
     (tmp_path / "config.toml").write_text('sample_usage_early_stop = "fullscan"\n')
-    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     assert app2._sample_usage_early_stop_gap is None
 
@@ -431,7 +432,7 @@ async def test_clear_sample_usage_cache():
         def get_preset_name(self, preset, *, timeout=None):
             return "Only Match" if preset == 0 else ""
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -461,7 +462,7 @@ async def test_clear_sample_usage_cache():
 
 
 async def test_cache_all_names_depth_fills_only_the_name_catalogs():
-    # "names" depth (see action_cache_all / EosRemoteApp._run_full_sweep)
+    # "names" depth (see action_cache_all / EosedApp._run_full_sweep)
     # has no use for a voice/zone walk at all -- must not populate the
     # preset-overview or sample-usage caches, only the two name catalogs.
     class FakeBridge(DemoBridge):
@@ -478,7 +479,7 @@ async def test_cache_all_names_depth_fills_only_the_name_catalogs():
                 raise LookupError("no such sample")
             return self._SAMPLES[sample]
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "names"
     app._sample_usage_early_stop_gap = None  # "names" depth ignores this anyway -- explicit for clarity
     async with app.run_test() as pilot:
@@ -518,7 +519,7 @@ async def test_cache_all_sample_names_stop_early_after_consecutive_empty_samples
         def get_sample_name(self, sample, *, timeout=None):
             return "Only Sample" if sample == 0 else "Empty Sample"
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "full"
     assert app._sample_usage_early_stop_gap == 10  # the documented default
     async with app.run_test() as pilot:
@@ -564,7 +565,7 @@ async def test_find_sample_usage_shows_results_in_the_params_pane_too():
         def get_preset_name(self, preset, *, timeout=None):
             return self._MATCHING_PRESETS.get(preset, "")
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     assert app.compact_view is True  # default -- #samples is hidden right now
     app._sample_usage_early_stop_gap = None
     async with app.run_test() as pilot:
@@ -622,7 +623,7 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
         def get_sample_name(self, sample, *, timeout=None):
             return "Demo Kick" if sample == 0 else ""
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "structure"
     app._sample_usage_early_stop_gap = None  # this test wants the full, uninterrupted sweep
     async with app.run_test() as pilot:
@@ -693,7 +694,7 @@ async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
             self.midi_calls += 1
             return "Demo Kick" if sample == 0 else ""
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "full"
     app._sample_usage_early_stop_gap = None
     async with app.run_test() as pilot:
@@ -737,7 +738,7 @@ async def test_cancelling_cache_all_promotes_nothing():
                 return -2
             return 0
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "full"
     app._sample_usage_early_stop_gap = None  # testing user-cancel, not the heuristic
     async with app.run_test() as pilot:
@@ -760,7 +761,7 @@ async def test_cancelling_cache_all_promotes_nothing():
 async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
     config_path = str(tmp_path / "config.toml")
     (tmp_path / "config.toml").write_text("cache_all_on_startup = true\ncache_depth = \"names\"\n")
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
                        connect_kwargs={"config_path": config_path})
     assert app._cache_all_on_startup is True
     assert app._cache_depth == "names"
@@ -773,17 +774,99 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
             0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
 
     (tmp_path / "config.toml").write_text("")  # unset -- must default to off
-    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     assert app2._cache_all_on_startup is False
     assert app2._cache_depth == "full"  # the documented default
+
+
+def test_sweep_estimate_scales_with_used_ram_not_preset_count():
+    """Preset COUNT cannot tell a bank of one-voice pads from one of 94-voice
+    drum kits; used preset RAM can, and is one query rather than the whole
+    walk we are trying to predict (RESOLUTION_NOTES §20)."""
+    from eosed.app import _estimate_sweep_seconds
+
+    # A small bank sweeps in seconds at every depth.
+    assert _estimate_sweep_seconds("full", 3) < 30
+    # The measured commercial bank: 2013 KB used, ~4130 voices.
+    assert _estimate_sweep_seconds("full", 2013) > 3000
+    # Depth ordering must hold for any bank.
+    for used in (50, 500, 2013):
+        assert (_estimate_sweep_seconds("names", used)
+                < _estimate_sweep_seconds("structure", used)
+                < _estimate_sweep_seconds("full", used))
+    # Unknown/absent sizing must never fabricate a number.
+    assert _estimate_sweep_seconds("full", None) is None
+    assert _estimate_sweep_seconds("full", 0) is None
+    assert _estimate_sweep_seconds("nonsense", 500) is None
+
+
+def test_humanize_seconds_reads_naturally():
+    from eosed.app import _humanize_seconds
+    assert _humanize_seconds(20) == "20 seconds"
+    assert _humanize_seconds(600) == "10 minutes"
+    assert _humanize_seconds(5400) == "1.5 hours"
+
+
+async def test_small_bank_sweeps_without_asking():
+    """The prompt exists to prevent a surprise, not to add a keystroke to
+    every sweep -- a demo-sized bank must start immediately."""
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert app._catalog_cache["preset"]        # it really ran
+        assert not isinstance(app.screen, ConfirmSweepScreen)
+
+
+async def test_big_bank_asks_first_and_no_means_no():
+    """A bank whose used RAM implies a long sweep must ask, and answering no
+    must leave every cache untouched."""
+    class BigBank(DemoBridge):
+        def preset_memory(self, *, timeout=None):
+            from eos import messages as msgs
+            return msgs.PresetMemoryResponse(total_kb=8192, free_kb=8192 - 2013,
+                                             device_id=self.device_id)
+
+    app = EosedApp(BigBank(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        app._catalog_cache["preset"].clear()
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: isinstance(app.screen, ConfirmSweepScreen))
+
+        await pilot.press("n")
+        await _wait_for(pilot, lambda: not isinstance(app.screen, ConfirmSweepScreen))
+        assert not app._scan_active
+        assert app._catalog_cache["preset"] == {}, "declining must cache nothing"
+
+
+async def test_big_bank_yes_runs_the_sweep():
+    class BigBank(DemoBridge):
+        def preset_memory(self, *, timeout=None):
+            from eos import messages as msgs
+            return msgs.PresetMemoryResponse(total_kb=8192, free_kb=8192 - 2013,
+                                             device_id=self.device_id)
+
+    app = EosedApp(BigBank(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        table = app.query_one("#presets")
+        await _wait_for(pilot, lambda: table.row_count)
+        await pilot.press("a")
+        assert await _wait_for(pilot, lambda: isinstance(app.screen, ConfirmSweepScreen))
+        await pilot.press("y")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert app._catalog_cache["preset"]
 
 
 async def test_a_key_still_works_in_demo_with_no_startup_config():
     # --demo never reads cache_all_on_startup/cache_depth (same "demo
     # touches no real local state" convention as compact_view/sample_usage_
     # early_stop) -- the 'a' key itself must still work regardless.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     assert app._cache_all_on_startup is False
     assert app._cache_depth == "full"
     async with app.run_test() as pilot:
@@ -796,7 +879,7 @@ async def test_a_key_still_works_in_demo_with_no_startup_config():
 
 
 async def test_selecting_preset_loads_voices_global_params_and_samples():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -818,7 +901,7 @@ async def test_selecting_preset_loads_voices_global_params_and_samples():
 
 
 async def test_selecting_voice_loads_voice_params_and_that_voices_samples():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _select_voice(pilot, app)
@@ -834,7 +917,7 @@ async def test_selecting_voice_loads_voice_params_and_that_voices_samples():
 
 
 async def test_escape_returns_to_preset_level_view():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _select_voice(pilot, app)
@@ -866,7 +949,7 @@ async def test_back_to_preset_reuses_cached_overview_no_refetch():
     # Regression test: going voice/link -> back to the *same* preset used
     # to re-walk every voice/zone over MIDI again for data that hadn't
     # changed, making "back" noticeably slow against real hardware.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         calls = _count_preset_overview_fetches(app)
@@ -885,7 +968,7 @@ async def test_editing_a_parameter_invalidates_the_cached_overview():
     # A write could change which sample a zone points at -- the cached
     # preset overview (voice/zone/sample data) can no longer be trusted
     # unchanged after one, unlike plain read-only navigation.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         calls = _count_preset_overview_fetches(app)
@@ -913,7 +996,7 @@ async def test_editing_a_parameter_invalidates_the_catalog_cache_too():
     # _invalidate_write_sensitive_caches clears every cache-all-filled cache
     # uniformly, not just the preset overview -- a write could change a
     # name just as easily as a sample assignment.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.press("a")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
@@ -942,7 +1025,7 @@ async def test_editing_a_parameter_invalidates_the_catalog_cache_too():
 
 
 async def test_edit_value_writes_through_and_refreshes_table():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -968,7 +1051,7 @@ async def test_edit_value_writes_through_and_refreshes_table():
 
 
 async def test_edit_value_rejects_out_of_range_input():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -991,7 +1074,7 @@ async def test_edit_value_rejects_out_of_range_input():
 
 
 async def test_rename_preset():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1011,7 +1094,7 @@ async def test_rename_preset():
 
 
 async def test_master_menu_delete_preset_requires_arm_then_fire():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1032,7 +1115,7 @@ async def test_master_menu_delete_preset_requires_arm_then_fire():
 
 
 async def test_master_menu_erase_all_presets():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1047,7 +1130,7 @@ async def test_master_menu_erase_all_presets():
 
 
 async def test_master_menu_delete_preset_unavailable_without_selection():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -1064,7 +1147,7 @@ async def test_master_menu_delete_preset_unavailable_without_selection():
 
 
 async def test_writes_disabled_by_default_blocks_edit_rename_and_master():
-    app = EosRemoteApp(DemoBridge(), allow_write=False, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=False, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1094,7 +1177,7 @@ async def test_write_mode_toggle_arms_writes_and_colors_the_header():
     # 'w' arms/disarms writes at runtime on top of whatever --allow-write
     # started the session at; the header turns the E4XT badge's own red
     # while armed -- a persistent reminder, not just a status-line message.
-    app = EosRemoteApp(DemoBridge(), allow_write=False, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=False, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)  # let the initial page load settle first
@@ -1124,7 +1207,7 @@ async def test_write_mode_toggle_arms_writes_and_colors_the_header():
 
 
 async def test_write_mode_starts_armed_when_launched_with_allow_write():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
         header = app.query_one(Header)
@@ -1145,7 +1228,7 @@ async def test_selecting_a_preset_sends_a_program_change_by_default():
         def send_program_change(self, preset, *, channel=None):
             self.pc_calls.append(preset)
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     assert app._send_pc_on_preset_select is True  # the documented default
     async with app.run_test() as pilot:
         await _select_preset(pilot, app, row=0)
@@ -1158,17 +1241,17 @@ async def test_send_pc_on_preset_select_configurable_via_config_toml(tmp_path):
     # demo=False (with a DemoBridge standing in for a real one) exercises
     # the actual config-reading wiring, matching the pattern used for the
     # other config-backed settings -- --demo itself never reads config.toml.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
                        connect_kwargs={"config_path": config_path})
     assert app._send_pc_on_preset_select is False
 
     (tmp_path / "config.toml").write_text("send_pc_on_preset_select = true\n")
-    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     assert app2._send_pc_on_preset_select is True
 
     (tmp_path / "config.toml").write_text("")  # unset -- must default to on
-    app3 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app3 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     assert app3._send_pc_on_preset_select is True
 
@@ -1183,12 +1266,12 @@ async def test_demo_mode_does_not_touch_config_toml_for_send_pc_setting(monkeypa
     def _boom(*a, **k):
         raise AssertionError("--demo must never read config.toml")
     monkeypatch.setattr(bridge_mod, "load_send_pc_on_preset_select", _boom)
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     assert app._send_pc_on_preset_select is True
 
 
 async def test_goto_preset_out_of_current_window():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1205,7 +1288,7 @@ async def test_goto_preset_jumps_window_and_highlights_the_right_row():
     # Regression test: reported bug — "goto 125" visually landed on preset
     # 112 because the table's cursor reset to row 0 after the window
     # rebuilt, instead of highlighting 125's own row (13, within 112-127).
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1220,7 +1303,7 @@ async def test_goto_preset_jumps_window_and_highlights_the_right_row():
 
 
 async def test_goto_preset_within_same_window_does_not_rescan():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1244,7 +1327,7 @@ async def test_cache_all_makes_bank_paging_free_of_new_midi():
     # load_bank_page consults _catalog_cache before hitting the device --
     # after a cache-all sweep, paging to a window the paged browser has
     # never fetched on its own must not call catalog_presets at all.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     app._cache_depth = "names"
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
@@ -1272,7 +1355,7 @@ async def test_cache_all_makes_bank_paging_free_of_new_midi():
 
 
 async def test_browser_window_grows_and_shrinks_with_terminal_height():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(80, 24)) as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1312,7 +1395,7 @@ async def test_pending_resize_debounce_survives_teardown():
     # running when the stray callback landed) rather than as anything
     # pointing back here. Asserted directly instead of racing the real
     # timing, which is exactly what made the original flake so hard to place.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(80, 24)) as pilot:
         presets = app.query_one("#presets")
         await _wait_for(pilot, lambda: presets.row_count)
@@ -1333,7 +1416,7 @@ async def test_scrolling_near_bottom_of_page_extends_with_more_rows():
         def catalog_presets(self, preset_range=range(0, 128), *, timeout=None, on_progress=None):
             return {n: f"P{n}" for n in preset_range}
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(80, 24)) as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -1358,7 +1441,7 @@ async def test_extend_reuses_cache_all_data_with_no_new_midi():
             self.catalog_calls += 1
             return {n: f"P{n}" for n in preset_range}
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     app._cache_depth = "names"
     async with app.run_test(size=(80, 24)) as pilot:
         table = app.query_one("#presets")
@@ -1380,7 +1463,7 @@ async def test_page_down_up_step_through_the_bank():
         def catalog_presets(self, preset_range=range(0, 128), *, timeout=None, on_progress=None):
             return {n: f"P{n}" for n in preset_range}
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(80, 24)) as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -1480,12 +1563,12 @@ def test_zone_walk_reaches_a_62_zone_voice():
 async def test_samples_pane_aggregates_across_voices_and_dedups():
     # A fake bridge with 3 voices: two single-sample voices sharing sample 7,
     # and one multisample voice (flagged via the voice-level -1 sentinel,
-    # not a count field — see EosRemoteApp._voice_sample_info /
+    # not a count field — see EosedApp._voice_sample_info /
     # RESOLUTION_NOTES §11) with 3 zones: samples 7, 9, and 9 again (the
     # same voice hitting the same sample from two different zones -- a very
     # normal pattern, e.g. two key ranges sharing one recording) -- exercises
     # both the cross-voice dedup AND the same-voice-multiple-zones dedup in
-    # EosRemoteApp._resolve_sample_rows independent of DemoBridge's
+    # EosedApp._resolve_sample_rows independent of DemoBridge's
     # simplicity (which only ever has one voice/one zone).
     class FakeBridge(DemoBridge):
         def get_parameter(self, param_id, *, timeout=None):
@@ -1513,7 +1596,7 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
         def get_sample_name(self, sample, *, timeout=None):
             return {7: "Shared Kick", 9: "Extra Snare"}.get(sample, "")
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1529,7 +1612,7 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
 
 
 async def test_view_defaults_to_compact_with_no_stored_preference():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.compact_view is True
@@ -1539,7 +1622,7 @@ async def test_view_defaults_to_compact_with_no_stored_preference():
 
 
 async def test_toggle_view_shows_and_hides_voice_and_samples_panes():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
         voices = app.query_one("#voices")
@@ -1563,7 +1646,7 @@ async def test_view_preference_persists_across_restarts(tmp_path):
     # demo=False (with a DemoBridge instance standing in for a real one)
     # exercises the actual persistence wiring in isolation, without needing
     # real hardware — demo=True deliberately skips it (see next test).
-    app1 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app1 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     async with app1.run_test() as pilot:
         await pilot.pause()
@@ -1572,7 +1655,7 @@ async def test_view_preference_persists_across_restarts(tmp_path):
         await pilot.pause()
         assert app1.compact_view is False
 
-    app2 = EosRemoteApp(DemoBridge(), allow_write=True, demo=False,
+    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
                         connect_kwargs={"config_path": config_path})
     async with app2.run_test() as pilot:
         await pilot.pause()
@@ -1590,7 +1673,7 @@ async def test_demo_mode_does_not_touch_config_toml_for_view_preference(monkeypa
                         lambda *a, **k: calls.append("load"))
     monkeypatch.setattr(bridge_mod, "save_compact_view",
                         lambda *a, **k: calls.append("save"))
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("e")
@@ -1602,7 +1685,7 @@ async def test_browse_voices_with_exactly_one_skips_the_prompt():
     # A prompt whose only valid answer is "1" is just an extra keypress —
     # 'v' should jump straight there instead. DemoBridge always has exactly
     # one voice, so this is the path _select_voice takes in every other test.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1617,7 +1700,7 @@ async def test_browse_voices_modal_works_in_compact_view():
     # Regression test: 'v' used to only work by clicking the Voice pane
     # directly, which is hidden in the (now-default) compact view. The
     # modal prompt must work regardless of which pane layout is showing.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.compact_view is True
@@ -1641,7 +1724,7 @@ async def test_browse_links_with_exactly_one_skips_the_prompt():
         def get_parameters(self, param_ids, *, timeout=None):
             return {pid: 0 for pid in param_ids}
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1668,7 +1751,7 @@ async def test_browse_links_with_several_prompts_for_which_one():
         def get_parameters(self, param_ids, *, timeout=None):
             return {pid: 0 for pid in param_ids}
 
-    app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
+    app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
 
@@ -1685,7 +1768,7 @@ async def test_browse_links_with_several_prompts_for_which_one():
 async def test_demo_never_touches_rtmidi(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, "rtmidi", None)
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         assert await _wait_for(pilot, lambda: table.row_count)
@@ -1710,7 +1793,7 @@ async def _edit_param(pilot, app, row: int, new_value: str) -> None:
 
 
 async def test_edit_records_a_change_and_shows_the_counter():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         assert app._changes == []
@@ -1726,7 +1809,7 @@ async def test_edit_records_a_change_and_shows_the_counter():
 
 
 async def test_undo_restores_the_previous_value_and_reports_it():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")
@@ -1744,7 +1827,7 @@ async def test_undo_restores_the_previous_value_and_reports_it():
 
 
 async def test_undo_is_step_by_step_and_undo_all_clears_everything():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")
@@ -1769,7 +1852,7 @@ async def test_undo_replays_in_reverse_order():
     # Two edits to *different* parameters, so undoing in the wrong order
     # would still leave both at their original values and hide the bug --
     # the order is asserted through the log itself.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")
@@ -1785,7 +1868,7 @@ async def test_undo_replays_in_reverse_order():
 
 
 async def test_history_overlay_lists_every_change():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")
@@ -1806,7 +1889,7 @@ async def test_history_overlay_lists_every_change():
 
 
 async def test_history_overlay_opens_with_no_changes():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await pilot.press("h")
@@ -1817,7 +1900,7 @@ async def test_history_overlay_opens_with_no_changes():
 async def test_selecting_a_different_preset_discards_the_undo_log():
     # Every write goes to whatever PRESET_SELECT points at, so a log for a
     # preset that is no longer selected could not be replayed safely.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app, row=0)
         await _edit_param(pilot, app, 0, "5")
@@ -1830,7 +1913,7 @@ async def test_selecting_a_different_preset_discards_the_undo_log():
 
 
 async def test_reselecting_the_same_preset_keeps_the_undo_log():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app, row=0)
         await _edit_param(pilot, app, 0, "5")
@@ -1841,7 +1924,7 @@ async def test_reselecting_the_same_preset_keeps_the_undo_log():
 
 
 async def test_undo_is_gated_behind_write_mode():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")
@@ -1855,7 +1938,7 @@ async def test_undo_is_gated_behind_write_mode():
 
 
 async def test_no_op_edit_is_not_recorded():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1868,7 +1951,7 @@ async def test_no_op_edit_is_not_recorded():
 async def test_undo_of_a_voice_scoped_edit_restores_the_voice_selection():
     # A parameter id means "this voice's field" only while VOICE_SELECT
     # points at it, so the undo has to re-select before writing back.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         await _select_voice(pilot, app)
@@ -1888,7 +1971,7 @@ async def test_history_shows_the_scope_each_change_was_made_under():
     # The same parameter id edited under two different selections is two
     # different fields, so the history has to say which -- a row that only
     # named the parameter would be ambiguous.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(120, 32)) as pilot:
         await _select_preset(pilot, app)
         await _edit_param(pilot, app, 0, "5")           # global scope
@@ -1907,7 +1990,7 @@ async def test_history_shows_the_scope_each_change_was_made_under():
 # --- +/- nudge and in-dialog stepping -----------------------------------------
 
 async def test_plus_and_minus_nudge_the_highlighted_parameter():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1925,7 +2008,7 @@ async def test_plus_and_minus_nudge_the_highlighted_parameter():
 
 
 async def test_nudging_clamps_to_the_device_reported_range():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1944,7 +2027,7 @@ async def test_nudging_clamps_to_the_device_reported_range():
 async def test_consecutive_nudges_collapse_into_one_undo_entry():
     # Holding '+' is one edit as far as the user is concerned; ten log
     # entries would make both 'z' and the history useless for it.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1966,7 +2049,7 @@ async def test_consecutive_nudges_collapse_into_one_undo_entry():
 
 
 async def test_nudging_a_different_parameter_starts_a_new_undo_entry():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1982,7 +2065,7 @@ async def test_nudging_a_different_parameter_starts_a_new_undo_entry():
 
 
 async def test_nudge_is_gated_behind_write_mode():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")
@@ -1999,7 +2082,7 @@ async def test_nudge_is_gated_behind_write_mode():
 async def test_nudge_ignores_rows_that_are_not_parameters():
     # select_sample borrows the Parameters pane for read-only info, keyed by
     # something that isn't a parameter id.
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
         await pilot.press("s")  # sample bank
@@ -2012,7 +2095,7 @@ async def test_nudge_ignores_rows_that_are_not_parameters():
 
 
 async def test_edit_dialog_arrow_keys_step_the_value():
-    app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await _select_preset(pilot, app)
         params = app.query_one("#params")

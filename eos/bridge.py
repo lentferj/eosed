@@ -124,7 +124,7 @@ def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_P
 
 
 # --- remembered TUI view mode ------------------------------------------------
-# eosed.app.EosRemoteApp's compact-vs-extended pane layout, persisted so
+# eosed.app.EosedApp's compact-vs-extended pane layout, persisted so
 # the choice survives a restart (see docs/RESOLUTION_NOTES.md).
 
 def load_compact_view(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
@@ -139,7 +139,7 @@ def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
 
 
 # --- sample-usage reverse-lookup early-stop threshold ------------------------
-# eosed.app.EosRemoteApp's "which presets use this sample" scan
+# eosed.app.EosedApp's "which presets use this sample" scan
 # (action_find_sample_usage) bails out after this many consecutive
 # no-voices presets, since a full 0-999 sweep can take several minutes.
 # User-edited in config.toml, not written by the app itself: either an int
@@ -163,7 +163,7 @@ def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
 # goes and whether it runs unattended at startup are user-edited, not
 # app-written, same convention as sample_usage_early_stop above. Never
 # persisted to disk *by* the app: the cache itself is deliberately in-memory
-# only (see eosed.app.EosRemoteApp's cache fields) since a front-panel
+# only (see eosed.app.EosedApp's cache fields) since a front-panel
 # edit is invisible to us and a stale disk cache would confidently lie.
 
 def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:

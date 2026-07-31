@@ -87,7 +87,16 @@ class DemoBridge:
             device_id=self.device_id)
 
     def preset_memory(self, *, timeout: Optional[float] = None) -> m.PresetMemoryResponse:
-        return m.PresetMemoryResponse(total_kb=8192, free_kb=6000, device_id=self.device_id)
+        # Used RAM tracks the demo device's ACTUAL content (a handful of
+        # one-voice presets), rather than the arbitrary 2192 KB this used to
+        # report. Real banks measure ~0.5 KB of preset RAM per voice, and
+        # eosed.app now reads this to estimate how long a cache-all sweep
+        # will take -- so a demo claiming a big bank's worth of RAM while
+        # holding three presets made the app predict ~95 minutes for a sweep
+        # that finishes instantly.
+        used_kb = max(1, len(self.preset_names))
+        return m.PresetMemoryResponse(total_kb=8192, free_kb=8192 - used_kb,
+                                      device_id=self.device_id)
 
     def sample_memory(self, *, timeout: Optional[float] = None) -> m.SampleMemoryResponse:
         return m.SampleMemoryResponse(total_mb=32, free_10kb=2000, device_id=self.device_id)

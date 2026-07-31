@@ -450,7 +450,7 @@ looked like it scaled. Root causes, both in `eosed/app.py`:
   exceeds 100%, hitting the `max-height` ceiling — which *looks* like
   correct scaling but is really the same "size to content" behavior landing
   on a different, larger content size. Fixed with explicit
-  `#presets { height: 1fr; } #params { height: 1fr; }` in `EosRemoteApp.CSS`,
+  `#presets { height: 1fr; } #params { height: 1fr; }` in `EosedApp.CSS`,
   overriding the widget default so both panes always fill the space the
   `Horizontal` container gives them.
 - **`DataTable` columns are `auto_width` by default** — sized to cell
@@ -475,7 +475,7 @@ page to exactly fill the pane on every resize event would spam the device
 with a fresh multi-preset scan on every frame of a window drag.
 
 Resolved by making the page size dynamic but deliberately damped:
-`EosRemoteApp._desired_preset_window()` computes `ceil(1.5 × pane row
+`EosedApp._desired_preset_window()` computes `ceil(1.5 × pane row
 capacity)`, floored at `PRESET_MIN_WINDOW = 16` (`app.py`'s replacement for
 the old constant). Resize events feed a debounce timer
 (`PRESET_RESIZE_SETTLE = 0.4s`) via `_on_presets_resized`/
@@ -606,7 +606,7 @@ both correctly multi, with the 3 real distinct samples resolved and named
 for each.
 
 **Separate, also-real bug found and fixed alongside this** (not a wire/count
-issue): `eosed.app.EosRemoteApp._load_voice_detail` read a voice's own
+issue): `eosed.app.EosedApp._load_voice_detail` read a voice's own
 general parameter group for display *after* walking that voice's sample
 zones — but zone-walking leaves `SAMPLE_ZONE_SELECT` pointed at the last
 zone it visited, and the spec only resets zone selection on a fresh

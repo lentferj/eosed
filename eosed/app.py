@@ -536,6 +536,81 @@ class MasterScreen(ModalScreen[Optional[str]]):
         self.dismiss(None)
 
 
+class ConfirmSweepScreen(ModalScreen[bool]):
+    """Yes/no before a cache-all sweep that is going to take a long time.
+
+    Not a generic confirm: it exists because a full-depth sweep of a large
+    bank runs for the better part of an hour with nothing but a status line
+    to say it has not hung, and there is no way to know that from the key
+    legend. `escape` cancels a running sweep, but only if you knew to expect
+    one that long in the first place.
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel"),
+                Binding("n", "cancel", "No", show=False),
+                Binding("y", "confirm", "Yes", show=False)]
+
+    def __init__(self, depth: str, estimate: str, detail: str):
+        super().__init__()
+        self.depth = depth
+        self.estimate = estimate
+        self.detail = detail
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(Static(id="body"), id="dialog")
+
+    def on_mount(self) -> None:
+        self.query_one("#body", Static).update(
+            f"Cache all data (depth: {self.depth})\n\n"
+            f"This bank looks like roughly {self.estimate}.\n"
+            f"{self.detail}\n\n"
+            "The app stays usable, but every other MIDI action waits behind\n"
+            "the sweep. 'escape' cancels it at any point (nothing is kept).\n\n"
+            "Start it?   y) yes    n/escape) no")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
+# Rough cost model for a cache-all sweep, calibrated against a real E4XT
+# Ultra rev 4.70 at the default 50ms send gap (docs/RESOLUTION_NOTES.md §20).
+#
+# Preset COUNT is the wrong predictor: "structure"/"full" scale with how many
+# VOICES a bank holds, and a 990-preset bank of one-voice pads is an order of
+# magnitude cheaper than one of 94-voice drum kits at the same count. Used
+# preset RAM is a decent proxy for voice count (~0.5 KB per voice on the banks
+# measured) and, unlike voice count, is available up front from a single
+# `preset_memory()` query -- which matters, since the walk that would tell us
+# the real number *is* the expensive thing we are trying to predict.
+_SWEEP_SECONDS_PER_KB = {      # seconds of sweep per KB of used preset RAM
+    "names": 0.075,
+    "structure": 0.68,
+    "full": 2.6,
+}
+# Below this, do not bother asking -- a small bank sweeps in seconds.
+_SWEEP_CONFIRM_SECONDS = 60
+
+
+def _estimate_sweep_seconds(depth: str, used_kb: Optional[int]) -> Optional[float]:
+    """Very rough seconds for a cache-all sweep, or None if unknown."""
+    if used_kb is None or used_kb <= 0:
+        return None
+    per_kb = _SWEEP_SECONDS_PER_KB.get(depth)
+    return None if per_kb is None else used_kb * per_kb
+
+
+def _humanize_seconds(seconds: float) -> str:
+    if seconds < 90:
+        return f"{int(seconds)} seconds"
+    minutes = seconds / 60.0
+    if minutes < 90:
+        return f"{minutes:.0f} minutes"
+    return f"{minutes / 60.0:.1f} hours"
+
+
 class _FillWidthDataTable(DataTable):
     """A DataTable whose last column stretches to fill the widget's width.
 
@@ -643,7 +718,7 @@ class _KeyHints(Static):
 
 # --- main app ----------------------------------------------------------------
 
-class EosRemoteApp(App):
+class EosedApp(App):
     CSS = """
     #dialog {
         width: 64; height: auto; border: round $accent; padding: 1 2;
@@ -958,8 +1033,12 @@ class EosRemoteApp(App):
             self._maybe_cache_all_on_startup()
 
     def _maybe_cache_all_on_startup(self) -> None:
+        # No prompt here, deliberately: cache_all_on_startup is an explicit
+        # opt-in in config.toml, and asking on every launch would defeat the
+        # setting. It still announces the estimate, so a long sweep on a big
+        # bank is not a silent surprise -- see _confirm_then_cache_all.
         if self._cache_all_on_startup:
-            self._start_cache_all(self._cache_depth)
+            self._confirm_then_cache_all(self._cache_depth, prompt=False)
 
     def on_unmount(self) -> None:
         # The very first layout pass fires a resize, which arms the
@@ -1717,7 +1796,55 @@ class EosRemoteApp(App):
         if self._scan_active:
             self.set_status("a scan is already running ('escape' to cancel)")
             return
-        self._start_cache_all(self._cache_depth)
+        self._confirm_then_cache_all(self._cache_depth)
+
+    @work(thread=True)
+    def _confirm_then_cache_all(self, depth: str, *, prompt: bool = True) -> None:
+        """Ask first if this bank looks big enough to be worth warning about.
+
+        The size query is one round trip and needs the bridge, so it runs on
+        this worker thread like every other MIDI call; the modal itself is
+        pushed back onto the UI thread. A bank we cannot size (or a small
+        one) starts immediately, exactly as before -- the prompt is there to
+        prevent a surprise, not to add a keystroke to every sweep.
+
+        ``prompt=False`` (the startup path) still computes and announces the
+        estimate but never blocks: that sweep was asked for in config.toml.
+        """
+        estimate = None
+        used_kb = None
+        try:
+            with self._bridge_lock:
+                memory = self.bridge.preset_memory()
+            used_kb = max(0, memory.total_kb - memory.free_kb)
+            estimate = _estimate_sweep_seconds(depth, used_kb)
+        except Exception:
+            pass  # sizing is a courtesy; never block the sweep on it
+
+        if estimate is None or estimate < _SWEEP_CONFIRM_SECONDS:
+            self._start_cache_all(depth)
+            return
+
+        if not prompt:
+            self.call_from_thread(
+                self.set_status,
+                f"cache all ({depth}) on startup: roughly "
+                f"{_humanize_seconds(estimate)} on this bank — 'escape' cancels")
+            self._start_cache_all(depth)
+            return
+
+        detail = (f"{used_kb} KB of preset RAM in use; the sweep reads every "
+                  f"preset,\nand at this depth every voice inside it.")
+        self.call_from_thread(
+            self.push_screen,
+            ConfirmSweepScreen(depth, _humanize_seconds(estimate), detail),
+            self._on_sweep_confirmed)
+
+    def _on_sweep_confirmed(self, go: Optional[bool]) -> None:
+        if go:
+            self._start_cache_all(self._cache_depth)
+        else:
+            self.set_status("cache all cancelled")
 
     @work(thread=True)
     def _start_cache_all(self, depth: str) -> None:
@@ -2371,9 +2498,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     if args.demo:
-        app = EosRemoteApp(DemoBridge(), allow_write=True, demo=True)
+        app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     else:
-        app = EosRemoteApp(
+        app = EosedApp(
             None, allow_write=args.allow_write, demo=False,
             connect_kwargs=dict(port=args.port, device_id=args.device_id, timeout=args.timeout,
                                 config_path=args.config))
