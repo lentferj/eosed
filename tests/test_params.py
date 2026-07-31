@@ -106,10 +106,14 @@ def test_chorus_itd_sign_and_symmetry():
     assert p.cnv_chorus_itd(-32) == "-1.451ms"
 
 
-def test_lfo_rate_deliberately_not_implemented():
-    # See docs/RESOLUTION_NOTES.md §2 — transcription ambiguity, not a bug.
-    with pytest.raises(NotImplementedError):
-        p.cnv_lfo_rate(10)
+def test_lfo_rate_is_a_fit_and_says_so():
+    """It used to raise NotImplementedError: the spec's display table wraps
+    across a PDF page and could not be transcribed unambiguously (§6a). It is
+    now mpc2emu's hardware-measured fit instead, and the leading "~" is part
+    of the contract -- it marks a value that approximates the front panel
+    rather than reproducing the spec's table exactly."""
+    text = p.cnv_lfo_rate(10)
+    assert text.startswith("~") and text.endswith("Hz"), text
 
 
 def test_midi_control_display_labels():
@@ -158,6 +162,28 @@ def test_fx_a_algorithm_name_spot_checks(value, expected):
 ])
 def test_fx_b_algorithm_name_spot_checks(value, expected):
     assert p.FX_B_ALGORITHM_NAMES[value] == expected
+
+
+def test_lfo_rate_matches_the_measured_anchors():
+    """The fit is mpc2emu's, read off the E4XT's own rate menu. Its three
+    published anchors must be reproduced exactly, and it must be monotonic --
+    a quadratic that turned over inside 0..127 would map two bytes to one Hz
+    (its vertex sits at ~134, safely outside)."""
+    assert p.cnv_lfo_rate(0) == "~0.08Hz"
+    assert p.cnv_lfo_rate(64) == "~4.12Hz"
+    assert p.cnv_lfo_rate(127) == "~18.01Hz"
+
+    hz = [float(p.cnv_lfo_rate(v).strip("~").rstrip("Hz")) for v in range(128)]
+    assert hz == sorted(hz), "LFO rate must increase monotonically with the byte"
+    assert all(0.07 < v < 18.1 for v in hz)
+
+
+def test_lfo_rate_reaches_describe_value_for_both_lfos():
+    """It was implemented but unreachable at first -- the function existed and
+    describe_value still returned the bare number."""
+    for name in ("E4_VOICE_LFO_RATE", "E4_VOICE_LFO2_RATE"):
+        text = p.describe_value(p.PARAMETERS_BY_NAME[name], 64)
+        assert text == "64 (~4.12Hz)", (name, text)
 
 
 def test_describe_value_aligned_puts_the_sign_outside_the_digits():

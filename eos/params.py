@@ -209,7 +209,7 @@ _PARAMS: List[Parameter] = [
     _p(104, "E4_VOICE_FENV_SEG5_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls2 Level"),
 
     # -- VOICE: LFOs (ids 105-116) ----------------------------------------------
-    _p(105, "E4_VOICE_LFO_RATE", "voice.lfo", 0, 127, notes="see LFO_SHAPES; display table not transcribed, see cnv_lfo_rate()"),
+    _p(105, "E4_VOICE_LFO_RATE", "voice.lfo", 0, 127, notes="see LFO_SHAPES; Hz via cnv_lfo_rate() -- fitted, not from the spec"),
     _p(106, "E4_VOICE_LFO_SHAPE", "voice.lfo", 0, 7, notes="see LFO_SHAPES"),
     _p(107, "E4_VOICE_LFO_DELAY", "voice.lfo", 0, 127),
     _p(108, "E4_VOICE_LFO_VAR", "voice.lfo", 0, 100, unit="%"),
@@ -711,6 +711,8 @@ def _known_value_name(param: Parameter, value: int) -> Optional[str]:
         return volenv_depth_display(value)
     if name == "E4_VOICE_GLIDE_CURVE":
         return GLIDE_CURVE_LABELS.get(value)
+    if name in ("E4_VOICE_LFO_RATE", "E4_VOICE_LFO2_RATE"):
+        return cnv_lfo_rate(value)
     if name in ("E4_VOICE_LFO_SYNC", "E4_VOICE_LFO2_SYNC"):
         return LFO_SYNC_LABELS.get(value)
     if name == "MIDIGLO_VEL_CURVE":
@@ -913,11 +915,31 @@ def cnv_glide_rate(value: int) -> str:
 # (E4_VOICE_LFO_RATE / LFO2_RATE, 0-127) is unaffected and fully usable for
 # control; only the cosmetic "x.xx Hz"-style display string is missing.
 
+# LFO rate byte -> Hz. NOT from the specification: its lfounits1[]/lfounits2[]
+# display tables wrap across a PDF page boundary and extract as 129 entries for
+# 128 slots, so which value is duplicated cannot be determined from the text
+# (RESOLUTION_NOTES §6a). Rather than guess-correct that table, this uses the
+# sibling mpc2emu project's empirical calibration, read off the E4XT's OWN rate
+# menu and fitted log-quadratically:
+#     mpc2emu models/common.py, lfo_rate_byte_to_hz()
+#     Copyright (C) 2025-2026  mpc2emu contributors -- GPL-2.0-or-later
+# Anchors: byte 0 = 0.08 Hz, 64 = 4.12 Hz, 127 = 18.01 Hz (all three reproduced
+# exactly by the fit, which is monotonic over 0..127 -- its vertex is at ~134).
+_LFO_RATE_FIT = (-0.000300578, 0.0808242, -2.52573)
+
+
 def cnv_lfo_rate(value: int) -> str:
-    raise NotImplementedError(
-        "LFO rate display conversion not transcribed (ambiguous source table; "
-        "see docs/RESOLUTION_NOTES.md §2). The raw value is still usable directly."
-    )
+    """``E4_VOICE_LFO_RATE``/``LFO2_RATE`` (ids 105/110), 0..127 -> Hz.
+
+    Rendered with a leading "~" because this is a *fit* to measured hardware
+    readings, not the specification's exact display table — it should land
+    within rounding of what the front panel shows, but the two are not
+    guaranteed to agree digit for digit. See RESOLUTION_NOTES §6a.
+    """
+    import math
+    a, b, c = _LFO_RATE_FIT
+    hz = math.exp(a * value * value + b * value + c)
+    return f"~{hz:.2f}Hz"
 
 
 # --- master tuning offset display conversion --------------------------------

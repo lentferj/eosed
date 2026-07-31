@@ -63,6 +63,15 @@ eos/bridge.py
   released under GPL-2.0-or-later. The rest of this file (EosBridge, the
   config.toml read/write helpers) is original work.
 
+eos/params.py (LFO rate display)
+  cnv_lfo_rate()'s byte->Hz coefficients are NOT from the E-mu specification --
+  its LFO rate display table could not be transcribed unambiguously (the source
+  wraps across a PDF page boundary). They are the sibling mpc2emu project's
+  empirical calibration, measured from the E4XT's own rate menu:
+    mpc2emu models/common.py, lfo_rate_byte_to_hz()
+    Copyright (C) 2025-2026  mpc2emu contributors
+    License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+
 eosed/app.py
   Mostly original work, except: the key-hint legend's fold-to-terminal-width
   algorithm (wrap_blocks) is ported from the sibling k2kremote project

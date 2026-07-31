@@ -156,7 +156,7 @@ SysEx**, on the current E4XT route. Any live probe or session must either
 route around this script or have it changed first — otherwise a "no reply"
 result is a false negative about the protocol, not a real one.
 
-## §6a — LFO rate display table: transcription gap (open, cosmetic only)
+## §6a — LFO rate display table: transcription gap (RESOLVED via mpc2emu's hardware calibration)
 
 `eos/params.py`'s glide-rate, master-tuning-offset, and chorus-ITD display
 tables were transcribed from the spec PDF and cross-validated: they reproduce
@@ -171,12 +171,30 @@ table's source (`lfounits1[]`/`lfounits2[]`) wraps across a page boundary in
 the PDF in a way that produced 129 transcribed entries against an expected
 128 — i.e. one value is duplicated or misplaced by the page-break reflow, and
 which one is not determinable from the extracted text alone. Rather than
-silently guess-correct it, `eos/params.py::cnv_lfo_rate()` raises
-`NotImplementedError` with a pointer back here. **To resolve:** re-open the
-source PDF directly (not through a text-extraction pass) at the LFO rate
-section and re-transcribe `lfounits1[]`/`lfounits2[]` by hand, or capture the
-128 raw parameter values against real hardware and reverse the display
-strings shown on its front panel. This does not block anything else — the
+silently guess-correct it, `eos/params.py::cnv_lfo_rate()` raised
+`NotImplementedError` with a pointer back here.
+
+**Resolved 2026-08-01, by the second route and from the other direction.**
+The sibling mpc2emu project needed the same mapping for its own converter and
+calibrated it empirically off the E4XT's *own rate menu*, fitting a
+log-quadratic (`models/common.py`, `lfo_rate_byte_to_hz`, GPL-2.0-or-later —
+attributed in `LICENSE`):
+
+    Hz = exp(-0.000300578·b² + 0.0808242·b - 2.52573)
+
+Anchors: byte 0 = 0.08 Hz, 64 = 4.12 Hz, 127 = 18.01 Hz — all three
+reproduced exactly by the fit, which is monotonic across 0..127 (its vertex
+lies at byte ≈134, outside the range, so no two bytes map to one frequency).
+Both checks are pinned by tests.
+
+**Displayed with a leading `~`** (`~4.12Hz`), deliberately: this approximates
+the front panel rather than reproducing the spec's table digit for digit, and
+the notation says so at a glance. Every other conversion in `eos/params.py`
+prints an exact spec-derived value and carries no tilde.
+
+Worth noting how this closed: not by re-reading the PDF, but because a
+sibling project measured the machine instead. The ambiguous page-wrap is
+still ambiguous; it simply stopped mattering. This does not block anything else — the
 raw 0-127 parameter value is unaffected and fully controllable.
 
 ## §6 — Preset dump field order cross-check (open)
@@ -1579,3 +1597,46 @@ author would not guess, both worth treating as load-bearing:
   that presets are gone** — P000 always exists (§21b).
 * **`sample_memory()` never reaches 0**; ~3.00 MB is device overhead, and that
   figure *is* empty (§21c).
+
+## §22 — Cross-check against mpc2emu's independent RE (2026-08-01)
+
+The sibling mpc2emu project reverse-engineered the same machine from the
+opposite side — differential saves and byte-hunting of the on-disk E4B format,
+with no access to E-mu's protocol specification. It has now cross-referenced
+this project's transcribed parameter table against its own findings
+(`../mpc2emu/docs/E4B_FORMAT.md`, "Cross-reference: the EOS editor-protocol
+parameter spec"). Three outcomes, in increasing order of interest.
+
+**Corroboration.** Names, ranges and units line up with fields mpc2emu had
+RE'd anonymously — `E4_VOICE_NON_TRANSPOSE` ↔ its `vpar[38]`,
+`E4_VOICE_CHORUS_AMOUNT` (0-100%) ↔ `vpar[42]`, and the six-stage envelope
+segment naming (`Atk1/Dcy1/Rls1/Atk2/Dcy2/Rls2`) confirms the rate/level
+pairing and ordering it had inferred from byte layout alone. Note the id
+spaces are *different*: a SysEx parameter id is not a `vpar[]` offset. The
+semantics agree; the numbering does not.
+
+**Something flowed back to us: §6a is now closed** — mpc2emu's measured LFO
+rate calibration replaced the untranscribable display table. See §6a.
+
+**And one real disagreement, which is theirs to resolve but ours to know
+about.** `eos/params.py::fil_freq()` is a port of the specification's own C
+for the filter cutoff byte → Hz conversion. mpc2emu measured the *acoustic*
+−3 dB corner of the 4-pole lowpass on noise and got a materially different
+answer — up to **3× apart** mid-range.
+
+Probably not a contradiction: the two describe different quantities. The
+spec's function yields the **displayed / design** frequency, which is what the
+front panel shows; mpc2emu measured where the filter actually turns over, and
+a 4-pole cascade's −3 dB point sits well below its design frequency. The
+disagreement runs in exactly that direction.
+
+**For this project that is fine, and no change is warranted.** eosed's job is
+to show the user what the device shows, so the design frequency is the correct
+quantity and `fil_freq` should stay as the spec defines it. The question mpc2emu
+raises — whether a *converter* should target the design frequency or the
+measured corner, since source formats (SF2/EXS24/SFZ/GIG) specify a design
+frequency — is a question about conversion fidelity, not about this display.
+
+Recorded because it would be easy to mistake for a bug here later: if someone
+measures the E4XT's filter and finds `fil_freq` "wrong", this is why, and the
+answer is that they measured a different thing.
