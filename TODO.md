@@ -7,6 +7,17 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 
 *What* is open. `docs/RESOLUTION_NOTES.md` tracks *how* to resolve each item.
 
+**Status, 2026-08-01.** Public at `github.com/lentferj/eosed`. 374 tests, all
+synthetic. Every command in the editor protocol is now either verified against
+a real E4XT Ultra or explicitly listed below as not — including all four
+destructive Master utilities (§21a-§21d), the parameter write path (§18), and
+the read paths. Nothing in the protocol is undocumented-and-unlabelled.
+
+The largest open items are, in rough order of value: root-causing the §15
+device crash (the only thing that can take the machine down, and what blocks a
+faster default `SEND_GAP`), the §17 pipelining probe (minutes off every bank
+sweep), and the panel/mirror protocol (not started, needs capture).
+
 ## Live hardware verification
 
 **Status: in progress.** `eoscli inquire`, `config`, `memory`, `catalog`
@@ -196,7 +207,7 @@ catalogs this is meant to speed up. Procedure, and why the voice walk is
 
 ## Housekeeping (OPEN, none of it blocking)
 
-- **No CI.** All 372 tests are synthetic and hardware-free, so a GitHub
+- **No CI.** All 374 tests are synthetic and hardware-free, so a GitHub
   Actions job would run them on every push. Worth having: the drift this
   project keeps finding by hand (stale key tables, stale "unverified"
   claims) is exactly what a green/red signal catches early.
@@ -207,6 +218,8 @@ catalogs this is meant to speed up. Procedure, and why the voice walk is
   actions as unfired — all four are now verified (§21a-§21d). Row C10 in
   particular says "do not fire a destructive op", which the §21 campaign has
   superseded.
+- **`review-fixes` branch is stale** — merged long ago, and orphaned by the
+  history rewrites since. `git branch -D review-fixes`.
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a
   commercial preset's, and the file is public. Either keep it as a small
