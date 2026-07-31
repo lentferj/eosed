@@ -780,6 +780,16 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
     assert app2._cache_depth == "full"  # the documented default
 
 
+def test_legend_shows_typed_keys_not_textual_key_names():
+    """A binding may list several keys ("plus,equals_sign") -- right for
+    dispatch, wrong to print. The legend read "plus,equals_sign Value +1"."""
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    blocks = app._legend_blocks()
+    assert "+ Value +1" in blocks
+    assert "- Value -1" in blocks
+    assert not any("," in b or "equals_sign" in b for b in blocks), blocks
+
+
 def test_cache_keys_are_fixed_depths_not_the_configured_one():
     """'c' and 'C' mean predictable amounts of work regardless of
     cache_depth, which now only governs the startup sweep."""

@@ -211,12 +211,13 @@ is remembered across restarts (against real hardware — `--demo` never
 touches local state).
 
 <p align="center">
-  <img src="docs/screenshots/extended_view_voice.svg" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with a voice selected" width="900">
+  <img src="docs/screenshots/extended_view_voice.svg" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with V2 of a three-voice preset selected" width="900">
 </p>
 
-<p align="center"><sub>Extended view: Preset · Voice · Parameters · Samples,
-a voice selected — its full <code>voice.*</code> parameter group and the
-sample it plays are both shown at once.</sub></p>
+<p align="center"><sub>Extended view: Preset · Voice · Parameters · Samples.
+A three-voice preset with <b>V2</b> selected — a multisample voice, so the
+Samples pane resolves its zones down to the individual samples they play,
+while V1 and V3 are single-sample.</sub></p>
 
 Four panes, left to right:
 
@@ -407,6 +408,15 @@ keystroke.</sub></p>
   persistent, glanceable reminder that's easy to miss in the status line
   alone. No write path has been exercised against real hardware as
   thoroughly as the read paths yet — see [TODO.md](TODO.md).
+
+<p align="center">
+  <img src="docs/screenshots/history.svg" alt="eosed's change history overlay, listing each edit with its scope, parameter, old and new value" width="900">
+</p>
+
+<p align="center"><sub>The change history (<code>h</code>): every edit with
+the scope it was made under. The three consecutive <code>+</code> nudges of
+one parameter collapse into a single entry keeping the value the run started
+from.</sub></p>
 
 - **Undo (`z`), undo-all (`Z`), and a change history (`h`).** Every
   parameter edit and preset rename made in the session is logged with the

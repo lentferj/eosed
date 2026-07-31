@@ -949,12 +949,25 @@ class EosedApp(App):
         return self._bank_states[bank if bank is not None else self.bank]
 
     # -- layout ---------------------------------------------------------
+    # Textual key *names* that should not be shown to the user verbatim. A
+    # binding may list several keys ("plus,equals_sign"), which is exactly
+    # what to dispatch on and exactly the wrong thing to print — the legend
+    # read "plus,equals_sign Value +1" before this.
+    _LEGEND_KEY_NAMES = {"equals_sign": "=", "plus": "+", "minus": "-",
+                         "pageup": "PgUp", "pagedown": "PgDn"}
+
+    def _legend_key(self, key: str) -> str:
+        """First key of a binding, in the form a user would type it."""
+        first = key.split(",")[0]
+        return self._LEGEND_KEY_NAMES.get(first, first)
+
     def _legend_blocks(self) -> List[str]:
         # BINDINGS is the single source of truth for both key dispatch and
         # the legend text — unlike k2kremote's separate LEGEND_BLOCKS table,
         # there is no second list to keep in sync by hand. `show=False`
         # entries (e.g. "enter") are hidden the same way Footer hid them.
-        return [f"{binding.key} {binding.description}" for binding in self.BINDINGS if binding.show]
+        return [f"{self._legend_key(binding.key)} {binding.description}"
+                for binding in self.BINDINGS if binding.show]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
