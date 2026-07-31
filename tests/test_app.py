@@ -221,7 +221,7 @@ async def test_find_sample_usage_scans_full_range_and_reports_matches():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_voice == 0 and self._current_preset in self._MATCHING_PRESETS:
                     return 0  # matches DemoBridge's sample 0 ("Demo Kick")
-                return 0x3FFE  # no such voice
+                return -2  # no such voice
             return 0
 
         def get_preset_name(self, preset, *, timeout=None):
@@ -273,7 +273,7 @@ async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
                 self.calls += 1
                 if self._current_voice == 0 and self._current_preset in self._PRESETS:
                     return self._PRESETS[self._current_preset][0]
-                return 0x3FFE  # no such voice
+                return -2  # no such voice
             return 0
 
         def get_preset_name(self, preset, *, timeout=None):
@@ -317,7 +317,7 @@ async def test_cancel_sample_usage_scan():
         def get_parameter(self, param_id, *, timeout=None):
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 time.sleep(0.01)  # slow enough to reliably catch mid-scan
-                return 0x3FFE  # no such voice -- every preset is empty
+                return -2  # no such voice -- every preset is empty
             return 0
 
     app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
@@ -363,7 +363,7 @@ async def test_sample_usage_scan_stops_after_consecutive_empty_presets():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_preset == 0 and self._current_voice == 0:
                     return 0  # preset 0's one voice plays sample 0
-                return 0x3FFE  # everything else, and voice 1+, is "empty"
+                return -2  # everything else, and voice 1+, is "empty"
             return 0
 
         def get_preset_name(self, preset, *, timeout=None):
@@ -425,7 +425,7 @@ async def test_clear_sample_usage_cache():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_preset == 0 and self._current_voice == 0:
                     return 0
-                return 0x3FFE
+                return -2
             return 0
 
         def get_preset_name(self, preset, *, timeout=None):
@@ -512,7 +512,7 @@ async def test_cache_all_sample_names_stop_early_after_consecutive_empty_samples
 
         def get_parameter(self, param_id, *, timeout=None):
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
-                return 0x3FFE  # no preset has any voices -- keep the preset walk cheap
+                return -2  # no preset has any voices -- keep the preset walk cheap
             return 0
 
         def get_sample_name(self, sample, *, timeout=None):
@@ -558,7 +558,7 @@ async def test_find_sample_usage_shows_results_in_the_params_pane_too():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_voice == 0 and self._current_preset in self._MATCHING_PRESETS:
                     return 0
-                return 0x3FFE
+                return -2
             return 0
 
         def get_preset_name(self, preset, *, timeout=None):
@@ -612,7 +612,7 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_preset == 0 and self._current_voice == 0:
                     return 0
-                return 0x3FFE
+                return -2
             return 0
 
         def get_parameters(self, param_ids, *, timeout=None):
@@ -682,7 +682,7 @@ async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 if self._current_preset == 0 and self._current_voice == 0:
                     return 0
-                return 0x3FFE
+                return -2
             return 0
 
         def get_parameters(self, param_ids, *, timeout=None):
@@ -734,7 +734,7 @@ async def test_cancelling_cache_all_promotes_nothing():
         def get_parameter(self, param_id, *, timeout=None):
             if param_id == p.lookup("E4_GEN_SAMPLE").id:
                 time.sleep(0.01)  # slow enough to reliably catch mid-scan
-                return 0x3FFE
+                return -2
             return 0
 
     app = EosRemoteApp(FakeBridge(), allow_write=True, demo=True)
@@ -1403,8 +1403,8 @@ async def test_page_down_up_step_through_the_bank():
 
 async def test_samples_pane_aggregates_across_voices_and_dedups():
     # A fake bridge with 3 voices: two single-sample voices sharing sample 7,
-    # and one multisample voice (flagged via the spec's 0x3FFF voice-level
-    # sentinel, not a count field — see EosRemoteApp._voice_sample_info /
+    # and one multisample voice (flagged via the voice-level -1 sentinel,
+    # not a count field — see EosRemoteApp._voice_sample_info /
     # RESOLUTION_NOTES §11) with 3 zones: samples 7, 9, and 9 again (the
     # same voice hitting the same sample from two different zones -- a very
     # normal pattern, e.g. two key ranges sharing one recording) -- exercises
@@ -1422,9 +1422,9 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
                 return 7  # single-sample voices, both using sample 7
             if voice == 2:
                 if zone is None:
-                    return 0x3FFF  # multisample sentinel at voice level
+                    return -1  # multisample sentinel at voice level
                 return {0: 7, 1: 9, 2: 9}.get(zone, 0)  # zone 3 reads 0 -> ends the scan
-            return 0x3FFE  # no such voice -- stops the walk after voice 2
+            return -2  # no such voice -- stops the walk after voice 2
 
         def set_parameter(self, param_id, value):
             from eos import params as p

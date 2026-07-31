@@ -44,13 +44,16 @@ _DEFAULT_PARAM_VALUES: Dict[int, int] = {
 
 # eosed.app walks voice indices directly (preset_num_voices/voice_num_
 # szones cannot be trusted live -- see docs/RESOLUTION_NOTES.md §11/§12),
-# stopping at the device's own 0x3FFE "no such voice" signal. Every demo
-# preset has exactly one real voice (index 0); anything else must answer
-# with that marker so the walk stops, or every demo preset would appear to
-# have _MAX_VOICE_SCAN voices instead of 1.
+# stopping at the device's own "no such voice" signal. Every demo preset has
+# exactly one real voice (index 0); anything else must answer with that
+# marker so the walk stops, or every demo preset would appear to have
+# _MAX_VOICE_SCAN voices instead of 1.
+#
+# -2, not 3FFEh: E4_GEN_SAMPLE is signed and EosBridge sign-extends it, so a
+# fake bridge has to answer in the same domain the real one now returns.
 _GEN_SAMPLE_ID = p.lookup("E4_GEN_SAMPLE").id
 _VOICE_SELECT_ID = p.lookup("VOICE_SELECT").id
-_NO_SUCH_VOICE_MARKER = 0x3FFE
+_NO_SUCH_VOICE_MARKER = -2
 
 
 def _name_bytes(name: str) -> bytes:

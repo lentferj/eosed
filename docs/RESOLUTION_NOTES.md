@@ -694,6 +694,14 @@ preset has exactly one real voice — without this, the walk-based logic
 would have made every demo preset appear to have `_MAX_VOICE_SCAN` voices
 instead of 1.
 
+> **Later (§18a): these are -2 and -1, not `0x3FFE`/`0x3FFF`.** The raw words
+> recorded above are correct as observed; what was not known at the time is
+> that `E4_GEN_SAMPLE` is a *signed* parameter, so those bit patterns are
+> simply the two's-complement -2 and -1. The code now compares against the
+> signed values, and `EosBridge` sign-extends them on the way in. Nothing
+> about the findings in this section changes — only how the values are
+> spelled.
+
 This also explains the sample-usage scan's false early-stop: presets in
 the 75-90 range that genuinely have voices were being reported as having
 none, manufacturing a run of consecutive "empty" presets that never
@@ -1035,9 +1043,13 @@ That layer genuinely cannot know. So both decoders now return **raw 14-bit
 words**, and `eos.bridge._signed_value` applies signedness from `eos.params`'
 table (a negative `minimum`), for values *and* ranges alike. One source of
 truth for both halves, so they cannot drift apart again. An id absent from
-the table, or any word without bit 13 set, passes through untouched — which
-is what keeps `E4_GEN_SAMPLE`'s undocumented `3FFEh`/`3FFFh` sentinels (§11,
-§12) intact, since that parameter's transcribed minimum is 0.
+the table, or any word without bit 13 set, passes through untouched.
+
+At the time this landed, `E4_GEN_SAMPLE`'s transcribed minimum of 0 meant its
+undocumented `3FFEh`/`3FFFh` sentinels (§11, §12) passed through unchanged.
+That is no longer so: §18a below establishes that the parameter really is
+signed and those sentinels really are **-1 and -2**, and converts the whole
+chain to say so.
 
 `encode_s14` refused values past 8191 and so could not express id 61's real
 maximum at all; `encode_14` accepts either domain and emits the bit pattern
@@ -1079,14 +1091,47 @@ display (e.g. the `*_NAMES` label tables in `eos/params.py`) is working from
 the smaller 4.00 set and will have gaps on this firmware — `describe_value`
 already returns `None` for an unknown index rather than exploding.
 
-**Open, and interesting:** `E4_GEN_SAMPLE` reports a minimum of **-8**, not 0.
-That is a strong hint the parameter is genuinely *signed* and that the
-`3FFFh`/`3FFEh` sentinels §11/§12 discovered empirically are simply **-1 and
--2**, with six further negative special values (-3..-8) never yet observed.
-Do **not** "correct" the table to -8 on that reasoning alone: `_signed_value`
-keys off the table's minimum, so doing so would sign-extend every
-`E4_GEN_SAMPLE` read and break every sentinel comparison in `eosed/app.py`
-(`_MULTISAMPLE_SENTINEL`, `_NO_SUCH_VOICE_MARKER`) at once. The right move is
-to find out what -3..-8 mean first — a preset with several voices in assorted
-states, read voice by voice — and then convert the sentinels and the table
-together, in one change, or not at all.
+**`E4_GEN_SAMPLE`'s minimum of -8 — resolved, verified live.** The reported
+minimum is -8, not the transcribed 0, which raised the question of whether
+there are eight negative special values of which §11/§12 had only ever seen
+two (`3FFFh`/`3FFEh`).
+
+Deliberately *not* settled by inference. The -8 on its own is precisely the
+shape of evidence that has already been wrong three times in this file (§11
+`voice_num_szones`, §12 `preset_num_voices`, and `preset_num_links`): a
+plausible signal from a related field, extrapolated without independent
+confirmation. Two things argued against reading semantics into it — the
+on-disk format's `sample_idx` is an *unsigned* BE u16 (mpc2emu's
+`docs/E4B_FORMAT.md` §5.3), so negative sample numbers are not a data domain
+there at all; and the reported minimum is **invariant**, identical across
+voice-past-the-end, zone-past-the-end, empty preset, P999 and link-selected
+contexts, which is what a static field declaration looks like.
+
+**The probe that settled it.** Every existing walk in this repo *stops* at the
+first sentinel, so none of them was ever in a position to observe a third
+value. A dedicated sweep of a full loaded bank deliberately walked **past**
+them: 287 populated presets, voices 0-7 of each regardless of sentinels, plus
+zones 0-33 of 40 multisample voices. **3956 reads, 173 distinct values, and
+in the whole -16..-1 window only two: -2 (1781×) and -1 (574×).** No -3, no
+-8, nothing between.
+
+So the parameter is genuinely signed, only two negative values exist, and
+they are exactly -1 (multisample) and -2 (no such voice). Converted
+accordingly, in one atomic change: `eos/params.py`'s minimum to -8,
+`eosed/app.py`'s `_MULTISAMPLE_SENTINEL`/`_NO_SUCH_VOICE_MARKER` to -1/-2,
+`eosed/demo.py`'s fake marker, and the test fakes, which have to answer in
+the same domain the real bridge now returns.
+
+**Why converting was worth the risk at all**, given it changes nothing
+functionally: before it, sentinel handling was correct *only because the
+table was wrong*. `_signed_value` reads the table's minimum to decide whether
+to sign-extend, so the transcribed 0 was load-bearing — and anyone correcting
+that 0 (an entirely reasonable thing to do) silently broke voice detection.
+The trap is now gone rather than merely guarded.
+
+**Regression check, live:** `eosed.app._voice_sample_info` was run against 55
+real presets (40 of them containing multisample voices) immediately before
+and immediately after the change, and the two captures are **byte-identical**
+— 152 voices, 429 zones, same structure both times. Tests alone would not
+have caught a sentinel-domain mismatch against real hardware, since
+`DemoBridge` and the test fakes bypass `_signed_value` entirely.

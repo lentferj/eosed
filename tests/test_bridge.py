@@ -423,12 +423,14 @@ def test_get_parameter():
     # midi_control_display() renders, and read back as 16383 before this fix.
     (2, 0x3FFF, -1),
     (2, 64, 64),
-    # E4_GEN_SAMPLE (id 38) is unsigned 0..999, so its undocumented sentinels
-    # must survive untouched even though bit 13 is set -- the whole voice/zone
-    # structure walk keys on these (RESOLUTION_NOTES §11/§12).
-    (38, 0x3FFF, 0x3FFF),   # multisample
-    (38, 0x3FFE, 0x3FFE),   # no such voice
+    # E4_GEN_SAMPLE (id 38) is SIGNED (device minimum -8), so its two
+    # undocumented sentinels sign-extend to -1 and -2 -- which is what the
+    # voice/zone structure walk compares against (RESOLUTION_NOTES §11/§12,
+    # §18a). Ordinary sample numbers are unaffected: they never set bit 13.
+    (38, 0x3FFF, -1),       # multisample
+    (38, 0x3FFE, -2),       # no such voice
     (38, 999, 999),
+    (38, 0, 0),
 ])
 def test_get_parameter_sign_extends_only_signed_params(param_id, wire, expected):
     def handler(frame):

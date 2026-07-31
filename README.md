@@ -431,8 +431,8 @@ specification alone:
   Two different real presets gave zone counts that needed *different*
   additive corrections to match ground truth — no single formula
   reconciles them. The real, reliable signal turned out to be
-  voice-level `E4_GEN_SAMPLE`: it reads the specification's own `3FFFh`
-  "multisample" sentinel if and only if the voice genuinely is one, and
+  voice-level `E4_GEN_SAMPLE`: it reads the specification's own
+  "multisample" sentinel (`−1`) if and only if the voice genuinely is one, and
   from there the only trustworthy way to find the real zone count is to
   walk `SAMPLE_ZONE_SELECT` from 0 until `E4_GEN_SAMPLE` reads back `0`
   — empirically the clean, consistent "past the real data" signal in
@@ -445,9 +445,11 @@ specification alone:
   value that the "−1" correction turned into zero. **Two independent
   cross-checks were not enough evidence for a general formula.** The
   reliable signal turned out to be the same kind as above, one level up:
-  a device-consistent (but undocumented) `3FFEh` "this voice index does
+  a device-consistent (but undocumented) `−2` "this voice index does
   not exist" marker on voice-level `E4_GEN_SAMPLE`, distinct from the
-  `3FFFh` multisample sentinel above.
+  `−1` multisample sentinel above. (Both were first recorded as the raw
+  words `3FFEh`/`3FFFh`; the parameter later turned out to be *signed*,
+  which is all those bit patterns ever were.)
 - **`PRESET_NUM_LINKS`, despite sharing a command family and byte shape
   with `PRESET_NUM_VOICES`, needed no correction at all** — its raw wire
   value is already the plain, direct count. This was found by
@@ -523,7 +525,7 @@ multisample voice, addressed together with `SAMPLE_ZONE_SELECT`.
 | Parameter | Range | Notes |
 |---|---|---|
 | `E4_GEN_GROUP_NUM` | 1..32 | |
-| `E4_GEN_SAMPLE` | 0..999 (2999 w/ Flash) | `3FFFh` = multisample sentinel, `3FFEh` = "no such voice" (both undocumented — see [the trap above](#the-number-of-x-trap)) |
+| `E4_GEN_SAMPLE` | −8..999 (2999 w/ Flash) | Signed. `−1` = multisample sentinel, `−2` = "no such voice" (both undocumented — see [the trap above](#the-number-of-x-trap)). The device declares a −8 floor but only these two negatives exist: verified across a 287-preset bank, 3956 reads |
 | `E4_GEN_VOLUME` | −96..10 dB | |
 | `E4_GEN_PAN` | −64..63 | |
 | `E4_GEN_CTUNE` | −72..24 | **voice-only**, not zone-scoped |

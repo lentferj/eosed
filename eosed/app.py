@@ -193,8 +193,14 @@ _VOICE_PARAM_IDS = _group_param_ids("voice")  # the 146-id group, same every voi
 # returns this exact placeholder, not a blank name and not an exception.
 _EMPTY_SAMPLE_NAME = "Empty Sample"
 
-_MULTISAMPLE_SENTINEL = 0x3FFF  # spec: voice-level E4_GEN_SAMPLE == this means multisample
-_NO_SUCH_VOICE_MARKER = 0x3FFE  # empirically: this voice index does not exist on this preset
+# E4_GEN_SAMPLE is a SIGNED parameter (device-reported minimum -8), so these
+# two are simply -1 and -2 -- the same bit patterns §11/§12 recorded as
+# 3FFFh/3FFEh before the signedness was understood. `eos.bridge` sign-extends
+# them from `eos.params`' table, so the values compared here are negative.
+# Only these two of the eight possible negative values exist: verified across
+# a full 287-preset bank, walking past every sentinel (RESOLUTION_NOTES §18a).
+_MULTISAMPLE_SENTINEL = -1  # spec: voice-level E4_GEN_SAMPLE == this means multisample
+_NO_SUCH_VOICE_MARKER = -2  # empirically: this voice index does not exist on this preset
 _MAX_ZONE_SCAN = 32  # safety cap only — see the docstring below
 _MAX_VOICE_SCAN = 64  # safety cap only — preset_num_voices cannot be trusted at all, see below
 

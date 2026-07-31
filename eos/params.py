@@ -103,7 +103,17 @@ _PARAMS: List[Parameter] = [
 
     # -- VOICE: general (ids 37-56) ------------------------------------------
     _p(37, "E4_GEN_GROUP_NUM", "voice.general", 1, 32),
-    _p(38, "E4_GEN_SAMPLE", "voice.general", 0, 999, notes="2999 with Sample Flash/ROM"),
+    # Minimum is -8, not the 0 the spec transcribes: this parameter is signed,
+    # and its negative half is how the device signals structure rather than a
+    # sample number. Only two of those eight values are real -- -1 "this voice
+    # is multisample" and -2 "this voice index does not exist" (the sentinels
+    # §11/§12 found empirically as 3FFFh/3FFEh, which is what they are in
+    # two's complement). Confirmed by sweeping a full 287-preset bank with 358
+    # multisample voices, walking PAST every sentinel rather than stopping at
+    # it: 3956 reads produced only -1 and -2 and nothing else in -16..-1
+    # (RESOLUTION_NOTES §18a). The -8 floor is a static field declaration --
+    # it does not move with preset, voice, zone, or link selection.
+    _p(38, "E4_GEN_SAMPLE", "voice.general", -8, 999, notes="2999 with Sample Flash/ROM"),
     _p(39, "E4_GEN_VOLUME", "voice.general", -96, 10, unit="dB"),
     _p(40, "E4_GEN_PAN", "voice.general", -64, 63),
     _p(41, "E4_GEN_CTUNE", "voice.general", -72, 24, notes="Voice only"),
