@@ -167,9 +167,12 @@ Preset/Sample bank switch, the reverse sample-usage lookup, and the
 cache-all sweep, including the count-field corrections in
 `docs/RESOLUTION_NOTES.md` §11/§12 that live use itself surfaced.
 
-**Write paths (`--allow-write`) remain unverified against real hardware**
-— parameter edits, renames, and every Master action have only been
-exercised against `--demo`/synthetic tests so far. See
+**Write paths are partly verified.** Parameter edits and renames have
+been exercised against a real E4XT Ultra — every preset-scoped parameter
+written across ten scratch presets, read back, and re-read after
+selecting away and returning (3340 comparisons and 20 renames, all
+exact; `docs/RESOLUTION_NOTES.md` §18). **Every Master action remains
+unverified against real hardware**, as does writing `E4_GEN_SAMPLE`. See
 [TODO.md](TODO.md) for exact status and what's still open, including the
 NEW-format dump path and the undocumented panel protocol above.
 

@@ -144,7 +144,7 @@ are multisample sharing the same 3 samples.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 296 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). 363 tests pass
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
   only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
@@ -293,11 +293,12 @@ other view/scan settings — the `c`/`C` keys themselves still work in demo.
 `a` (one key, sweeping at the configured `cache_depth`) became two keys at
 *fixed* depths — `c` = "structure", `C` = "full" — so each means a
 predictable amount of work; `cache_depth` now only governs the startup
-sweep. `x` took over "clear usage cache" from `c`. On startup,
-`cache_all_on_startup` stays **off** by default (at `"full"` it is 1h 44m
-on a large bank) and a new `cache_structure_on_startup` defaults **on**
-(~23 min there, and it buys the everyday wins). Neither prompts, both
-announce their estimate, and `escape` cancels either.
+sweep. `x` took over "clear usage cache" from `c`. On startup, **neither sweep
+runs by default**: `cache_all_on_startup` stays off (1h 44m at `"full"`)
+and the new `cache_structure_on_startup` is off too (~23 min) — a big
+improvement over `"full"` but still far too long to impose on someone who
+launched the app to look at one preset. Both are explicit opt-ins, neither
+prompts, both announce their estimate, and `escape` cancels either.
 **Deliberately never persisted to disk**: a front-panel edit is invisible
 to this app, so a saved cache could confidently serve data that no longer
 matches the device — every launch genuinely re-scans.

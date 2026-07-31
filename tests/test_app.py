@@ -809,20 +809,21 @@ async def test_c_and_C_sweep_at_their_own_depths():
                 f"expected {expect_globals}")
 
 
-def test_structure_on_startup_is_the_default_not_cache_all(tmp_path):
-    """The expensive 'full' sweep must not run unprompted; the 23-minute
-    'structure' one is the default (RESOLUTION_NOTES §20)."""
+def test_no_sweep_runs_on_startup_unless_asked(tmp_path):
+    """Both startup sweeps are opt-in. "structure" is 23 min and "full" is
+    1h 44m on a large bank (RESOLUTION_NOTES §20) -- far too long to impose
+    on someone who launched the app to look at one preset."""
     config = tmp_path / "config.toml"
     config.write_text("# empty\n")
 
     kw = {"connect_kwargs": {"config_path": str(config)}}
     app = EosedApp(DemoBridge(), allow_write=True, demo=False, **kw)
     assert app._cache_all_on_startup is False
-    assert app._cache_structure_on_startup is True
-
-    config.write_text("cache_structure_on_startup = false\n")
-    app = EosedApp(DemoBridge(), allow_write=True, demo=False, **kw)
     assert app._cache_structure_on_startup is False
+
+    config.write_text("cache_structure_on_startup = true\n")
+    app = EosedApp(DemoBridge(), allow_write=True, demo=False, **kw)
+    assert app._cache_structure_on_startup is True
 
 
 def test_sweep_estimate_scales_with_used_ram_not_preset_count():

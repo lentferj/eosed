@@ -179,15 +179,15 @@ def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]
 
 
 def load_cache_structure_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
-    """Run a "structure"-depth sweep on connect. Defaults to ON (returns None
-    when unset; the caller supplies the default).
+    """Run a "structure"-depth sweep on connect. Defaults to OFF.
 
-    "structure" is the depth that buys the everyday wins — instant preset
-    selection, bank paging, and `u` for any sample — at 23 min on the same
-    bank where "full" costs 1h 44m, because "full"'s entire premium is a
-    per-voice parameter fetch (6198 of them there) that only pays off if you
-    open many voices. Cancellable with `escape` like any other sweep, and it
-    announces its estimate rather than starting silently.
+    Opt-in like its `cache_all_on_startup` sibling: at 23 min on a large
+    bank it is far cheaper than "full" (1h 44m) but still much too long to
+    impose on someone who launched the app to look at one preset. Worth
+    turning on for a session you know will involve a lot of browsing —
+    afterwards preset selection, bank paging and `u` cost no MIDI at all.
+    Cancellable with `escape`, and it announces its estimate rather than
+    starting silently.
     """
     value = _read_config_dict(path).get("cache_structure_on_startup")
     return value if isinstance(value, bool) else None

@@ -895,17 +895,16 @@ class EosedApp(App):
         # as compact_view/sample_usage_early_stop above.
         self._cache_all_on_startup: bool = (
             False if self.demo else bool(bridge_mod.load_cache_all_on_startup(self._view_config_path)))
-        # "structure" instead, and ON by default: it buys the everyday wins
-        # (instant preset selection, bank paging, `u`) for 23 min on a large
-        # bank where a "full" sweep costs 1h 44m (RESOLUTION_NOTES §20).
-        # cache_all_on_startup wins if both are set — it is the explicit
-        # request for the deeper sweep.
+        # The cheaper "structure" sweep, also opt-in (OFF by default): 23 min
+        # on a large bank against 1h 44m for "full" (RESOLUTION_NOTES §20) is
+        # a big improvement but still far too long to impose on someone who
+        # launched the app to look at one preset. cache_all_on_startup wins if
+        # both are set — it is the explicit request for the deeper sweep.
         configured_structure = (
             None if self.demo
             else bridge_mod.load_cache_structure_on_startup(self._view_config_path))
         self._cache_structure_on_startup: bool = (
-            False if self.demo else
-            (True if configured_structure is None else configured_structure))
+            False if self.demo else bool(configured_structure))
         configured_depth = None if self.demo else bridge_mod.load_cache_depth(self._view_config_path)
         self._cache_depth: str = configured_depth or "full"
 

@@ -141,6 +141,42 @@ script using `EosBridge.autodetect()` directly to disable caching.
 
 ---
 
+## `config.toml` — all settings
+
+A flat TOML file, **`config.toml` in the current working directory** by
+default (`--config PATH` to point elsewhere). It is **gitignored**, optional —
+every setting has a working default — and **never read or written under
+`--demo`**, so exploring in demo mode cannot disturb your real setup.
+
+Two of the keys are written *by* the app; the rest are yours to edit and the
+app only reads them.
+
+| key | type | default | what it does |
+|---|---|---|---|
+| `send_port` | string | *(unset)* | **App-written.** Last MIDI output port that answered a Device Inquiry, tried first on the next launch so a reconnect skips the full port sweep. |
+| `recv_port` | string | *(unset)* | **App-written.** The matching input port. |
+| `compact_view` | bool | `true` | **App-written** by the `e` key. `true` = 2-pane (Preset \| Parameters), `false` = 4-pane (adds Voice and Samples). |
+| `cache_structure_on_startup` | bool | `false` | Sweep the bank at `"structure"` depth on connect, so preset selection, bank paging and `u` are instant afterwards. ~23 min on a large bank, so it is opt-in — worth turning on for a session you know will involve a lot of browsing. |
+| `cache_all_on_startup` | bool | `false` | Sweep at `cache_depth` on connect instead. Off by default because at `"full"` that is **1 h 44 min** on a large bank. |
+| `cache_depth` | `"names"` \| `"structure"` \| `"full"` | `"full"` | Depth for the `cache_all_on_startup` sweep **only** — the `c`/`C` keys use fixed depths and ignore this. |
+| `sample_usage_early_stop` | int \| `"fullscan"` | `10` | Stop a bank sweep after this many consecutive empty presets. `"fullscan"` disables early stopping and always sweeps the whole range. |
+| `send_pc_on_preset_select` | bool | `true` | Send a real MIDI Program Change when a preset is selected, which is what actually makes the device switch preset and redraw its own LCD (the editor protocol's `PRESET_SELECT` does not — see [Two protocols, one device](#two-protocols-one-device)). |
+
+Example:
+
+```toml
+# eosed local config — gitignored, safe to delete.
+compact_view = false
+cache_structure_on_startup = false   # start instantly, sweep on demand with 'c'
+sample_usage_early_stop = "fullscan" # never stop early; banks with big gaps
+send_pc_on_preset_select = true
+```
+
+Deleting the file simply restores every default; the port cache is rebuilt on
+the next successful autodetect.
+
+---
+
 ## eoscli — the command-line explorer
 
 ```
@@ -192,18 +228,33 @@ Four panes, left to right:
   without typing a number), and just scrolling down with the arrow keys —
   or a mouse wheel — toward the bottom of what's loaded fetches and
   appends the next 50 entries in the background automatically, so you
-  never hit a hard wall at the end of a page. A raw sample has no per-sample properties in this protocol
-  (no generic parameter access to loop points, root key, or sample rate
-  — only its number and name); selecting one shows just that, plus `u`
-  for an opt-in reverse lookup ("which presets use this sample"), with
-  results shown both in the status line and — since the Samples pane is
-  hidden in compact view — the Parameters pane too, so the full match
-  list is visible regardless of view mode. This is a full preset-range
-  sweep — not automatic, shows live progress, cancellable with `escape`
-  — so on the **first** run it can take several minutes on a
-  fully-populated bank; every later lookup (any sample, not just the one
-  you first searched for) is then instant, no MIDI at all, until
-  something is actually written. By default it stops early after 10
+  never hit a hard wall at the end of a page.
+- **Voice** — every voice of the selected preset, with a single/
+  multisample hint. `v` (from either bank) also opens a modal voice
+  picker.
+- **Parameters** — the selected voice's parameters, the parameters of a
+  selected Link (`l`), or the preset's GLOBAL parameters if neither is
+  selected; `escape` goes back.
+- **Samples** — a *derived* view, not the Sample bank above: which raw
+  sample(s) the selection actually plays (the whole preset's if no voice
+  is selected, just that voice's otherwise), resolved from the voice's
+  Sample Zone fields down to a sample number + name. Orthogonal to which
+  bank the Preset pane is browsing.
+
+**Bank-wide operations** (these sweep the whole preset range, so they
+are the slow ones — see the timings below):
+
+- **`u`** — **reverse sample lookup**, "which presets use this sample".
+  Selecting a raw sample shows only its number and name — this protocol
+  has no generic parameter access to loop points, root key or sample rate.
+  `u` then answers the reverse question, with results shown both in the
+  status line and — since the Samples pane is hidden in compact view — the
+  Parameters pane too, so the full match list is visible in either view.
+  This is a full preset-range sweep — not automatic, shows live progress,
+  cancellable with `escape` — so on the **first** run it can take several
+  minutes on a fully-populated bank; every later lookup (any sample, not
+  just the one you first searched for) is then instant, no MIDI at all,
+  until something is actually written. By default it stops early after 10
   consecutive presets/samples with nothing in them (a heuristic, not a
   guarantee); set `sample_usage_early_stop = "fullscan"` in `config.toml`
   to always sweep completely, or to a specific number to change the
@@ -222,13 +273,13 @@ Four panes, left to right:
   preset's GLOBAL values and every voice's own parameter group — by far
   the priciest addition, and 4.5× slower).
 
-  **A `"structure"` sweep runs automatically on connect** — that is
-  `cache_structure_on_startup`, which defaults to **on**. Set it to
-  `false` to start instantly instead. `cache_all_on_startup = true`
-  runs the deeper `cache_depth` sweep instead (default `"full"`, also
-  `"names"`); it defaults to **off**, because at `"full"` depth that is
-  measured at 1 h 44 min on a large bank. `cache_depth` only affects
-  that startup sweep — it does not change what `c`/`C` do.
+  **Neither runs automatically** — eosed starts instantly and sweeps only
+  when you ask. Set `cache_structure_on_startup = true` to run the `c`
+  sweep on connect, or `cache_all_on_startup = true` to run the deeper
+  `cache_depth` one (`"names"`/`"structure"`/`"full"`, default `"full"`).
+  Both are off by default because on a large bank they cost 23 min and
+  1 h 44 min respectively. `cache_depth` only affects that startup sweep —
+  it does not change what `c`/`C` do.
   **Never persisted to disk** —
   rebuilt fresh every launch, deliberately: the E4XT can be edited from
   its own front panel with no way for this app to notice, so a saved
@@ -245,17 +296,6 @@ Four panes, left to right:
   [Two protocols, one device](#two-protocols-one-device) above). Set
   `send_pc_on_preset_select = false` in `config.toml` to turn this off
   (default: on).
-- **Voice** — every voice of the selected preset, with a single/
-  multisample hint. `v` (from either bank) also opens a modal voice
-  picker.
-- **Parameters** — the selected voice's parameters, the parameters of a
-  selected Link (`l`), or the preset's GLOBAL parameters if neither is
-  selected; `escape` goes back.
-- **Samples** — a *derived* view, not the Sample bank above: which raw
-  sample(s) the selection actually plays (the whole preset's if no voice
-  is selected, just that voice's otherwise), resolved from the voice's
-  Sample Zone fields down to a sample number + name. Orthogonal to which
-  bank the Preset pane is browsing.
 
 ### How long cache-all takes, and when it is worth it
 
@@ -267,7 +307,7 @@ voices per preset):
 | depth | key | full 0-999 sweep | per 50 presets | what you get |
 |---|---|---|---|---|
 | `"names"` | — *(startup only)* | 150 s (2.5 min) | ~8 s | preset + sample name catalogs |
-| `"structure"` | **`c`** — *and runs on connect by default* | 1371 s (23 min) | ~69 s | + voice/zone/sample structure, and the `u` index |
+| `"structure"` | **`c`** | 1371 s (23 min) | ~69 s | + voice/zone/sample structure, and the `u` index |
 | `"full"` | **`C`** | **6241 s (1 h 44 min)** | ~310 s | + GLOBAL values and every voice's own parameters |
 
 `"full"` is **4.5× `"structure"`** on this bank, because it adds a batched
@@ -319,9 +359,8 @@ bank of pads from a bank of drum kits. `escape` cancels a running sweep at
 any point; a cancelled sweep caches nothing, since there is no way to tell
 "not found" from "not reached".
 
-Neither startup sweep prompts — `cache_structure_on_startup` is the default
-and `cache_all_on_startup` is an explicit opt-in, and asking on every launch
-would make both an annoyance rather than a convenience. Both announce their
+Neither startup sweep prompts: both are explicit opt-ins in `config.toml`,
+so asking again on every launch would just be nagging. Both announce their
 estimate in the status line, and `escape` cancels either at any point.
 
 Editing, renaming, and the Master menu:
