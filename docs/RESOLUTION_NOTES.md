@@ -1469,22 +1469,32 @@ as §21a, against the bank §21a left behind (P000 `P_VCUT` 12 voices, P002
 RAM are untouched**. That is the whole distinction between `75h` and `74h`,
 and it holds.
 
-**Unexpected, and the reason this was worth firing rather than assuming:
-the bank is not left empty.** `75h` re-initialises to a single blank
-`"Untitled Preset"` with one voice at slot 0 — the same state a freshly
-cleared machine sits in. Preset RAM reads 0 KB at the same time, so that
-preset is not a survivor or a partial erase; it is the device's floor state.
+**The bank is not left empty — and that is a device invariant, not
+something `75h` does.** After the erase, slot 0 holds a blank
+`"Untitled Preset"` with one voice while preset RAM reads 0 KB. Per the
+author: **P000 always exists on an EOS machine.** The device never holds
+zero presets, so "erase all presets" necessarily bottoms out at that single
+empty one rather than at nothing. `75h` is not re-initialising anything
+special; it is removing everything it can and leaving the floor.
+
+This was surprising from the outside, which is exactly why it was worth
+firing rather than reasoning about — a client author reading only the
+command name would predict an empty bank.
 
 Consequences for anything scripting against this:
 
-* **"No presets" and "one empty Untitled Preset" are the same state.** Do
-  not treat a `P000` that reads `"Untitled Preset"` as evidence the erase
-  failed, and do not expect a preset-name sweep to come back empty.
+* **"No presets" and "one empty Untitled Preset" are the same state**, and
+  a preset-name sweep can never come back completely empty on this hardware,
+  since P000 always exists. Do not treat a `P000` reading
+  `"Untitled Preset"` as evidence an erase failed.
 * `preset_memory()` reading 0 KB used is the reliable signal that the erase
   took, not the absence of preset names.
-* This differs from `71h`, which leaves a genuinely empty slot reading
-  `"Empty Preset"` (§13). `"Untitled Preset"` and `"Empty Preset"` are
-  different states and the distinction is load-bearing here.
+* `"Untitled Preset"` and `"Empty Preset"` are **different states**, and the
+  distinction is load-bearing. `"Empty Preset"` (§13) means the slot holds
+  nothing — which is what `71h` leaves behind, and what every slot above the
+  populated range reads. `"Untitled Preset"` means a real, empty preset
+  occupies the slot: it has a voice, and it is what the user's own scratch
+  presets read before anything was written to them.
 
 Predicted but worth stating: this is why the test bank needed samples in it
 at all. Without them, `75h` and `74h` would have produced identical
