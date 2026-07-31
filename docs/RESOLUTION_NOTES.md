@@ -1336,13 +1336,13 @@ adequate for the original question (finding negative sentinel values) is not
 automatically adequate for a later one (counting voices). Worth checking what
 a dataset's collection cap was before computing totals from it.
 
-## §21 — Master/erase actions: verification plan (`71h` and `75h` RESOLVED, `74h`/`76h` still open)
+## §21 — Master/erase actions: verification plan (`71h`/`75h`/`76h` RESOLVED, only `74h` still open)
 
 The four destructive utilities were the last unverified commands in this
 project: Preset Delete (`71h`), Erase RAM Bank (`74h`), Erase All RAM Presets
-(`75h`), Erase All RAM Samples (`76h`). **`71h` and `75h` are now confirmed live — see
-§21a and §21b. `74h` and `76h` have still never been sent to a real
-device.** The app reaches them only through a modal arm-then-fire screen, never
+(`75h`), Erase All RAM Samples (`76h`). **`71h`, `75h` and `76h` are now confirmed live — see
+§21a, §21b and §21c. Only `74h` (Erase RAM Bank) has never been sent to a
+real device.** The app reaches them only through a modal arm-then-fire screen, never
 a single keypress, and `--allow-write`/`w` gates them on top of that.
 
 ### Established behaviour: EOS does not compact
@@ -1499,3 +1499,46 @@ Consequences for anything scripting against this:
 Predicted but worth stating: this is why the test bank needed samples in it
 at all. Without them, `75h` and `74h` would have produced identical
 observations.
+
+
+### §21c — Erase All RAM Samples (`76h`) confirmed live, 2026-07-31
+
+Fired by hand from the arm-then-fire modal (`m`, `4`, `Enter`) against the
+reloaded test bank.
+
+| | before | after |
+|---|---|---|
+| S001 / S002 | `VNoise_C2` / `VTone_C2` | **gone**, both read `"Empty Sample"` |
+| P000 / P001 / P002 | 12 / 7 / 7 voices | **unchanged, all three** |
+| preset RAM | 8 KB | 8 KB |
+| sample RAM | 3.49 MB | 3.00 MB |
+
+Confirms the mirror of §21b: samples destroyed, **presets and preset RAM
+untouched**. Two things fell out that were not predicted.
+
+**Sample RAM has a ~3 MB floor: "3.00 MB used" IS empty.** The erase did not
+take the figure to zero. Corroborated independently earlier in the same
+session — the first survey of a bank containing no samples at all reported
+exactly `free_10kb = 12800`, i.e. the same 3.00 MB used. So roughly 3 MB is
+device overhead that is always accounted as used. **A client testing
+`sample_memory()` used == 0 for "no samples" will never see it.** Test the
+sample-name catalog instead, or compare against this floor.
+
+**Voices are left DANGLING, not stripped.** After the erase, `P000`'s voices
+still read `E4_GEN_SAMPLE = 1` — pointing at a sample that no longer exists,
+while `get_sample_name(1)` returns `"Empty Sample"`. The presets keep their
+full voice/zone structure referencing nothing.
+
+This is the more consequential finding, and it has a direct bearing on this
+project: **`eosed`'s Samples pane resolves voices to sample numbers and looks
+up their names, so after a sample erase it will display references to samples
+that are gone.** Nothing in the voice-level value distinguishes "sample 1"
+from "sample 1 which has been erased" — the only way to know is to cross-check
+the sample catalog. The same applies to `u` (reverse sample lookup) and to any
+external tool walking voices.
+
+Not treated as a bug in the device: leaving the reference intact is arguably
+the right behaviour, and is consistent with the non-compacting rule (§21a) —
+slot numbers stay stable, and reloading the samples would make the presets
+whole again. But it means "this voice plays sample N" and "sample N exists"
+are independent questions.
