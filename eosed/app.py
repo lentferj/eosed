@@ -586,9 +586,9 @@ class ConfirmSweepScreen(ModalScreen[bool]):
 # `preset_memory()` query -- which matters, since the walk that would tell us
 # the real number *is* the expensive thing we are trying to predict.
 _SWEEP_SECONDS_PER_KB = {      # seconds of sweep per KB of used preset RAM
-    "names": 0.075,
-    "structure": 0.68,
-    "full": 2.6,
+    "names": 0.075,            # 150s / 2013 KB
+    "structure": 0.68,         # 1371s / 2013 KB
+    "full": 3.10,              # 6241s / 2013 KB  (1h 44m on that bank)
 }
 # Below this, do not bother asking -- a small bank sweeps in seconds.
 _SWEEP_CONFIRM_SECONDS = 60

@@ -253,13 +253,18 @@ Four panes, left to right:
 
 Measured against a **real E4XT Ultra (rev 4.70)** at the default 50 ms send
 gap, on a full commercial bank — **990 populated presets, 128 MB of samples,
-about 4130 voices** (drum kits of 80-94 voices each pull that average up):
+6198 voices** (drum kits of 80-94 voices each pull that average up to ~6.3
+voices per preset):
 
 | `cache_depth` | full 0-999 sweep | per 50 presets | what you get |
 |---|---|---|---|
-| `"names"` | ~2.5 min | ~8 s | preset + sample name catalogs |
-| `"structure"` | ~23 min | ~69 s | + voice/zone/sample structure, and the `u` index |
-| `"full"` *(default)* | ~1 hour+ | ~3 min | + GLOBAL values and every voice's own parameters |
+| `"names"` | 150 s (2.5 min) | ~8 s | preset + sample name catalogs |
+| `"structure"` | 1371 s (23 min) | ~69 s | + voice/zone/sample structure, and the `u` index |
+| `"full"` *(default)* | **6241 s (1 h 44 min)** | ~310 s | + GLOBAL values and every voice's own parameters |
+
+`"full"` is **4.5× `"structure"`** on this bank, because it adds a batched
+146-parameter fetch per *voice* — 6198 of them — where `"structure"` only
+walks each voice once.
 
 **These numbers scale with *voices*, not presets.** A 990-preset bank of
 one-voice pads is an order of magnitude cheaper than the same count of

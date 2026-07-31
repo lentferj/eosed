@@ -1274,3 +1274,64 @@ the sub-25ms figures have only ~20s of traffic behind them each, against
 *capability* to spend the margin where it is provably safe (reads) while
 keeping it where the failure would be silent (writes); adopting a lower
 default is a separate decision needing a sustained soak first.
+
+## §20 — How long a cache-all sweep actually takes, and why preset count is the wrong predictor (resolved, measured live)
+
+Measured by calling `eosed.app.EosedApp._run_full_sweep` itself — unbound,
+against a shim supplying only the attributes it touches — rather than
+reimplementing the walk, so the figures describe the real feature rather than
+a lookalike loop. (A reimplementation would silently drop things like the
+sample-name memo or the early-stop heuristic and report a number no user
+would ever experience.)
+
+**Bank:** a full commercial bank on an E4XT Ultra rev 4.70 — 990 populated
+presets (P000-P989), 128 MB of samples with ~260 KB free, 2013 KB of used
+preset RAM, and **6198 voices**. Default 50 ms send gap throughout.
+
+| depth | elapsed | per KB used | per 50 presets |
+|---|---|---|---|
+| `names` | 150 s | 0.075 | ~8 s |
+| `structure` | 1371 s (23 min) | 0.68 | ~69 s |
+| `full` | **6241 s (1 h 44 min)** | 3.10 | ~310 s |
+
+`full` is 4.5× `structure`: it adds one batched 146-parameter fetch per
+*voice*, and there are 6198 of them.
+
+**Preset count is the wrong predictor.** `structure` and `full` scale with
+*voices*, not presets — 990 one-voice pads are an order of magnitude cheaper
+than 990 drum kits at the same count, and nothing about the preset number
+distinguishes them. But voice count is not knowable up front: the walk that
+would establish it *is* the expensive thing being predicted.
+
+**Used preset RAM is a usable proxy**, and costs one `preset_memory()` query
+before the sweep starts. Across the banks measured it tracks voice count
+closely — this bank runs ~3.1 voices per KB of used preset RAM (2013 KB /
+6198 voices), and an almost-empty scratch bank reported 3 KB for 10 voices.
+So `eosed.app` estimates sweep time as `used_kb × seconds_per_kb` and prompts
+only when that exceeds a minute. The constants above are that calibration.
+
+**Caveats worth keeping attached to these numbers:**
+
+* They are **Ultra** numbers. Non-Ultra E4 models have slower CPUs, and
+  device response time already dominates our send pacing — §19a showed
+  cutting the gap from 25 ms to 5 ms bought only ~30%, because a batched
+  frame's wire time (~58 ms) plus device latency is the floor.
+* The harness calls `set_status`/`call_from_thread` directly instead of
+  repainting a TUI, so the real `a` key is marginally slower. Noise at this
+  scale — UI repaints against 6198 batched MIDI fetches.
+
+### §20a — a self-inflicted estimation error worth recording
+
+Before the `full` run finished, its remaining time was estimated from the
+§19 sweep's histogram, giving **~4130 voices** and a predicted 75-95 minutes.
+The real answer was **6198 voices and 104 minutes** — the voice count was 33%
+low, and the time estimate correspondingly so.
+
+The cause: that histogram came from a sweep whose own `MAX_VOICE` cap was 32,
+so every drum kit of 76-94 voices contributed exactly 32. The estimate was
+built on data truncated by **the very cap §19 had just been written about**,
+in the same session. The lesson is not "estimate better" but that derived
+data inherits the limits of the walk that produced it, and a bound that was
+adequate for the original question (finding negative sentinel values) is not
+automatically adequate for a later one (counting voices). Worth checking what
+a dataset's collection cap was before computing totals from it.
