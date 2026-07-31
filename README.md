@@ -19,8 +19,8 @@ sibling **k2kremote** (Kurzweil K2000/K2000R) and **mpc2emu** projects.
 
 ## Where this came from, and what it is not
 
-eosed is a **side product of mpc2emu**, not a project that set out to be a
-sampler editor. mpc2emu converts sample libraries for vintage hardware, and
+eosed is a **side product of [mpc2emu](https://github.com/lentferj/mpc2emu)**,
+not a project that set out to be a sampler editor. mpc2emu converts sample libraries for vintage hardware, and
 getting the *musical* parameters right — filters,
 envelopes, LFOs, loops — means checking them against a real machine. In
 practice that meant standing at an E4XT's front panel, pressing buttons,
