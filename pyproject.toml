@@ -27,6 +27,10 @@ eoscli = "eosed.cli:main"
 
 [tool.setuptools]
 packages = ["eos", "eosed"]
+# Explicit rather than relying on setuptools' default glob: GPL-2 §1 requires
+# the licence text to travel with the program, so COPYING must never silently
+# drop out of a built distribution.
+license-files = ["LICENSE", "COPYING"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

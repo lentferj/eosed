@@ -14,6 +14,10 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+The full, verbatim text of the GNU General Public License version 2 is in
+the file COPYING alongside this one. This file records only the project's
+copyright notice and its third-party attributions.
+
 -------------------------------------------------------------------------------
 Third-party references and their licenses
 -------------------------------------------------------------------------------
@@ -23,9 +27,29 @@ eos/messages.py, eos/params.py
   from the manufacturer's own protocol specification:
     "Remote Preset Editing via MIDI SysEx", Draft #30, EOS 4.00
     Brian Clark, E-mu Systems, 17 February 1999
-  No source code is derived from this document (it contains none); only the
-  wire-protocol facts (command bytes, parameter ids, ranges, display-conversion
-  formulas) are used, as data. Released under GPL-2.0-or-later.
+  That document is NOT redistributed with this project.
+
+  Most of what is taken from it is wire-protocol fact used as data — command
+  bytes, parameter ids, value ranges, and the specification's own names for
+  parameters and enumerated values.
+
+  One exception, stated plainly: the specification also contains a small
+  amount of C source for the display conversions that turn a raw parameter
+  value into the number the front panel shows, and the following functions in
+  eos/params.py follow it directly rather than being independently derived:
+
+    fil_freq()          a port of the spec's fil_freq(input, maxfreq, mul)
+    filter_table_1/2/3  its (maxfreq, mul) arguments per Filter Tables 1-3
+    cnv_morph_freq()    per the spec's Filter Table 5
+
+  These are a few lines of arithmetic each, reproduced for interoperability —
+  to display the same value the device itself displays — and E-mu / Creative
+  Technology Ltd. retain whatever rights subsist in the original. If that
+  is unacceptable to the rights holder, these functions can be removed or
+  reimplemented from observed input/output behaviour without affecting any
+  other part of this project.
+
+  Everything else here is original work. Released under GPL-2.0-or-later.
 
 eos/bridge.py
   The throttled-output queue (ThrottledOut), the MultiIn merged-input facade,
@@ -46,7 +70,7 @@ eosed/app.py
   GPL-2.0-or-later.
 
 All other files (eos/__init__.py, eosed/__init__.py, eosed/cli.py,
-eosed/demo.py, tests/)
+eosed/demo.py, tests/, tools/)
   Original work. Released under GPL-2.0-or-later.
 
 -------------------------------------------------------------------------------

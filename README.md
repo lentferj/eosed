@@ -916,10 +916,18 @@ hardware is touched or required.
 
 ## License and Third-Party Sources
 
-GPL-2.0-or-later. See [LICENSE](LICENSE) for the full text and the
-third-party attribution table (the SysEx protocol facts transcribed from
-E-mu's specification; the transport layer and the TUI's key-hint legend
-folding ported from k2kremote/mpc2emu).
+GPL-2.0-or-later. [COPYING](COPYING) is the verbatim licence text;
+[LICENSE](LICENSE) holds the copyright notice and the third-party
+attribution table — the SysEx protocol facts transcribed from E-mu's
+specification, and the transport layer plus the TUI's key-hint legend
+folding ported from k2kremote/mpc2emu.
+
+Note one attribution worth reading before reusing this code: a handful of
+display-conversion functions in `eos/params.py` (`fil_freq`,
+`filter_table_1/2/3`, `cnv_morph_freq`) follow C source printed in E-mu's
+specification rather than being independently derived, so that they show the
+same numbers the device's own front panel does. See [LICENSE](LICENSE) for
+the details and for how to remove them if that matters to you.
 
 ## Trademarks
 
