@@ -33,8 +33,52 @@ samples and sample RAM untouched — and it does *not* leave the bank empty:
 **P000 always exists on an EOS machine**, so the erase bottoms out at a
 single blank `"Untitled Preset"` with preset RAM at 0 KB. "No presets" and
 "one Untitled Preset" are therefore the same state, and a name sweep can
-never come back completely empty. Still untested live: `74h`/`76h`, the device-global `master.*`
-parameters, and *writing* `E4_GEN_SAMPLE`.
+never come back completely empty.
+
+**All four Master/erase actions are now verified live (RESOLUTION_NOTES
+§21a-§21d)** — `71h`, `74h`, `75h`, `76h` — each fired by hand from the
+arm-then-fire modal. `74h` is the union of `75h` and `76h` with nothing left
+over. Two device facts came out of it that a client author would not guess:
+`preset_memory()` at 0 KB (not an empty name catalog) is the signal presets
+are gone, since P000 always exists; and `sample_memory()` never reaches 0 —
+~3.00 MB is overhead, and that figure *is* empty. Still untested live: the
+device-global `master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
+
+### Find presets with dangling sample references (planned, from §21c)
+
+A voice keeps its `E4_GEN_SAMPLE = N` after sample N is erased — confirmed
+live. Nothing at the voice level distinguishes a live reference from a dead
+one, so the Samples pane, `u`, and the cache-all sweep all currently display
+erased samples as though they were present.
+
+Wanted: **an action reporting every preset that references a sample which no
+longer exists** — a bank integrity check.
+
+**Cheap, because the data is already collected.** A `"structure"`-depth
+`_run_full_sweep` returns *both* halves in one walk: which sample numbers each
+preset's voices/zones reference, and the sample-name catalog (a slot is empty
+iff its name is the `"Empty Sample"` placeholder, §13). Dangling = referenced
+minus present. So this needs **no new MIDI beyond a sweep the app already
+does**, and is instant once `c`/`C` or a `u` lookup has filled the caches.
+
+Design notes:
+
+* Report preset, voice and missing sample — `P012 V3 → S045 (missing)`. The
+  preset number is what the user needs in order to go fix it.
+* **Sample 0 is not dangling.** A voice with nothing assigned reads
+  `E4_GEN_SAMPLE = 0` (seen on the §18 scratch presets) and `S000` reads
+  `"Empty Sample"` on every bank seen so far. Reporting it would flag every
+  empty voice on the bank.
+* Reuse `u`'s presentation: status line plus the full list mirrored into
+  `#params`, since `#samples` is hidden in compact view.
+* Read-only — no write-mode gate.
+* Key: `c`/`C`/`x` are taken by the cache actions; `d`, `f`, `i`, `t` are
+  free.
+
+Worth having beyond the erase case: a bank restored from disk with missing
+samples, or one assembled by an external writer (mpc2emu writes E4B banks),
+shows the same symptom with no current way to detect it short of checking
+every voice by hand.
 
 **Re-verified against a full commercial bank (RESOLUTION_NOTES §19).** 990
 populated presets, 128MB of samples, 10121 reads: confirmed `E4_GEN_SAMPLE`

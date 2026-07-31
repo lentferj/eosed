@@ -1336,13 +1336,13 @@ adequate for the original question (finding negative sentinel values) is not
 automatically adequate for a later one (counting voices). Worth checking what
 a dataset's collection cap was before computing totals from it.
 
-## §21 — Master/erase actions: verification plan (`71h`/`75h`/`76h` RESOLVED, only `74h` still open)
+## §21 — Master/erase actions: ALL FOUR verified live (resolved)
 
 The four destructive utilities were the last unverified commands in this
 project: Preset Delete (`71h`), Erase RAM Bank (`74h`), Erase All RAM Presets
-(`75h`), Erase All RAM Samples (`76h`). **`71h`, `75h` and `76h` are now confirmed live — see
-§21a, §21b and §21c. Only `74h` (Erase RAM Bank) has never been sent to a
-real device.** The app reaches them only through a modal arm-then-fire screen, never
+(`75h`), Erase All RAM Samples (`76h`). **All four are now confirmed live** — §21a-§21d below. Every one was fired
+by hand from the TUI's arm-then-fire modal, never from a script, with
+before/after state captured over SysEx from a separate session. The app reaches them only through a modal arm-then-fire screen, never
 a single keypress, and `--allow-write`/`w` gates them on top of that.
 
 ### Established behaviour: EOS does not compact
@@ -1542,3 +1542,40 @@ the right behaviour, and is consistent with the non-compacting rule (§21a) —
 slot numbers stay stable, and reloading the samples would make the presets
 whole again. But it means "this voice plays sample N" and "sample N exists"
 are independent questions.
+
+
+### §21d — Erase RAM Bank (`74h`) confirmed live, 2026-07-31
+
+The last of the four. Fired by hand (`m`, `2`, `Enter`) against a freshly
+reloaded test bank, so that both categories were present and it had something
+of each to destroy — without that, `74h` cannot be told apart from `75h`.
+
+| | before | after |
+|---|---|---|
+| P000 / P001 / P002 | `P_VCUT` 12v, `P_VGAIN` 7v, `P_VPAN` 7v | **`Untitled Preset`, 1 voice** |
+| preset RAM | 8 KB | **0 KB** |
+| S001 / S002 | `VNoise_C2`, `VTone_C2` | **gone** |
+| sample RAM | 3.49 MB | **3.00 MB** |
+
+**`74h` is the union of `75h` and `76h`**, with nothing left over. It lands on
+both floors established independently by the two earlier tests — the lone
+`"Untitled Preset"` of §21b and the 3.00 MB sample-RAM floor of §21c — which
+is a useful cross-confirmation of both, since they were measured in separate
+runs against different starting states.
+
+### Summary of the four
+
+| command | | verified behaviour |
+|---|---|---|
+| `71h` | Preset Delete | Deletes the *selected* preset only. **Does not compact** — survivors keep their numbers and names. Frees preset RAM. Samples untouched. |
+| `74h` | Erase RAM Bank | Presets **and** samples, in one action. Both floors. |
+| `75h` | Erase All RAM Presets | Presets only; samples and sample RAM untouched. Bottoms out at the single `"Untitled Preset"` that always exists. |
+| `76h` | Erase All RAM Samples | Samples only; presets and preset RAM untouched. **Leaves voices dangling** at erased sample numbers. |
+
+Two device facts fell out that are not in the specification and that a client
+author would not guess, both worth treating as load-bearing:
+
+* **`preset_memory()` reaching 0 KB, not an empty name catalog, is the signal
+  that presets are gone** — P000 always exists (§21b).
+* **`sample_memory()` never reaches 0**; ~3.00 MB is device overhead, and that
+  figure *is* empty (§21c).
