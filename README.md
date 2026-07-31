@@ -279,9 +279,15 @@ pacing — is already the dominant cost (cutting the send gap from 25 ms to
   selecting presets, opening voices (`v`), paging the bank and running `u`
   cost *no MIDI at all*. If you plan to spend half an hour exploring a bank,
   paying 20 minutes up front to make all of it instant is a good trade.
-- **Yes, for `u` (which presets use this sample).** That lookup needs a
-  full-bank sweep anyway, so at `"structure"` depth or deeper you are paying
-  a cost you would otherwise pay on first use.
+- **You may not need it at all if you run `u`.** A `u` lookup *is* a
+  `"structure"`-depth sweep that answers one question on the way, and it
+  keeps everything it fetched — both name catalogs, every preset's
+  voice/zone/sample structure, and the usage index for **every** sample it
+  saw, not just the one you asked about. So after one `u`, preset selection,
+  bank paging and `u` on any other sample are already instant, and running
+  `a` at `"structure"` depth afterwards would re-do work you have. (The
+  reverse holds too: `a` makes a later `u` instant.) Only `"full"` depth
+  adds anything `u` does not — every voice's own parameter group.
 - **No, for a quick look.** Selecting a handful of presets fetches only what
   it needs; a sweep to look at three presets is pure overhead.
 - **No, if you are about to write.** Any parameter edit, rename or Master
