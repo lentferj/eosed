@@ -1154,7 +1154,10 @@ class EosedApp(App):
         try:
             if kwargs.get("port"):
                 bridge = bridge_mod.EosBridge.standard(
-                    kwargs["port"], device_id=kwargs["device_id"], timeout=kwargs["timeout"])
+                    kwargs["port"],
+                    device_id=(m.DEFAULT_DEVICE_ID if kwargs["device_id"] is None
+                               else kwargs["device_id"]),
+                    timeout=kwargs["timeout"])
             else:
                 bridge = bridge_mod.EosBridge.autodetect(
                     device_id=kwargs["device_id"], timeout=kwargs["timeout"],
@@ -2553,7 +2556,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(
         prog="eosed", description="Textual editor for the EOS remote editor protocol.")
     parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
-    parser.add_argument("--device-id", type=int, default=m.DEFAULT_DEVICE_ID)
+    parser.add_argument("--device-id", type=int, default=None,
+                        help="SysEx device id. With autodetect, selects WHICH device to "
+                             "use when several are connected (they must have distinct "
+                             "ids, per the spec); default: whichever answers")
     parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)
     parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
                         help="local settings file: caches the last successful autodetect port "

@@ -212,6 +212,110 @@ class _AutodetectRtmidi:
     MidiIn = _AutodetectPort
 
 
+def _inquiry_reply(device_id: int, member=(0x04, 0x04)) -> list:
+    """A Universal Device Inquiry reply carrying a given SysEx device id."""
+    return [0xF0, 0x7E, device_id, 0x06, 0x02, 0x18, 0x01, 0x04, member[0], member[1],
+            ord('4'), ord('.'), ord('0'), ord('0'), 0xF7]
+
+
+class _TwoMachinePort:
+    """Two EOS machines answering one broadcast inquiry, on two input ports.
+
+    This is the case the spec's distinct-device-id requirement exists for:
+    both hear the broadcast and both reply, so "first reply wins" would bind
+    to whichever the OS happened to enumerate first.
+    """
+
+    PORTS = ["Shared Out", "Machine A In", "Machine B In"]
+    IDS = {1: 3, 2: 7}          # input port index -> device id it answers with
+    _unread = set()
+
+    def __init__(self, queue_size_limit=None):
+        self.index = None
+
+    def get_ports(self):
+        return list(self.PORTS)
+
+    def open_port(self, index):
+        self.index = index
+
+    def ignore_types(self, **kwargs):
+        pass
+
+    def send_message(self, message):
+        # One reply per machine per broadcast. Re-answering on every poll
+        # would make this an infinite source, which is not what hardware
+        # does -- and an unbounded drain against it grew to 12GB before
+        # eos.bridge gained its _MAX_INQUIRY_* caps.
+        type(self)._unread = set(self.IDS)
+
+    def get_message(self):
+        if self.index in self.IDS and self.index in getattr(type(self), "_unread", set()):
+            type(self)._unread.discard(self.index)
+            return (_inquiry_reply(self.IDS[self.index]), 0.0)
+        return None
+
+    def close_port(self):
+        pass
+
+    def delete(self):
+        pass
+
+
+class _TwoMachineRtmidi:
+    MidiOut = _TwoMachinePort
+    MidiIn = _TwoMachinePort
+
+
+def test_autodetect_refuses_to_guess_between_two_devices(monkeypatch):
+    """Binding to whichever replied first would be decided by MIDI port
+    enumeration order and could change between reboots -- so refuse, and say
+    what was found."""
+    _TwoMachinePort._unread = set()
+    monkeypatch.setattr(bridge_mod, "rtmidi", _TwoMachineRtmidi)
+    with pytest.raises(bridge_mod.AmbiguousDevice) as excinfo:
+        EosBridge.autodetect(timeout=0.05, config_path=None)
+    message = str(excinfo.value)
+    assert "device id 3" in message and "device id 7" in message
+    assert "--device-id" in message, "must tell the user how to resolve it"
+    assert [d[0] for d in excinfo.value.devices] == [3, 7]
+
+
+@pytest.mark.parametrize("wanted", [3, 7])
+def test_autodetect_device_id_selects_between_two_devices(monkeypatch, wanted):
+    """The spec requires distinct ids on a shared setup precisely so this
+    works; the parameter used to be accepted and silently ignored."""
+    _TwoMachinePort._unread = set()
+    monkeypatch.setattr(bridge_mod, "rtmidi", _TwoMachineRtmidi)
+    bridge = EosBridge.autodetect(timeout=0.05, device_id=wanted, config_path=None)
+    assert bridge.device_id == wanted
+    assert bridge.inquiry.device_id == wanted
+
+
+def test_autodetect_reports_nothing_found_for_an_absent_device_id(monkeypatch):
+    _TwoMachinePort._unread = set()
+    monkeypatch.setattr(bridge_mod, "rtmidi", _TwoMachineRtmidi)
+    with pytest.raises(RuntimeError) as excinfo:
+        EosBridge.autodetect(timeout=0.05, device_id=9, config_path=None)
+    assert not isinstance(excinfo.value, bridge_mod.AmbiguousDevice)
+
+
+def test_autodetect_one_device_on_two_input_ports_is_not_ambiguous(monkeypatch):
+    """A single machine heard on two inputs (merged/THRU'd interface) answers
+    twice with the SAME id -- that is one device, not an ambiguity."""
+    class OneMachineTwoPorts(_TwoMachinePort):
+        IDS = {1: 5, 2: 5}
+
+    class Rtmidi:
+        MidiOut = OneMachineTwoPorts
+        MidiIn = OneMachineTwoPorts
+
+    OneMachineTwoPorts._unread = set()
+    monkeypatch.setattr(bridge_mod, "rtmidi", Rtmidi)
+    bridge = EosBridge.autodetect(timeout=0.05, config_path=None)
+    assert bridge.device_id == 5
+
+
 def test_autodetect_finds_answering_port(monkeypatch):
     # config_path=None: autodetect's port cache writes to the real filesystem
     # by default (see the dedicated cache tests below, which use tmp_path) —

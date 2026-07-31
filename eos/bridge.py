@@ -61,6 +61,10 @@ from eos import params as p
 SEND_GAP = 0.05            # conservative; NOT reverse-engineered for EOS (see module docstring)
 DEFAULT_TIMEOUT = 2.0
 AUTODETECT_TIMEOUT = 1.0
+# Bounds on the autodetect reply drain. Neither is a protocol limit — they
+# exist so a port that never runs dry cannot spin or accumulate without end.
+_MAX_INQUIRY_DRAIN = 64      # messages read from one port in one pass
+_MAX_INQUIRY_REPLIES = 32    # Device Inquiry replies kept per probe
 DEFAULT_DEVICE_ID = m.DEFAULT_DEVICE_ID
 DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's BridgeConfig convention
 
@@ -448,6 +452,38 @@ class MultiIn:
         self.ports = []
 
 
+class AmbiguousDevice(RuntimeError):
+    """More than one EOS device answered the Device Inquiry.
+
+    Distinct device ids are how the protocol expects machines to be told
+    apart. The EOS 4.0 Software Manual (p. 104, "MIDI Device ID") says so
+    directly -- "allows an external SysEx programming device to distinguish
+    between multiple Emulator units. In this case, each Emulator should have
+    a different ID number" -- and the SysEx spec provides the mechanism,
+    defining 0-126 as unique ids and 127 as the all-broadcast id. (The spec
+    itself never states the obligation; it only describes the address space.)
+
+    When two devices answer with different ids there is no basis for picking one,
+    so autodetect refuses rather than silently binding to whichever replied
+    first — which, with two identical machines, would be decided by MIDI port
+    enumeration order and could change between reboots.
+
+    Two devices left on the *same* id are indistinguishable on the wire (the
+    reply payloads are byte-identical, and so is one device heard on two
+    input ports), so this cannot detect that case. That configuration is a
+    protocol violation on the user's side.
+    """
+
+    def __init__(self, devices):
+        self.devices = devices          # [(device_id, model, recv_port), ...]
+        listing = "\n".join(
+            f"  device id {did}: {model} on {port}" for did, model, port in devices)
+        super().__init__(
+            f"{len(devices)} EOS devices answered:\n{listing}\n"
+            "Pass --device-id N to choose one, or pin the ports explicitly by "
+            "setting send_port/recv_port in the config file.")
+
+
 class DeviceCancelled(Exception):
     """The device replied CANCEL to a request (e.g. a non-existent preset)."""
 
@@ -494,7 +530,7 @@ class EosBridge:
 
     @classmethod
     def autodetect(cls, *, gap: float = SEND_GAP, write_gap: Optional[float] = None,
-                   device_id: int = DEFAULT_DEVICE_ID,
+                   device_id: Optional[int] = None,
                    timeout: float = AUTODETECT_TIMEOUT,
                    on_try: Optional[Callable[[str], None]] = None,
                    config_path: Optional[str] = DEFAULT_CONFIG_PATH) -> "EosBridge":
@@ -514,6 +550,20 @@ class EosBridge:
         the full sweep if the cache is absent, stale (ports renamed/gone), or
         the device doesn't answer on those ports anymore. Pass
         ``config_path=None`` to disable caching entirely.
+
+        ``device_id`` selects *which* device to bind to when more than one is
+        connected — ``None`` (the default) means "whichever answers". The
+        inquiry itself always goes out broadcast, so every device replies and
+        this can tell them apart; the spec requires distinct ids on a shared
+        setup for exactly this reason. If several answer with different ids
+        and none was requested, :class:`AmbiguousDevice` is raised rather than
+        binding to whichever happened to reply first — that choice would
+        otherwise fall out of MIDI port enumeration order and could change
+        between reboots.
+
+        Note this waits the full ``timeout`` on the port that answers, rather
+        than returning at the first reply, so a second device on the same wire
+        is actually heard. Costs one extra ``timeout`` on a cold cache.
         """
         if config_path is not None:
             cached = load_last_ports(config_path)
@@ -524,10 +574,14 @@ class EosBridge:
                 data = _try_port_pair(cached_send, cached_recv, timeout)
                 if data is not None:
                     reply = m.parse_device_inquiry_reply(data)
-                    bridge = cls._connect(cached_send, cached_recv, reply, gap=gap,
-                                         write_gap=write_gap, timeout=timeout)
-                    save_last_ports(cached_send, cached_recv, config_path)
-                    return bridge
+                    # A cached pair that answers with the *wrong* device falls
+                    # through to the sweep: the cache remembers ports, and on a
+                    # multi-device setup the machine behind a port can change.
+                    if device_id is None or reply.device_id == device_id:
+                        bridge = cls._connect(cached_send, cached_recv, reply, gap=gap,
+                                             write_gap=write_gap, timeout=timeout)
+                        save_last_ports(cached_send, cached_recv, config_path)
+                        return bridge
 
         request = m.build_device_inquiry_request(device_id=m.BROADCAST_DEVICE_ID)
 
@@ -546,17 +600,32 @@ class EosBridge:
                 if port is not None:
                     _delete_quiet(port)
 
-        def find_reply():
+        def collect_replies(into):
+            """Drain every listener, appending each Device Inquiry reply seen.
+
+            Collects rather than returning the first: two machines on one wire
+            both answer a broadcast inquiry, and stopping at the first would
+            be exactly the silent mis-binding this is meant to prevent.
+
+            Bounded on both axes. Draining "until the port is empty" trusts
+            the port to eventually run dry, and a chatty or wedged one never
+            does -- this loop grew to 12GB against a fake that re-answered
+            every call. There is no legitimate setup with dozens of EOS units
+            on one wire, so a cap costs nothing real and turns a hang into a
+            correct answer.
+            """
             for name, port in listeners:
-                message = port.get_message()
-                while message is not None:
+                for _ in range(_MAX_INQUIRY_DRAIN):
+                    message = port.get_message()
+                    if message is None:
+                        break
                     data = message[0]
                     if (len(data) >= 15 and data[0] == 0xF0 and data[1] == 0x7E
                             and data[3] == 0x06 and data[4] == 0x02
                             and data[5] == m.MANUFACTURER_ID):
-                        return name, data
-                    message = port.get_message()
-            return None
+                        if len(into) >= _MAX_INQUIRY_REPLIES:
+                            return
+                        into.append((name, bytes(data)))
 
         try:
             for index, out_name in enumerate(out_names):
@@ -570,29 +639,56 @@ class EosBridge:
                     if out is not None:
                         _delete_quiet(out)
                     continue
-                found = None
+                seen: List[Tuple[str, bytes]] = []
                 try:
                     for _, port in listeners:  # flush stale input
                         while port.get_message() is not None:
                             pass
                     out.send_message(list(request))
+                    # Listen for the whole window even after a reply arrives —
+                    # a second machine on the same wire answers too, and we
+                    # need to know about it.
                     deadline = time.time() + timeout
                     while time.time() < deadline:
-                        found = find_reply()
-                        if found is not None:
-                            break
+                        collect_replies(seen)
                         time.sleep(0.005)
+                    collect_replies(seen)
                 finally:
                     out.close_port()
                     _delete_quiet(out)
-                if found is not None:
-                    recv_name, data = found
-                    reply = m.parse_device_inquiry_reply(data)
-                    bridge = cls._connect(out_name, recv_name, reply, gap=gap,
-                                     write_gap=write_gap, timeout=timeout)
-                    if config_path is not None:
-                        save_last_ports(out_name, recv_name, config_path)
-                    return bridge
+                if not seen:
+                    continue
+
+                # Key by device id: the same machine heard on two input ports
+                # is one device, not two. Two machines sharing an id are
+                # byte-identical on the wire and collapse here too — that case
+                # is undetectable and is a protocol violation by the user.
+                by_id = {}
+                for recv_name, data in seen:
+                    try:
+                        reply = m.parse_device_inquiry_reply(data)
+                    except Exception:
+                        continue
+                    by_id.setdefault(reply.device_id, (recv_name, reply))
+                if not by_id:
+                    continue
+
+                if device_id is not None:
+                    if device_id not in by_id:
+                        continue          # not the one we want; keep sweeping
+                    recv_name, reply = by_id[device_id]
+                elif len(by_id) > 1:
+                    raise AmbiguousDevice(sorted(
+                        (did, rep.model or f"member {rep.member_code}", port_name)
+                        for did, (port_name, rep) in by_id.items()))
+                else:
+                    recv_name, reply = next(iter(by_id.values()))
+
+                bridge = cls._connect(out_name, recv_name, reply, gap=gap,
+                                 write_gap=write_gap, timeout=timeout)
+                if config_path is not None:
+                    save_last_ports(out_name, recv_name, config_path)
+                return bridge
         finally:
             for _, port in listeners:
                 port.close_port()

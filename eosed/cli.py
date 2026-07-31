@@ -31,8 +31,13 @@ def _parse_range(text: str) -> Tuple[int, int]:
 
 def _build_bridge(args: argparse.Namespace) -> "bridge_mod.EosBridge":
     if args.port:
+        # standard() addresses one device directly, so it needs a concrete id;
+        # autodetect treats None as "whichever answers" and uses it to pick
+        # between machines.
         return bridge_mod.EosBridge.standard(
-            args.port, device_id=args.device_id, timeout=args.timeout)
+            args.port,
+            device_id=(m.DEFAULT_DEVICE_ID if args.device_id is None else args.device_id),
+            timeout=args.timeout)
     return bridge_mod.EosBridge.autodetect(
         device_id=args.device_id, timeout=args.timeout, config_path=args.config,
         on_try=lambda name: print(f"  trying {name} ...", file=sys.stderr))
@@ -136,7 +141,10 @@ def cmd_dump(args: argparse.Namespace, bridge) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eoscli", description=__doc__)
     parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
-    parser.add_argument("--device-id", type=int, default=m.DEFAULT_DEVICE_ID)
+    parser.add_argument("--device-id", type=int, default=None,
+                        help="SysEx device id. With autodetect, selects WHICH device to "
+                             "use when several are connected (they must have distinct "
+                             "ids, per the spec); default: whichever answers")
     parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)
     parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
                         help="local settings file: caches the last successful autodetect port "
