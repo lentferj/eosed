@@ -1181,10 +1181,26 @@ about 5s each at a 25ms send gap.
 
 **Perf note, now with real numbers instead of the speculation TODO.md
 carried:** a deep kit costs ~5s to walk at 25ms and roughly 20s at 100ms,
-since every voice is a sequential `VOICE_SELECT` + read round trip. That is
-the cost of correctness here, but it is also the strongest argument yet for
-the §17 pipelining work — this walk has the same "one request, block for
-reply" shape the name catalogs do.
+since every voice is a sequential `VOICE_SELECT` + read round trip.
+
+**That is not, however, a case for applying §17's pipelining here — the
+voice walk is a strictly harder problem, and conflating the two would be a
+mistake.** The two share a shape (send, block for reply, repeat) but not the
+property that makes pipelining *sound*. A `PresetName`/`SampleName` reply
+carries its own preset/sample number, so K requests can be fired off and
+their replies matched by content, order irrelevant. A parameter reply
+carries only `(param_id, value)` — no selection context — so a pipelined
+voice walk would send `VOICE_SELECT=0; REQ(38); VOICE_SELECT=1; REQ(38); …`
+and receive N replies that all read "parameter 38 = X", distinguishable
+*only by arrival order*. That needs reply ordering to be guaranteed (never
+probed), on top of `VOICE_SELECT` being device-side state that any
+interleaved request would re-point — the same hazard §17's own closing
+paragraph raises against releasing `_bridge_lock` mid-sweep. Getting it
+wrong produces silently wrong structure data, which is exactly the outcome
+§17 refuses to risk for names.
+
+If this walk is to be sped up, the honest options are a shorter send gap
+(§19a) or fetching less, not pipelining it on the strength of a resemblance.
 
 ### §19a — 25ms send gap, tested
 
