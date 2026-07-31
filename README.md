@@ -255,6 +255,22 @@ default on a fresh install) and the full 4-pane layout below; the choice
 is remembered across restarts (against real hardware — `--demo` never
 touches local state).
 
+### Keys
+
+| | |
+|---|---|
+| **Navigate** | `p` Presets · `s` Samples · `g` Goto · `r` Refresh · `escape` Back to preset |
+| **Inspect** | `v` Voices · `l` Links · `u` Find usage · `h` History |
+| **Cache** | `c` Cache structure · `C` Cache everything · `x` Clear usage cache |
+| **Edit** | `Enter` Edit value · `+` Value +1 · `-` Value -1 · `o` Rename · `z` Undo · `Z` Undo all · `w` Write mode |
+| **Other** | `e` Extended view · `m` Master · `q` Quit |
+
+`PageUp`/`PageDown` page the Preset/Sample bank; inside the Parameters
+pane they scroll normally. Scrolling near the bottom of a bank loads more
+entries automatically. Every key above is also shown in the hint bar at the
+bottom of the screen, which is generated from the same binding table this
+list is — so the two cannot disagree.
+
 <p align="center">
   <img src="docs/screenshots/extended_view_voice.svg" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with V2 of a three-voice preset selected" width="900">
 </p>
@@ -953,8 +969,12 @@ tests/
   §10).
 - `PRESET_NUM_SZONES` is unverified against real hardware and unused —
   see [The "Number Of X" trap](#the-number-of-x-trap).
-- Write paths (`--allow-write`) are unverified against real hardware —
-  see the warning at the top of this README and [TODO.md](TODO.md).
+- Writing `E4_GEN_SAMPLE` and the device-global `master.*` parameters
+  are unverified against real hardware. Parameter edits, renames and all
+  four Master/erase actions **have** been verified live
+  (`docs/RESOLUTION_NOTES.md` §18, §21a-§21d).
+- Multi-device autodetect — `--device-id` selection between two connected
+  machines — is unit-tested only, never run with two real machines.
 
 ## Tests
 

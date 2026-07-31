@@ -2558,9 +2558,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
     parser.add_argument("--device-id", type=int, default=None,
                         help="SysEx device id. With autodetect, selects WHICH device to "
-                             "use when several are connected (they must have distinct "
-                             "ids, per the spec); default: whichever answers")
-    parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT)
+                             "use when several are connected; the EOS manual says each "
+                             "unit should have a different id. Default: whichever answers")
+    parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT,
+                        help="seconds to wait for any one reply "
+                             "(default: %(default)s)")
     parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
                         help="local settings file: caches the last successful autodetect port "
                              "pair, and holds the view/cache-sweep/program-change "

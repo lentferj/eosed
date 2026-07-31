@@ -5,6 +5,7 @@
 #
 # --demo mode never opens a MIDI port — synthetic only.
 
+import pathlib
 import asyncio
 
 from textual.widgets import Header
@@ -778,6 +779,32 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
                         connect_kwargs={"config_path": config_path})
     assert app2._cache_all_on_startup is False
     assert app2._cache_depth == "full"  # the documented default
+
+
+def test_readme_key_table_lists_every_binding():
+    """The README's "### Keys" table must cover every visible binding.
+
+    This drifted badly once already: `a` became `c`/`C` and `x`, undo and the
+    +/- nudge were added, and the README (and the screenshots baked from the
+    same legend) kept advertising keys that no longer existed. A doc that
+    confidently lists the wrong keys is worse than one that lists none.
+    """
+    import re
+    readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text()
+    section = readme.split("### Keys", 1)[1].split("###", 1)[0]
+    # Only the table rows: the surrounding prose mentions config.toml keys in
+    # backticks too, and matching those would let a binding pass by accident.
+    rows = [ln for ln in section.splitlines() if ln.startswith("|")]
+    documented = set(re.findall(r"`([^`]+)`", "\n".join(rows)))
+
+    for binding in EosedApp.BINDINGS:
+        if not binding.show:
+            continue
+        app = EosedApp.__new__(EosedApp)
+        key = EosedApp._legend_key(app, binding.key)
+        assert key in documented, (
+            f"key {key!r} ({binding.description}) is bound but missing from "
+            f"the README's Keys table")
 
 
 def test_legend_shows_typed_keys_not_textual_key_names():

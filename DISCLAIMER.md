@@ -171,8 +171,12 @@ cache-all sweep, including the count-field corrections in
 been exercised against a real E4XT Ultra — every preset-scoped parameter
 written across ten scratch presets, read back, and re-read after
 selecting away and returning (3340 comparisons and 20 renames, all
-exact; `docs/RESOLUTION_NOTES.md` §18). **Every Master action remains
-unverified against real hardware**, as does writing `E4_GEN_SAMPLE`. See
+exact; `docs/RESOLUTION_NOTES.md` §18). **All four destructive Master
+actions have since been verified live too** — Preset Delete and the three
+Erase utilities, each fired by hand from the arm-then-fire modal with the
+device state checked over SysEx before and after (§21a-§21d). Writing
+`E4_GEN_SAMPLE` and the device-global `master.*` parameters remain
+unverified. See
 [TODO.md](TODO.md) for exact status and what's still open, including the
 NEW-format dump path and the undocumented panel protocol above.
 
