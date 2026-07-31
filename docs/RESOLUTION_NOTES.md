@@ -1336,12 +1336,13 @@ adequate for the original question (finding negative sentinel values) is not
 automatically adequate for a later one (counting voices). Worth checking what
 a dataset's collection cap was before computing totals from it.
 
-## §21 — Master/erase actions: verification plan (Preset Delete RESOLVED, the three Erase utilities still open)
+## §21 — Master/erase actions: verification plan (`71h` and `75h` RESOLVED, `74h`/`76h` still open)
 
 The four destructive utilities were the last unverified commands in this
 project: Preset Delete (`71h`), Erase RAM Bank (`74h`), Erase All RAM Presets
-(`75h`), Erase All RAM Samples (`76h`). **`71h` is now confirmed live — see
-§21a. The other three have still never been sent to a real device.** The app reaches them only through a modal arm-then-fire screen, never
+(`75h`), Erase All RAM Samples (`76h`). **`71h` and `75h` are now confirmed live — see
+§21a and §21b. `74h` and `76h` have still never been sent to a real
+device.** The app reaches them only through a modal arm-then-fire screen, never
 a single keypress, and `--allow-write`/`w` gates them on top of that.
 
 ### Established behaviour: EOS does not compact
@@ -1448,3 +1449,43 @@ testing the three Erase utilities.
 This also exercised the full user path end to end, not just the wire command:
 the `--allow-write` gate, the modal's arm-then-fire two-keypress requirement,
 and the command itself.
+
+
+### §21b — Erase All RAM Presets (`75h`) confirmed live, 2026-07-31
+
+Fired by hand from the arm-then-fire modal (`m`, `3`, `Enter`), same method
+as §21a, against the bank §21a left behind (P000 `P_VCUT` 12 voices, P002
+`P_VPAN` 7 voices, S001/S002, 3.49 MB).
+
+| | before | after |
+|---|---|---|
+| P000 | `P_VCUT`, 12 voices | **`Untitled Preset`, 1 voice** |
+| P002 | `P_VPAN`, 7 voices | gone |
+| S001 / S002 | present | **present, unchanged** |
+| preset RAM | 5 KB | **0 KB** |
+| sample RAM | 3.49 MB | **3.49 MB** |
+
+**Confirms the intended split:** presets are destroyed, **samples and sample
+RAM are untouched**. That is the whole distinction between `75h` and `74h`,
+and it holds.
+
+**Unexpected, and the reason this was worth firing rather than assuming:
+the bank is not left empty.** `75h` re-initialises to a single blank
+`"Untitled Preset"` with one voice at slot 0 — the same state a freshly
+cleared machine sits in. Preset RAM reads 0 KB at the same time, so that
+preset is not a survivor or a partial erase; it is the device's floor state.
+
+Consequences for anything scripting against this:
+
+* **"No presets" and "one empty Untitled Preset" are the same state.** Do
+  not treat a `P000` that reads `"Untitled Preset"` as evidence the erase
+  failed, and do not expect a preset-name sweep to come back empty.
+* `preset_memory()` reading 0 KB used is the reliable signal that the erase
+  took, not the absence of preset names.
+* This differs from `71h`, which leaves a genuinely empty slot reading
+  `"Empty Preset"` (§13). `"Untitled Preset"` and `"Empty Preset"` are
+  different states and the distinction is load-bearing here.
+
+Predicted but worth stating: this is why the test bank needed samples in it
+at all. Without them, `75h` and `74h` would have produced identical
+observations.

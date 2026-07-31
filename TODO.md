@@ -27,9 +27,13 @@ into 0..-6384. Both fixed, and 12 genuinely mis-transcribed envelope ranges
 corrected in `eos/params.py`. **Preset Delete (`71h`) is now confirmed live
 too** — fired by hand from the arm-then-fire modal against a 3-preset test
 bank, deleting exactly its target, freeing preset RAM (8 KB → 5 KB), sparing
-samples, and **not compacting** the bank (RESOLUTION_NOTES §21a). Still
-untested live: the three Erase utilities (`74h`/`75h`/`76h`), the
-device-global `master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
+samples, and **not compacting** the bank (RESOLUTION_NOTES §21a).
+**Erase All RAM Presets (`75h`) is confirmed too** (§21b): presets destroyed,
+samples and sample RAM untouched — and it does *not* leave the bank empty,
+but re-initialises to a single blank `"Untitled Preset"` at slot 0 with
+preset RAM at 0 KB, so "no presets" and "one Untitled Preset" are the same
+state. Still untested live: `74h`/`76h`, the device-global `master.*`
+parameters, and *writing* `E4_GEN_SAMPLE`.
 
 **Re-verified against a full commercial bank (RESOLUTION_NOTES §19).** 990
 populated presets, 128MB of samples, 10121 reads: confirmed `E4_GEN_SAMPLE`
