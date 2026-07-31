@@ -782,7 +782,7 @@ class EosBridge:
     #   directly instead (see _voice_sample_info's docstring). Kept here,
     #   uncorrected (raw passthrough), only for API completeness.
     # - preset_num_links: wire value IS the plain, direct count -- confirmed
-    #   live against preset 0 ("Test Preset"), whose own dump file
+    #   live against preset 0, whose own dump file
     #   independently shows exactly 1 real link, matching the raw wire
     #   value of 1 exactly (no offset). Only one data point, though, and
     #   preset_num_voices' own history is now a specific warning against

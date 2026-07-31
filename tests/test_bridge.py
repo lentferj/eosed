@@ -678,7 +678,7 @@ def test_preset_num_links_is_a_plain_count_unlike_its_sibling():
     # Live-hardware finding (docs/RESOLUTION_NOTES.md §11): a first fix
     # assumed this sibling of preset_num_voices shared the same "+1" wire
     # offset (same command family, same wire shape) -- wrong. Confirmed
-    # live against preset 0 ("Test Preset"), whose own dump file
+    # live against preset 0, whose own dump file
     # independently shows exactly 1 real link: the raw wire value was 1,
     # matching directly with no correction at all.
     def handler(frame):

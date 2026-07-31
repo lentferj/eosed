@@ -463,8 +463,8 @@ the only way to force a fresh sweep was an actual write.
 **`preset_num_voices`'s "-1" correction (§11) turned out to be wrong too —
 abandoned entirely, same fix shape as `voice_num_szones`.** Live use of `u`
 against the user's real 270-preset bank appeared to stop early at a genuine
-content gap; front-panel checks of P075 ("a bass preset", 1 voice/2 samples,
-audible) and P080 ("another bass preset", 1 voice/5 samples, audible) proved
+content gap; front-panel checks of P075 (1 voice/2 samples,
+audible) and P080 (1 voice/5 samples, audible) proved
 otherwise — both raw `preset_num_voices` values were `1`, which the `-1`
 fix turned into a false "no voices". A timing/race explanation was checked
 and ruled out first (a 4-variant probe: with/without re-setting

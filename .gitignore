@@ -10,3 +10,5 @@ probes/*.png
 # Claude Code / AI-assistant working files — kept out of the public repo
 CLAUDE.md
 .claude/
+build/
+dist/

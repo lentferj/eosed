@@ -209,7 +209,7 @@ _NO_SUCH_VOICE_MARKER = -2  # empirically: this voice index does not exist on th
 #
 # They used to be 64 and 32, which were guesses, and both were too small for
 # real content — live-caught on a commercial bank (RESOLUTION_NOTES §19):
-# drum kits run to 94 voices ("drum kit"), and a multisample voice was
+# drum kits run to 94 voices, and a multisample voice was
 # found with 62 zones. The old caps silently truncated those presets: the
 # Voice pane stopped at 64 and the Samples "used by" aggregation missed every
 # sample that only voices 64+ referenced, with nothing on screen to say so.

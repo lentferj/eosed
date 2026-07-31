@@ -304,7 +304,7 @@ immediately after decoding the header, before entering the data-receiving
 loop. All dump-engine tests in `tests/test_bridge.py` updated to expect this
 extra ACK.
 
-After the fix, `eoscli dump 0 <file>` against preset 0 ("Test Preset", a real
+After the fix, `eoscli dump 0 <file>` against preset 0 (a real
 preset from the bank loaded this session) succeeded: 1096 bytes, matching
 the previously-peeked header `byte_count` exactly. A copy is kept at
 `docs/samples/e4xt_ultra_preset0_old_format.bin` for future
@@ -315,8 +315,11 @@ parsing work. Byte-level inspection:
   as this file's docstrings previously assumed (fixed) — the `<NAME>`-only
   grammar block quoted in §2 evidently describes the **NEW** format's
   payload, not OLD's.
-- **Bytes 2-17:** name = `"Test Preset"` (space-padded to 16) — matches the
-  catalog exactly.
+- **Bytes 2-17:** the preset name, space-padded to 16 — matched the
+  catalog exactly. (The saved fixture's name field has since been
+  overwritten with `"Test Preset"`: the preset came from a commercial bank
+  and its title is not ours to ship — see CLAUDE.md. Only those 16 bytes
+  were changed; every offset and parameter value below is as captured.)
 - **Bytes 18-61:** 22 signed 14-bit words, decoding to fully in-range,
   plausible values in exactly `eos.params`'s GLOBAL id order (0-21):
   `FX_A_ALGORITHM=18` (range 0-44 ✓), `FX_A_PARM_0=40` (0-90 ✓),
@@ -496,7 +499,7 @@ presets are fetched/shown, debounced growth triggered exactly one
 
 First live use of `preset_num_voices`/`preset_num_links`/`preset_num_szones`/
 `voice_num_szones` (the `extended_view` branch's Voice/Samples panes),
-against preset 0 ("Test Preset", the same preset captured in §7's saved dump
+against preset 0 (the same preset captured in §7's saved dump
 at `docs/samples/e4xt_ultra_preset0_old_format.bin`). Reported
 live: a preset the front panel shows as 2 voices (V1 single-sample, V2
 multisample with 2 zones/samples) rendered in the TUI as **3 voices**, with
@@ -641,11 +644,11 @@ presets, P000-P269) surfaced a scan that stopped early, apparently at a
 genuine content gap around preset 81. Front-panel spot checks disproved
 that outright:
 
-- **P075 "a bass preset"**: front panel shows 1 voice, 2 samples, and it audibly
+- **P075**: front panel shows 1 voice, 2 samples, and it audibly
   plays sound on Audition. `preset_num_voices(75)` raw value is `1`; the
   `-1` correction gives `0` — "no voices", directly contradicting the
   front panel and the fact that it plays.
-- **P080 "another bass preset"**: front panel shows 1 voice, 5 samples, also audible.
+- **P080**: front panel shows 1 voice, 5 samples, also audible.
   Same raw value `1`, same false "no voices" after correction.
 
 So the `-1` fix, despite passing both dump-file cross-checks that motivated
@@ -1149,10 +1152,10 @@ which is a guess dressed as a bound. Real content overruns both:
 
 | preset | name | voices |
 |---|---|---|
-| P111 | `drum kit` | **94** |
-| P113 | `drum kit` | 87 |
-| P005 | `drum kit` | 81 |
-| P112 | `drum kit` | 76 |
+| P111 | drum kit | **94** |
+| P113 | drum kit | 87 |
+| P005 | drum kit | 81 |
+| P112 | drum kit | 76 |
 
 and the deepest multisample voice found (P041 V0, P040 V0/V1) has **62
 zones**, nearly double the 32 cap. 120 presets on this bank have 8+ voices.
