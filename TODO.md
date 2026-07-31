@@ -13,8 +13,20 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 (full 0-127 sweep), and `dump` (OLD format) have all been run live against a
 real E4XT Ultra — see RESOLUTION_NOTES §7. A real bug was found and fixed in
 the process (the dump engine wasn't ACKing the header before expecting data —
-see RESOLUTION_NOTES §7). Nothing has been tried live that *writes* to the
-device yet.
+see RESOLUTION_NOTES §7).
+
+**Writing is now verified too (2026-07-31, RESOLUTION_NOTES §18).** Ten
+scratch presets (P000-P009, one voice each, no samples) were used to write
+every preset-scoped parameter, read it back, then switch away and return and
+read it again: **3340 comparisons and 20 renames, all exact**, at 100ms
+between sends, with no dropped replies and no §15-style crash. Two real bugs
+fell out of it, both about signedness (see §18) — values were never
+sign-extended on read, and min/max/default were sign-extended
+*unconditionally*, which corrupted `E4_VOICE_DELAY`'s real 0..10000 range
+into 0..-6384. Both fixed, and 12 genuinely mis-transcribed envelope ranges
+corrected in `eos/params.py`. Still untested live, deliberately: the
+Master/erase utilities (`71h`/`74h`/`75h`/`76h`), the device-global
+`master.*` parameters, and `E4_GEN_SAMPLE`.
 
 - Not actually blocked on `~/mididings_e4xt.py`: autodetect finds the real
   hardware send/receive ports directly (bypassing mididings' filter chain
@@ -500,12 +512,12 @@ docs/RESOLUTION_NOTES.md §7 already caught once for the port cache.
 
 **Write actions (edit/rename/Master) default to disabled against real
 hardware** — `--allow-write` is required to enable them (always on for
-`--demo`). No write path has been exercised live yet, on either branch;
-the *read* paths above (Voice/Samples panes, the count-field fix) have now
-been verified live. Once ready to try `--allow-write` live, go in this
-order: a single low-stakes parameter edit + read-back first, then rename,
-then (with real caution and a fresh backup) a Master action — never start
-with a Master action.
+`--demo`). **The parameter-edit and rename paths are now verified live**
+(2026-07-31, RESOLUTION_NOTES §18), in exactly the prescribed order: one
+low-stakes parameter edit + read-back first, then the full parameter set,
+then renames. A Master action has still never been fired against real
+hardware, and should only ever be tried by hand with a fresh backup — never
+from a script, and never as the first thing tried in a session.
 
 **`w` — runtime write-mode toggle, on top of `--allow-write` rather than
 instead of it.** `--allow-write` still sets the *starting* state (armed
@@ -574,6 +586,61 @@ probed directly (`PRESET_SELECT` before/after) and confirmed it stays
 unaffected — so verifying a Program Change landed correctly still needs
 the physical front panel, not something this app can check for itself.
 
+**`z`/`Z`/`h` — an in-memory undo log, step and full undo, and a change
+history.** Every parameter edit and rename to the selected preset is
+recorded with the value it replaced *and the selection it was made under*
+(voice/link/global). The protocol is stateful — a parameter id means "this
+voice's field" only while `VOICE_SELECT` points at it (§11) — so an undo
+re-selects that scope before writing the old value back; without that it
+would land on whatever happens to be selected at undo time, the same
+wrong-target write class §15 records against live automation. That is also
+why scope is a *column* in the history rather than a suffix on the
+parameter name: the same id under two voices is two different fields.
+Pending count goes in the header subtitle (`preset 12 · Δ3`), not the
+status line, which any load or scan overwrites. Scope is deliberately
+in-memory and per-preset, discarded when a different preset is selected: a
+remote edit only lives in the device's RAM until the bank is saved to disk
+on the machine, so reloading or power-cycling is the real "undo
+everything" and nothing here needs to survive a restart. Undo is a write,
+so it is gated behind write mode exactly like an edit.
+
+**`+`/`-` — nudge a value from the Parameters pane, arrow keys inside the
+dialog.** Typing the full number was previously the only way to change a
+parameter. `+`/`-` (with `=` as an unshifted `+`) step the highlighted
+parameter by 1 without opening anything; inside the edit dialog the arrow
+keys step by 1 and PageUp/PageDown by 10. Arrow keys are deliberately
+*not* bound in the pane itself — there they move the row cursor, the one
+navigation the app cannot give up. Nudges clamp to the device's own
+03h/04h reported range rather than the static table (standing project
+rule), fetched once per parameter and cached since that range does not
+change under us, and cleared alongside the other write-sensitive caches.
+Consecutive nudges of the same parameter in the same scope collapse into
+one undo entry keeping the value the run *started* from — holding `+` for
+ten steps is one edit as far as `z` and the history are concerned. A
+refused nudge (already at the limit) records nothing.
+
+**Parameter values are described in human terms far more widely now**
+(`eos/params.py`, `describe_value`), extending what filter types and
+envelope stages already did to every family where the raw wire number is
+meaningless on its own — so the Parameters pane can be checked against the
+front panel directly. Key fields show note names (the octave offset is
+*not* scientific pitch: the spec's own "60 = C3" and "C-2 → G8" both pin a
+-2 offset), and the matching `*FADE` fields are deliberately excluded,
+being widths in semitones rather than keys. Also: the link filter flags
+and other 0/1 switches, SCSI termination and Combine L/R (which the spec
+states with *inverted* sense, 0 = on, kept that way rather than silently
+normalised), amp envelope depth in dB, glide curve, LFO sync, velocity
+curve, magic preset, MIDI channels shown 1-based as panels display them,
+and the -1 = off/none sentinels. **One open inference:**
+`E4_LINK_INTERNAL_EXTERNAL` — the SysEx spec gives its 0..16 range but
+never says what the values mean; the EOS 4.0 Software Manual's "Link Type"
+section supplies "an internal preset or an external MIDI device" and "up
+to 16 external MIDI devices", which is exactly 1 + 16. Marked INFERRED in
+the docstring; **the off-by-one direction (channel 1 at value 1 vs value
+0) is the assumption doing the work and still needs a live check** against
+the panel's own Link Type field — the same check `FX_A`/`FX_B_ALGORITHM`
+have been waiting on.
+
 Not built: NEW-format dump/restore, and anything from the panel/mirror
 protocol (see the section above — that's out of scope for this TUI
 entirely).
@@ -609,9 +676,10 @@ of truth for both key dispatch and the displayed hint, nothing to keep in
 sync by hand. Re-folds on its own `on_resize`, same per-widget pattern
 already used by `_FillWidthDataTable`'s column-stretch, rather than
 k2kremote's App-level `on_resize` override. Not a fixed two rows — however
-many lines the fold actually needs at the current width and binding
-count (confirmed 2 at 100 columns with the current 14 bindings; 1 on a
-wide terminal, 3+ on a narrow one).
+many lines the fold actually needs at the current width and binding count
+(1 on a wide terminal, 3+ on a narrow one). The binding count has since
+grown from the 14 that motivated this to 20, with `z`/`Z`/`h` and `+`/`-`
+joining, which the fold absorbed without any change.
 
 ## Dump field order vs. E4B_FORMAT.md — partially verified
 
