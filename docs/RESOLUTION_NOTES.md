@@ -11,12 +11,10 @@ code. `TODO.md` tracks *what* is open; this file tracks *how* to close it.
 ## §1 — Editor protocol source document (resolved)
 
 The full "Remote Preset Editing via MIDI SysEx" spec (Draft #30, EOS 4.00,
-Brian Clark, E-mu Systems, 17 Feb 1999, 61 pages) is on the author's machine
-at:
-
-```
-e-mu_eos_remote_sysex.pdf (not redistributed)
-```
+Brian Clark, E-mu Systems, 17 Feb 1999, 61 pages) is **not redistributed
+with this project** — it is E-mu's document, not ours to ship. Anyone
+reproducing this work needs their own copy; it circulates as
+`e-mu_eos_remote_sysex.pdf`.
 
 It is an E-mu internal document, text-extractable (not a scan). It documents
 **only** the `55h`-designated editor/librarian protocol — see §3 below for why
@@ -365,11 +363,10 @@ test isolation, not just a hypothetical risk.
 (32 entries), `FX_A_PARM_NAMES`, `FX_B_PARM_NAMES`, and `FX_AMT_BUS_NAMES`, plus
 a general `describe_value(param, value)` helper (used by both `eoscli get`
 and the TUI) that shows `"value (Name)"` when a mapping is known. Source:
-the **EOS 4.0 Software Manual**, which lives one directory *above* the
-SysEx spec of §1, not beside it:
-`e-mu_eos_4.0_manual.pdf (not redistributed)`
-(also in ``, along with `e-mu_eos_4.7_addendum.pdf` — checked
-for the FX B algorithm question below and it changes nothing there),
+the **EOS 4.0 Software Manual** (`e-mu_eos_4.0_manual.pdf`), a different
+document from the SysEx spec of §1 and likewise not redistributed here. The
+4.7 addendum (`e-mu_eos_4.7_addendum.pdf`) was checked for the FX B
+algorithm question below and changes nothing there. The names come from
 chapter 2 "Master Effects A/B" (pp. 97-98) and chapter 8 "Preset Effects A/B"
 (pp. 283-287) — the two independently cross-checked and match exactly.
 
