@@ -225,6 +225,11 @@ Four panes, left to right:
   rebuilt fresh every launch, deliberately: the E4XT can be edited from
   its own front panel with no way for this app to notice, so a saved
   cache could confidently show data that no longer matches the device.
+
+  On a large bank this takes a **long** time, so `a` asks first (and
+  tells you its estimate) whenever the sweep looks like it will run for
+  more than a minute — see [How long cache-all takes, and when it is
+  worth it](#how-long-cache-all-takes-and-when-it-is-worth-it).
 - **Selecting a preset also sends it a MIDI Program Change** (no key
   binding — happens automatically), which is what actually makes the
   E4/E4XT select that preset for real and redraw its own front-panel
@@ -243,6 +248,61 @@ Four panes, left to right:
   is selected, just that voice's otherwise), resolved from the voice's
   Sample Zone fields down to a sample number + name. Orthogonal to which
   bank the Preset pane is browsing.
+
+### How long cache-all takes, and when it is worth it
+
+Measured against a **real E4XT Ultra (rev 4.70)** at the default 50 ms send
+gap, on a full commercial bank — **990 populated presets, 128 MB of samples,
+about 4130 voices** (drum kits of 80-94 voices each pull that average up):
+
+| `cache_depth` | full 0-999 sweep | per 50 presets | what you get |
+|---|---|---|---|
+| `"names"` | ~2.5 min | ~8 s | preset + sample name catalogs |
+| `"structure"` | ~23 min | ~69 s | + voice/zone/sample structure, and the `u` index |
+| `"full"` *(default)* | ~1 hour+ | ~3 min | + GLOBAL values and every voice's own parameters |
+
+**These numbers scale with *voices*, not presets.** A 990-preset bank of
+one-voice pads is an order of magnitude cheaper than the same count of
+94-voice drum kits, because `"structure"` and `"full"` walk every voice
+individually. Treat the per-50-presets column as a rough middle case and
+expect real banks to land either side of it. `"names"` is the exception — it
+sweeps both name catalogs and barely cares what is inside the presets.
+
+**Older hardware will be slower.** These are Ultra figures; non-Ultra E4
+models have noticeably slower CPUs, and device response time — not our send
+pacing — is already the dominant cost (cutting the send gap from 25 ms to
+5 ms bought only ~30%, see `docs/RESOLUTION_NOTES.md` §19a).
+
+**When it is worth it**
+
+- **Yes, if you are going to browse a lot.** The payoff is that afterwards
+  selecting presets, opening voices (`v`), paging the bank and running `u`
+  cost *no MIDI at all*. If you plan to spend half an hour exploring a bank,
+  paying 20 minutes up front to make all of it instant is a good trade.
+- **Yes, for `u` (which presets use this sample).** That lookup needs a
+  full-bank sweep anyway, so at `"structure"` depth or deeper you are paying
+  a cost you would otherwise pay on first use.
+- **No, for a quick look.** Selecting a handful of presets fetches only what
+  it needs; a sweep to look at three presets is pure overhead.
+- **No, if you are about to write.** Any parameter edit, rename or Master
+  action invalidates **every** cache uniformly (deliberately — see
+  [Two protocols, one device](#two-protocols-one-device)), so a sweep
+  followed by an edit throws the whole thing away.
+- **Consider a shallower depth.** `"names"` costs ~2.5 minutes and already
+  makes bank browsing and `g` instant, which is most of the everyday benefit.
+  `"full"` mainly pays off if you will actually open many *voices*.
+
+Because a `"full"` sweep of a big bank runs for the better part of an hour,
+`a` **asks first** whenever the estimate exceeds a minute, showing what it
+expects. The estimate comes from **used preset RAM** (one query, before the
+sweep starts) rather than preset count — RAM tracks how many voices a bank
+holds, which is what actually costs time, and preset count cannot tell a
+bank of pads from a bank of drum kits. `escape` cancels a running sweep at
+any point; a cancelled sweep caches nothing, since there is no way to tell
+"not found" from "not reached".
+
+`cache_all_on_startup = true` does **not** prompt — you asked for it in
+`config.toml` — but it does announce the estimate in the status line.
 
 Editing, renaming, and the Master menu:
 
