@@ -17,6 +17,34 @@ sibling **k2kremote** (Kurzweil K2000/K2000R) and **mpc2emu** projects.
 
 ---
 
+## Where this came from, and what it is not
+
+eosed is a **side product of mpc2emu**, not a project that set out to be a
+sampler editor. mpc2emu converts sample libraries for vintage hardware, and
+getting the *musical* parameters right — filters,
+envelopes, LFOs, loops — means checking them against a real machine. In
+practice that meant standing at an E4XT's front panel, pressing buttons,
+saving banks to disk, and diffing them by hand.
+
+eosed started as automation for that loop: if the sampler can be driven over
+MIDI, a reverse-engineering probe can be **scripted, repeated and diffed**
+instead of hand-performed. It still does that job — mpc2emu has driven this
+protocol unattended for an amp-envelope calibration sweep
+(`docs/RESOLUTION_NOTES.md` §15), and a good deal of what is documented here
+was found by pointing it at hardware and watching what came back rather than
+by reading the specification.
+
+It grew a TUI because a probe you can steer interactively finds things a
+fixed script does not. But it is **not trying to be beautiful — it is trying
+to be useful**, which is where the name comes from. UNIX `ed`, the standard
+editor, is not a pleasant program and never pretended otherwise: it is small,
+it does exactly what you tell it, it assumes you know what you want, and it is
+still on every Unix system decades after friendlier tools came and went.
+`eosed` takes the same bargain. Expect dense panes, terse keys, and numbers
+where a prettier tool would draw a knob.
+
+---
+
 ## ⚠️ Use at your own risk — back up first, hardware verification is partial
 
 eosed is provided **as is, with absolutely no warranty and no
@@ -31,10 +59,15 @@ sweep. Live use is also what caught several real protocol bugs no amount
 of reading the specification would have surfaced — see
 [The "Number Of X" trap](#the-number-of-x-trap) below.
 
-**Write paths (`--allow-write`) remain unverified against real
-hardware** — parameter edits, renames, and every Master action have only
-been exercised against `--demo`/synthetic tests so far, and default to
-**disabled** against real hardware for exactly that reason. The E4/EOS
+**Write paths are now partly verified — but not the destructive ones.**
+Parameter edits and renames have been exercised against a real E4XT Ultra
+across ten scratch presets: every preset-scoped parameter written, read
+back, then re-read after selecting away and returning — 3340 comparisons
+and 20 renames, all exact (`docs/RESOLUTION_NOTES.md` §18). That is also
+what caught two real signedness bugs in the *read* path. **Every Master
+action remains unverified against real hardware**, as does writing
+`E4_GEN_SAMPLE`, and writes still default to **disabled** (`--allow-write`,
+or `w` at runtime) against real hardware. The E4/EOS
 protocol also has several **one-shot, unconfirmed destructive**
 operations (Preset Delete, Erase RAM Bank/Presets/Samples) with no
 device-side "are you sure" — none are ever bound to a single keypress in
