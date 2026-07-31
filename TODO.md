@@ -102,6 +102,9 @@ revisiting if §15 is ever closed.
   changes to mididings were needed or made.
 - Still applies: one-session-at-a-time hardware access (same rule as
   k2kremote/mpc2emu).
+- `PRESET_NUM_SZONES` has never been verified and is not called anywhere in
+  the app — its siblings in that command family all turned out not to be
+  plain counts (§11/§12), so assume nothing about it.
 - Remaining: the NEW-format dump path (`eoscli dump --new-format`) is
   untested live — its header-ACK handling in `dump_preset_new` is
   extrapolated from the OLD-format finding, not independently confirmed
@@ -172,6 +175,43 @@ anyone scripts against a real E4XT again:
    minimum a documented "don't do this" in `EosBridge`'s docstring. Until
    then, treat any unattended/rapid live automation against a real E4XT as a
    crash risk, not just a cosmetic-desync risk.
+
+## Name-catalog pipelining — the largest remaining speed win (OPEN, needs a live probe)
+
+Every catalog scan is strictly serial: send one name request, block for the
+reply, repeat — so a 0-999 sweep has a ~50s floor in send-throttle alone, and
+that is most of why a full cache-all runs into minutes (§20 measured 2.5 min
+for names alone, 1h 44m at full depth).
+
+Name replies carry their own preset/sample number, so they do **not** need to
+be matched positionally — the same property `get_parameters` already exploits
+to batch 64 ids per request. If the device queues more than one outstanding
+request, K round trips collapse into one pipeline depth.
+
+**Blocked on** a live probe, because the failure mode is silent and ugly: if
+it does not queue, dropped replies read as "this preset has no name", which is
+indistinguishable from an empty slot and would quietly corrupt the very
+catalogs this is meant to speed up. Procedure, and why the voice walk is
+*not* a candidate for the same treatment, in RESOLUTION_NOTES §17.
+
+## Housekeeping (OPEN, none of it blocking)
+
+- **No CI.** All 372 tests are synthetic and hardware-free, so a GitHub
+  Actions job would run them on every push. Worth having: the drift this
+  project keeps finding by hand (stale key tables, stale "unverified"
+  claims) is exactly what a green/red signal catches early.
+- **`pyproject.toml` has no `[project.urls]` or classifiers** — the repo is
+  public now, so both are worth filling in.
+- **`HW_CHECKLIST.md` is stale** (local-only, never committed): no rows for
+  the `c`/`C`/`x` cache keys, and its section C still treats the Master/erase
+  actions as unfired — all four are now verified (§21a-§21d). Row C10 in
+  particular says "do not fire a destructive op", which the §21 campaign has
+  superseded.
+- **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
+  The preset *name* was scrubbed (§7), but the parameter values are still a
+  commercial preset's, and the file is public. Either keep it as a small
+  interoperability artefact, or regenerate the equivalent from a
+  self-authored preset and drop the question entirely.
 
 ## Panel/remote (screen-mirror) protocol — reverse engineering not started
 

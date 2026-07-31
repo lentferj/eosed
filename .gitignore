@@ -12,3 +12,9 @@ CLAUDE.md
 .claude/
 build/
 dist/
+
+# editor/tooling backups — a stray one was committed once by `git add -A`
+*.backup
+*.bak
+*.orig
+*~
