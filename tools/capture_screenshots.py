@@ -36,6 +36,9 @@ from eosed.demo import DemoBridge                   # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parent.parent / "docs" / "screenshots"
 SIZE = (100, 30)
+# The 4-pane view splits the same width four ways, so it needs more room
+# before columns start truncating ("Demo Grand Pian", "singl").
+WIDE = (110, 30)
 
 _GEN_SAMPLE = 38
 _VOICE_SELECT = 225
@@ -97,10 +100,10 @@ async def _settle(pilot, tries=200, step=0.02):
     raise AssertionError("app never settled")
 
 
-async def shoot(name, setup, *, compact=True, bridge=None):
+async def shoot(name, setup, *, compact=True, bridge=None, size=SIZE):
     app = EosedApp(bridge or DemoBridge(), allow_write=True, demo=True)
     app.compact_view = compact
-    async with app.run_test(size=SIZE) as pilot:
+    async with app.run_test(size=size) as pilot:
         await _settle(pilot)
         await setup(pilot, app)
         await pilot.pause()
@@ -119,7 +122,7 @@ async def select_first_preset(pilot, app):
 
 
 async def main():
-    print(f"capturing to {OUT} at {SIZE[0]}x{SIZE[1]}")
+    print(f"capturing to {OUT} at {SIZE[0]}x{SIZE[1]} (4-pane at {WIDE[0]}x{WIDE[1]})")
 
     await shoot("compact_view", select_first_preset)
 
@@ -131,7 +134,7 @@ async def main():
         await pilot.press("enter")
         await _settle(pilot)
     await shoot("extended_view_voice", extended_voice, compact=False,
-                bridge=ShowcaseBridge())
+                bridge=ShowcaseBridge(), size=WIDE)
 
     async def edit_dialog(pilot, app):
         await select_first_preset(pilot, app)
