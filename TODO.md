@@ -26,7 +26,14 @@ sign-extended on read, and min/max/default were sign-extended
 into 0..-6384. Both fixed, and 12 genuinely mis-transcribed envelope ranges
 corrected in `eos/params.py`. Still untested live, deliberately: the
 Master/erase utilities (`71h`/`74h`/`75h`/`76h`), the device-global
-`master.*` parameters, and `E4_GEN_SAMPLE`.
+`master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
+
+**Re-verified against a full commercial bank (RESOLUTION_NOTES §19).** 990
+populated presets, 128MB of samples, 10121 reads: confirmed `E4_GEN_SAMPLE`
+has exactly two negative values (§18a), and caught a separate real bug —
+`_MAX_VOICE_SCAN`/`_MAX_ZONE_SCAN` were guesses (64/32) that real content
+overruns (94-voice drum kits, a 62-zone voice), silently truncating those
+presets with no error. Both raised to the protocol's own 256 ceiling.
 
 - Not actually blocked on `~/mididings_e4xt.py`: autodetect finds the real
   hardware send/receive ports directly (bypassing mididings' filter chain
@@ -108,8 +115,11 @@ are multisample sharing the same 3 samples.
 - **Voice** (`#voices`) — every voice of the selected preset (`V1`..`Vn`,
   1-based display / 0-based `VOICE_SELECT`), with a "single"/"multi (N)"
   zone hint derived by actually walking zones (see below), not by trusting
-  a count field. Not paged (a preset's voice count is expected to be
-  small; untested against a preset with a very large number of voices).
+  a count field. Not paged — which is now known to be a real question and
+  not a hypothetical: a commercial bank's drum kits have **94 voices**
+  (RESOLUTION_NOTES §19), so this pane renders 94 rows in one go. It works,
+  but the "voice count is expected to be small" assumption it was built on
+  is false, and paging (or at least a scroll hint) is worth revisiting.
 - **Parameters** (`#params`) — the selected voice's full `voice.*` group
   (146 params) if a voice is selected, else the preset's GLOBAL group (22
   params). Selecting/deselecting a voice (click a voice row, or `escape` to
@@ -307,8 +317,10 @@ why that field can't be trusted at all): a voice's own `E4_GEN_SAMPLE`
 (no zone selected) reads the spec's `0x3FFF` sentinel if and only if it's
 genuinely multisample; if so, zones are walked from 0 (`SAMPLE_ZONE_SELECT`)
 until one reads `E4_GEN_SAMPLE == 0`, empirically the clean, consistent
-signature of "past the real data" in every case tested — capped at 32 zones
-as a safety bound, not a trusted count.
+signature of "past the real data" in every case tested — capped at 256
+zones as a safety bound, not a trusted count (was 32, which real content
+overran: a commercial bank has a multisample voice with 62 zones — see
+RESOLUTION_NOTES §19).
 
 **Known perf caveat, not yet tuned:** selecting a preset walks *every* voice
 sequentially (a `VOICE_SELECT`/`SAMPLE_ZONE_SELECT` context switch + a
@@ -446,10 +458,11 @@ dropping `preset_num_voices` from every call site (`_load_preset_overview`,
 `_start_browse_voices`, the `u` scan) in favor of walking voice indices
 directly via `EosRemoteApp._voice_sample_info`, which now returns `None`
 to signal "stop" instead of trusting a count; capped at
-`_MAX_VOICE_SCAN = 64` as a safety bound, same non-trusted-count pattern
-as `_MAX_ZONE_SCAN`. `eos.bridge.EosBridge.preset_num_voices` now returns
+`_MAX_VOICE_SCAN = 256` as a safety bound, same non-trusted-count pattern
+as `_MAX_ZONE_SCAN` (was 64, and real drum kits run to 94 voices — the
+truncation was silent, see RESOLUTION_NOTES §19). `eos.bridge.EosBridge.preset_num_voices` now returns
 the raw wire value unmodified (kept for API completeness only, like
-`voice_num_szones`); `DemoBridge` updated to answer `0x3FFE` for any
+`voice_num_szones`); `DemoBridge` updated to answer `-2` for any
 non-zero `VOICE_SELECT` so demo presets (all single-voice) still walk
 correctly. Full writeup: RESOLUTION_NOTES §12. This also explains the
 early-stop false trigger above — presets that genuinely had voices were

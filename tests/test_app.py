@@ -12,7 +12,7 @@ from textual.widgets import Header
 from eos import params as p
 from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
-    EosRemoteApp)
+    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _voice_sample_info, EosRemoteApp)
 from eosed.demo import DemoBridge
 
 
@@ -1399,6 +1399,82 @@ async def test_page_down_up_step_through_the_bank():
         await pilot.pause()
         assert "already at the first page" in app.last_status
         assert app._bank_state("preset").window_start == 0
+
+
+def test_voice_and_zone_caps_cover_the_protocol_ceiling():
+    """VOICE_SELECT and SAMPLE_ZONE_SELECT are 0..255 in the spec and in the
+    device's own 03h/04h reply, and the EOS 4.0 manual states a preset may
+    have up to 256 voices -- so anything less silently truncates real content.
+
+    These were 64 and 32, and both were too small: a commercial bank has drum
+    kits of 94 voices and a multisample voice of 62 zones (RESOLUTION_NOTES
+    §19). Truncation is invisible at runtime -- the walk just stops early and
+    the missing voices look like they do not exist.
+    """
+    assert _MAX_VOICE_SCAN >= 256
+    assert _MAX_ZONE_SCAN >= 256
+
+
+def test_voice_walk_reaches_a_deep_drum_kit():
+    """A 94-voice preset (the deepest found on real hardware) must walk all
+    the way, not stop at the old 64 cap."""
+    deepest = 94
+
+    class DeepKit(DemoBridge):
+        def get_parameter(self, param_id, *, timeout=None):
+            from eos import params as p
+            if param_id != p.lookup("E4_GEN_SAMPLE").id:
+                return 0
+            voice = getattr(self, "_voice", 0)
+            zone = getattr(self, "_zone", None)
+            if zone is not None:
+                return 0                      # single-sample voices here
+            return -2 if voice >= deepest else 100 + voice
+
+        def set_parameter(self, param_id, value):
+            from eos import params as p
+            if param_id == p.lookup("VOICE_SELECT").id:
+                self._voice, self._zone = value, None
+            elif param_id == p.lookup("SAMPLE_ZONE_SELECT").id:
+                self._zone = value
+
+    bridge = DeepKit()
+    walked = []
+    for voice in range(_MAX_VOICE_SCAN):
+        info = _voice_sample_info(bridge, 0, voice)
+        if info is None:
+            break
+        walked.append(info[1][0])
+
+    assert len(walked) == deepest
+    assert walked[-1] == 100 + deepest - 1     # the last voice really was read
+
+
+def test_zone_walk_reaches_a_62_zone_voice():
+    """The deepest multisample voice found on real hardware had 62 zones,
+    nearly double the old 32 cap."""
+    zones = 62
+
+    class WideVoice(DemoBridge):
+        def get_parameter(self, param_id, *, timeout=None):
+            from eos import params as p
+            if param_id != p.lookup("E4_GEN_SAMPLE").id:
+                return 0
+            zone = getattr(self, "_zone", None)
+            if zone is None:
+                return -1                     # multisample at voice level
+            return 0 if zone >= zones else 200 + zone
+
+        def set_parameter(self, param_id, value):
+            from eos import params as p
+            if param_id == p.lookup("VOICE_SELECT").id:
+                self._voice, self._zone = value, None
+            elif param_id == p.lookup("SAMPLE_ZONE_SELECT").id:
+                self._zone = value
+
+    count, samples = _voice_sample_info(WideVoice(), 0, 0)
+    assert count == zones
+    assert len(samples) == zones and samples[-1] == 200 + zones - 1
 
 
 async def test_samples_pane_aggregates_across_voices_and_dedups():

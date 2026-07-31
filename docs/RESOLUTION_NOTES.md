@@ -1135,3 +1135,53 @@ and immediately after the change, and the two captures are **byte-identical**
 — 152 voices, 429 zones, same structure both times. Tests alone would not
 have caught a sentinel-domain mismatch against real hardware, since
 `DemoBridge` and the test fakes bypass `_signed_value` entirely.
+
+## §19 — The voice/zone walk caps were guesses, and both were too small for real content (resolved, verified live)
+
+Found while re-testing §18a against a **full commercial bank** (128MB of
+samples, 990 populated presets, P000-P989) rather than the sparse
+user-built bank the earlier work used.
+
+`_MAX_VOICE_SCAN = 64` and `_MAX_ZONE_SCAN = 32` were introduced (§11/§12)
+as "safety bounds, not trusted counts" — correct in principle, but the
+*numbers* were picked to be comfortably larger than anything then observed,
+which is a guess dressed as a bound. Real content overruns both:
+
+| preset | name | voices |
+|---|---|---|
+| P111 | `drum kit` | **94** |
+| P113 | `drum kit` | 87 |
+| P005 | `drum kit` | 81 |
+| P112 | `drum kit` | 76 |
+
+and the deepest multisample voice found (P041 V0, P040 V0/V1) has **62
+zones**, nearly double the 32 cap. 120 presets on this bank have 8+ voices.
+
+**Why this was invisible.** Truncation produces no error and no warning: the
+walk simply stops, and voices past the cap look exactly like voices that do
+not exist. The Voice pane showed 64 rows for a 94-voice kit, and — worse,
+because it is silent and wrong rather than merely incomplete — the Samples
+"used by" aggregation omitted every sample referenced *only* by voices 64+.
+The same applies to the `u` reverse-lookup sweep, which would report "this
+sample is used by no preset" for a sample that only a deep kit's later
+voices play.
+
+**The bound to use is the protocol's own, not a bigger guess.**
+`VOICE_SELECT` and `SAMPLE_ZONE_SELECT` are both 0..255 in the spec table
+*and* in the device's own 03h/04h reply (checked live), and the EOS 4.0
+Software Manual states it outright in its preset overview: **"Each preset can
+have up to 256 voices."** Both caps are now 256. Raising them costs nothing
+for ordinary presets — every walk stops at its own sentinel long before the
+cap — and the presets that do pay are exactly the ones that were being
+silently truncated.
+
+**Verified live** through `eosed.app._voice_sample_info` itself: P005/P111/
+P112/P113 now walk to 81/94/76/87 voices and 82/79/55/60 distinct samples,
+about 5s each at a 25ms send gap.
+
+**Perf note, now with real numbers instead of the speculation TODO.md
+carried:** a deep kit costs ~5s to walk at 25ms and roughly 20s at 100ms,
+since every voice is a sequential `VOICE_SELECT` + read round trip. That is
+the cost of correctness here, but it is also the strongest argument yet for
+the §17 pipelining work — this walk has the same "one request, block for
+reply" shape the name catalogs do.

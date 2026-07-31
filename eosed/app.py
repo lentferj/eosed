@@ -201,8 +201,24 @@ _EMPTY_SAMPLE_NAME = "Empty Sample"
 # a full 287-preset bank, walking past every sentinel (RESOLUTION_NOTES §18a).
 _MULTISAMPLE_SENTINEL = -1  # spec: voice-level E4_GEN_SAMPLE == this means multisample
 _NO_SUCH_VOICE_MARKER = -2  # empirically: this voice index does not exist on this preset
-_MAX_ZONE_SCAN = 32  # safety cap only — see the docstring below
-_MAX_VOICE_SCAN = 64  # safety cap only — preset_num_voices cannot be trusted at all, see below
+# Both are safety bounds, not trusted counts (preset_num_voices/voice_num_
+# szones cannot be trusted at all — §11/§12). They are set to the protocol's
+# own ceiling: VOICE_SELECT and SAMPLE_ZONE_SELECT are both 0..255 in the
+# spec AND in the device's own 03h/04h reply, and the EOS 4.0 manual states
+# "Each preset can have up to 256 voices".
+#
+# They used to be 64 and 32, which were guesses, and both were too small for
+# real content — live-caught on a commercial bank (RESOLUTION_NOTES §19):
+# drum kits run to 94 voices ("drum kit"), and a multisample voice was
+# found with 62 zones. The old caps silently truncated those presets: the
+# Voice pane stopped at 64 and the Samples "used by" aggregation missed every
+# sample that only voices 64+ referenced, with nothing on screen to say so.
+#
+# Raising them costs nothing for ordinary presets, since every walk stops at
+# its own sentinel long before the cap; only genuinely deep presets pay, and
+# for those the extra round trips are the whole point.
+_MAX_ZONE_SCAN = 256
+_MAX_VOICE_SCAN = 256
 
 
 @dataclass(frozen=True)
