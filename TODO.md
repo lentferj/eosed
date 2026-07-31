@@ -24,9 +24,12 @@ fell out of it, both about signedness (see §18) — values were never
 sign-extended on read, and min/max/default were sign-extended
 *unconditionally*, which corrupted `E4_VOICE_DELAY`'s real 0..10000 range
 into 0..-6384. Both fixed, and 12 genuinely mis-transcribed envelope ranges
-corrected in `eos/params.py`. Still untested live, deliberately: the
-Master/erase utilities (`71h`/`74h`/`75h`/`76h`), the device-global
-`master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
+corrected in `eos/params.py`. **Preset Delete (`71h`) is now confirmed live
+too** — fired by hand from the arm-then-fire modal against a 3-preset test
+bank, deleting exactly its target, freeing preset RAM (8 KB → 5 KB), sparing
+samples, and **not compacting** the bank (RESOLUTION_NOTES §21a). Still
+untested live: the three Erase utilities (`74h`/`75h`/`76h`), the
+device-global `master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
 
 **Re-verified against a full commercial bank (RESOLUTION_NOTES §19).** 990
 populated presets, 128MB of samples, 10121 reads: confirmed `E4_GEN_SAMPLE`

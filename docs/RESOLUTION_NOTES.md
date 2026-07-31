@@ -1336,12 +1336,12 @@ adequate for the original question (finding negative sentinel values) is not
 automatically adequate for a later one (counting voices). Worth checking what
 a dataset's collection cap was before computing totals from it.
 
-## §21 — Master/erase actions: verification plan (open, never fired at hardware)
+## §21 — Master/erase actions: verification plan (Preset Delete RESOLVED, the three Erase utilities still open)
 
-The four destructive utilities are the last unverified commands in this
+The four destructive utilities were the last unverified commands in this
 project: Preset Delete (`71h`), Erase RAM Bank (`74h`), Erase All RAM Presets
-(`75h`), Erase All RAM Samples (`76h`). They have never been sent to a real
-device. The app reaches them only through a modal arm-then-fire screen, never
+(`75h`), Erase All RAM Samples (`76h`). **`71h` is now confirmed live — see
+§21a. The other three have still never been sent to a real device.** The app reaches them only through a modal arm-then-fire screen, never
 a single keypress, and `--allow-write`/`w` gates them on top of that.
 
 ### Established behaviour: EOS does not compact
@@ -1404,3 +1404,47 @@ catalogs before each step, so verification is a diff rather than a judgement.
 **Do not script this.** Per the project's own rule, a Master action is fired
 by hand, from the TUI's arm-then-fire modal, with the bank known-reloadable —
 which also exercises the real user path rather than just the wire command.
+
+
+### §21a — Preset Delete (`71h`) confirmed live, 2026-07-31
+
+The first Master action ever fired at real hardware. Driven **by hand** from
+the TUI's arm-then-fire modal (`--allow-write`, select preset, `m`, `1` to
+arm, `Enter` to fire) rather than from a script, per this section's own rule;
+the author operated it, and the before/after state was captured over SysEx
+from a separate session with the app closed, since only one session may hold
+the MIDI port.
+
+Bank: three presets and two samples in 3.5 MB — deliberately tiny, per the
+sizing argument above.
+
+| | before | after |
+|---|---|---|
+| P000 | `P_VCUT`, 12 voices | `P_VCUT`, 12 voices |
+| P001 | `P_VGAIN`, 7 voices | **gone** |
+| P002 | `P_VPAN`, 7 voices | `P_VPAN`, 7 voices — **same slot** |
+| samples | S001, S002 | S001, S002 |
+| preset RAM | 8 KB | **5 KB** |
+| sample RAM | 3.49 MB | 3.49 MB |
+
+**Findings:**
+
+* Deletes exactly the selected preset, leaving the others untouched.
+* **No compaction, confirmed for the remote path.** P002 kept its number and
+  name. This was the one genuinely open question: the non-compacting
+  behaviour was already established from front-panel use, but "a remote
+  `71h` behaves like a panel delete" was an assumption. It does.
+* Preset RAM actually drops (8 KB → 5 KB), so this frees storage rather than
+  merely blanking a name.
+* Samples and sample RAM are untouched, as expected for a preset-scoped
+  delete.
+
+**Why the bank's names mattered more than its structure:** P001 and P002 were
+both 7-voice presets, so voice count alone could not have separated "did not
+compact" from "compacted, and the survivor happens to look similar". The
+distinct names are what made the result unambiguous — worth repeating when
+testing the three Erase utilities.
+
+This also exercised the full user path end to end, not just the wire command:
+the `--allow-write` gate, the modal's arm-then-fire two-keypress requirement,
+and the command itself.

@@ -65,10 +65,14 @@ Parameter edits and renames have been exercised against a real E4XT Ultra
 across ten scratch presets: every preset-scoped parameter written, read
 back, then re-read after selecting away and returning — 3340 comparisons
 and 20 renames, all exact (`docs/RESOLUTION_NOTES.md` §18). That is also
-what caught two real signedness bugs in the *read* path. **Every Master
-action remains unverified against real hardware**, as does writing
+what caught two real signedness bugs in the *read* path. **The three Erase
+utilities remain unverified against real hardware**, as does writing
 `E4_GEN_SAMPLE`, and writes still default to **disabled** (`--allow-write`,
-or `w` at runtime) against real hardware. The E4/EOS
+or `w` at runtime) against real hardware. **Preset Delete (`71h`) has since
+been confirmed live** — fired by hand from the arm-then-fire modal, it
+deleted exactly its target, freed preset RAM, spared samples, and did not
+renumber the surviving presets (`docs/RESOLUTION_NOTES.md` §21a). The three
+Erase utilities remain unfired. The E4/EOS
 protocol also has several **one-shot, unconfirmed destructive**
 operations (Preset Delete, Erase RAM Bank/Presets/Samples) with no
 device-side "are you sure" — none are ever bound to a single keypress in
