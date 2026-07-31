@@ -100,7 +100,7 @@ display"), not a mirror of the existing one.
 A **second, undocumented** SysEx dialect exists for that: `F0 18 7F 00 00
 <cmd> … F7` (note: device id fixed at `00`/`7F`, not the `21h`-family frame).
 Fragments published by third parties who reverse-engineered it from MIDI
-traffic between Ray Bellis's browser tool (<https://www.emu.tools/e-remote/>)
+traffic between Ray Bellis's browser tool (<https://emu.tools>)
 and real hardware
 (<https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/>):
 

@@ -540,7 +540,7 @@ on each is very different — keep the distinction sharp:
    `eos/` and `eoscli`/`eosed` implement.**
 2. **The undocumented panel/remote-control protocol** — `F0 18 7F 00 00
    … F7`. What a tool like Ray Bellis's
-   [e-remote](https://www.emu.tools/e-remote/) uses to mirror the
+   [e-remote](https://emu.tools) uses to mirror the
    device's own LCD and inject front-panel button presses (the same
    *kind* of thing k2kremote does for the K2000). E-mu never published
    this one; only fragments are known publicly, and **eosed does not
