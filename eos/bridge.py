@@ -341,23 +341,48 @@ class ThrottledOut:
     Only ``0xF0``-leading messages are gapped; ordinary MIDI (which this
     protocol never sends, but a caller might for other reasons) passes
     straight through.
+
+    Two gaps, because the two kinds of send need different protection --
+    measured live, see docs/RESOLUTION_NOTES.md §19b:
+
+    * A **request** is followed by a blocking wait for its reply, so the
+      round trip already separates it from the next send and the gap is
+      nearly redundant. Dropping it to 5ms changed nothing but latency.
+    * A **write** (Parameter Edit, naming, the destructive utilities) is
+      fire-and-forget. ``set_parameters`` emits up to 42 edits per frame and
+      several frames back to back with *only* this gap between them and no
+      reply to pace against, so it is the only thing standing between us and
+      an overrun input buffer -- and the failure mode is silent, since a lost
+      edit raises nothing and is found only by reading back.
+
+    So ``write_gap`` should be the conservative one and ``gap`` may be cut.
+    ``write_gap`` defaults to ``gap``, i.e. the single-gap behaviour this
+    class had before, unless a caller asks for the split.
+
+    The gap is applied as time owed *after* a send -- how long the device is
+    given to digest what it was just handed -- so the wait before any send is
+    determined by whatever preceded it, not by what is about to go out.
     """
 
-    def __init__(self, port: rtmidi.MidiOut, gap: float = SEND_GAP):
+    def __init__(self, port: rtmidi.MidiOut, gap: float = SEND_GAP, *,
+                 write_gap: Optional[float] = None):
         self._port = port
         self._gap = gap
+        self._write_gap = gap if write_gap is None else write_gap
         self._last = 0.0
+        self._owed = 0.0
 
-    def send_message(self, message) -> None:
+    def send_message(self, message, *, write: bool = False) -> None:
         is_sysex = len(message) > 0 and message[0] == 0xF0
         if not is_sysex:
             self._port.send_message(message)
             return
-        wait = self._gap - (time.time() - self._last)
+        wait = self._owed - (time.time() - self._last)
         if wait > 0:
             time.sleep(wait)
         self._port.send_message(message)
         self._last = time.time()
+        self._owed = self._write_gap if write else self._gap
 
     def __getattr__(self, name):
         return getattr(self._port, name)
@@ -434,15 +459,20 @@ class EosBridge:
     # -- constructors ---------------------------------------------------
     @classmethod
     def standard(cls, port_name: str, *, gap: float = SEND_GAP,
+                 write_gap: Optional[float] = None,
                  device_id: int = DEFAULT_DEVICE_ID,
                  timeout: float = DEFAULT_TIMEOUT) -> "EosBridge":
-        """Connect over a single bidirectional port (the portable default)."""
-        out = ThrottledOut(_open_out(port_name), gap=gap)
+        """Connect over a single bidirectional port (the portable default).
+
+        ``write_gap`` defaults to ``gap``; see :class:`ThrottledOut` for why
+        the two may reasonably differ."""
+        out = ThrottledOut(_open_out(port_name), gap=gap, write_gap=write_gap)
         in_port = _open_in(port_name)
         return cls(out, in_port, f"standard:{port_name}", device_id=device_id, timeout=timeout)
 
     @classmethod
-    def autodetect(cls, *, gap: float = SEND_GAP, device_id: int = DEFAULT_DEVICE_ID,
+    def autodetect(cls, *, gap: float = SEND_GAP, write_gap: Optional[float] = None,
+                   device_id: int = DEFAULT_DEVICE_ID,
                    timeout: float = AUTODETECT_TIMEOUT,
                    on_try: Optional[Callable[[str], None]] = None,
                    config_path: Optional[str] = DEFAULT_CONFIG_PATH) -> "EosBridge":
@@ -472,7 +502,8 @@ class EosBridge:
                 data = _try_port_pair(cached_send, cached_recv, timeout)
                 if data is not None:
                     reply = m.parse_device_inquiry_reply(data)
-                    bridge = cls._connect(cached_send, cached_recv, reply, gap=gap, timeout=timeout)
+                    bridge = cls._connect(cached_send, cached_recv, reply, gap=gap,
+                                         write_gap=write_gap, timeout=timeout)
                     save_last_ports(cached_send, cached_recv, config_path)
                     return bridge
 
@@ -535,7 +566,8 @@ class EosBridge:
                 if found is not None:
                     recv_name, data = found
                     reply = m.parse_device_inquiry_reply(data)
-                    bridge = cls._connect(out_name, recv_name, reply, gap=gap, timeout=timeout)
+                    bridge = cls._connect(out_name, recv_name, reply, gap=gap,
+                                     write_gap=write_gap, timeout=timeout)
                     if config_path is not None:
                         save_last_ports(out_name, recv_name, config_path)
                     return bridge
@@ -551,8 +583,9 @@ class EosBridge:
 
     @classmethod
     def _connect(cls, send_name: str, recv_name: str, reply: m.DeviceInquiryReply, *,
-                 gap: float, timeout: float) -> "EosBridge":
-        out = ThrottledOut(_open_out(send_name), gap=gap)
+                 gap: float, timeout: float,
+                 write_gap: Optional[float] = None) -> "EosBridge":
+        out = ThrottledOut(_open_out(send_name), gap=gap, write_gap=write_gap)
         in_port = MultiIn(recv_name, exact=True)
         model = reply.model or f"unknown model {reply.member_code}"
         bridge = cls(out, in_port, f"auto:{send_name} -> {recv_name} ({model} rev {reply.revision})",
@@ -561,8 +594,11 @@ class EosBridge:
         return bridge
 
     # -- low-level send/receive ------------------------------------------
-    def _send(self, frame: bytes) -> None:
-        self.midi_out.send_message(list(frame))
+    def _send(self, frame: bytes, *, write: bool = False) -> None:
+        """Send one frame. ``write=True`` marks a fire-and-forget write, which
+        `ThrottledOut` may gap more conservatively than a request whose reply
+        we are about to block on anyway -- see that class's docstring."""
+        self.midi_out.send_message(list(frame), write=write)
 
     def _drain(self) -> None:
         while self.midi_in.get_message() is not None:
@@ -659,7 +695,7 @@ class EosBridge:
         """Write one parameter. Fire-and-forget — the spec defines no reply
         to a Parameter Value Edit."""
         edit = m.ParameterEdit(values=[(param_id, value & 0x3FFF)], device_id=self.device_id)
-        self._send(edit.encode())
+        self._send(edit.encode(), write=True)
 
     def set_parameters(self, values) -> None:
         """Write several (param_id, value) pairs in as few messages as the
@@ -669,7 +705,7 @@ class EosBridge:
             chunk = values[start:start + m.MAX_PARAMETER_EDITS]
             edit = m.ParameterEdit(
                 values=[(pid, val & 0x3FFF) for pid, val in chunk], device_id=self.device_id)
-            self._send(edit.encode())
+            self._send(edit.encode(), write=True)
 
     # -- naming ----------------------------------------------------------
     def get_preset_name(self, preset: int, *, timeout: Optional[float] = None) -> str:
@@ -678,7 +714,7 @@ class EosBridge:
         return m.PresetName.decode(reply).name
 
     def set_preset_name(self, preset: int, name: str) -> None:
-        self._send(m.PresetName(preset=preset, name=name, device_id=self.device_id).encode())
+        self._send(m.PresetName(preset=preset, name=name, device_id=self.device_id).encode(), write=True)
 
     def get_sample_name(self, sample: int, *, timeout: Optional[float] = None) -> str:
         req = m.SampleNameRequest(sample=sample, device_id=self.device_id)
@@ -686,7 +722,7 @@ class EosBridge:
         return m.SampleName.decode(reply).name
 
     def set_sample_name(self, sample: int, name: str) -> None:
-        self._send(m.SampleName(sample=sample, name=name, device_id=self.device_id).encode())
+        self._send(m.SampleName(sample=sample, name=name, device_id=self.device_id).encode(), write=True)
 
     # -- memory / configuration -------------------------------------------
     def preset_memory(self, *, timeout: Optional[float] = None) -> m.PresetMemoryResponse:
@@ -940,19 +976,19 @@ class EosBridge:
     # a single keypress — always an explicit arm-then-fire confirmation.
     def delete_preset(self, preset: int) -> None:
         """DESTRUCTIVE, one-shot, no device-side confirmation."""
-        self._send(m.PresetDelete(preset=preset, device_id=self.device_id).encode())
+        self._send(m.PresetDelete(preset=preset, device_id=self.device_id).encode(), write=True)
 
     def erase_ram_bank(self) -> None:
         """DESTRUCTIVE, one-shot, no device-side confirmation."""
-        self._send(m.EraseRamBank(device_id=self.device_id).encode())
+        self._send(m.EraseRamBank(device_id=self.device_id).encode(), write=True)
 
     def erase_all_ram_presets(self) -> None:
         """DESTRUCTIVE, one-shot, no device-side confirmation."""
-        self._send(m.EraseAllRamPresets(device_id=self.device_id).encode())
+        self._send(m.EraseAllRamPresets(device_id=self.device_id).encode(), write=True)
 
     def erase_all_ram_samples(self) -> None:
         """DESTRUCTIVE, one-shot, no device-side confirmation."""
-        self._send(m.EraseAllRamSamples(device_id=self.device_id).encode())
+        self._send(m.EraseAllRamSamples(device_id=self.device_id).encode(), write=True)
 
     # -- plain MIDI performance messages (not the editor SysEx protocol) -----
     # PRESET_SELECT (id 223) is spec-stated to be "independent of the front

@@ -1223,3 +1223,54 @@ this device on this interface, for both short and sustained load. Not
 changed as the default in `eos/bridge.py` — §15's crash is still not
 root-caused, and there is no reason to spend the safety margin globally when
 the callers that care can pass `gap=`.
+
+## §19b — Read and write send gaps are now separate, because they protect against different things (resolved)
+
+Pushing the single `SEND_GAP` down (§19a) showed diminishing returns and,
+more usefully, showed *why*: the gap is doing two unrelated jobs, and only
+one of them still matters.
+
+**Measured, 25ms → 10ms → 5ms, on a full commercial bank:**
+
+| gap | 40-preset read | 6 × 145-param write bursts | data | lost writes |
+|---|---|---|---|---|
+| 25ms | 8.4s | 5.8s | reference | 0 |
+| 10ms | 6.2s | 5.6s | identical | 0 |
+| 5ms | 5.8s | 5.5s | identical | 0 |
+
+Cutting the gap 5× bought 31% on reads and essentially nothing on writes.
+The floor is not our pacing: MIDI is 31250 baud ≈ 0.32ms/byte, so a batched
+42-edit frame (~180 bytes) occupies **~58ms of wire** no matter what, and
+what remains is device round-trip latency.
+
+**The asymmetry, which runs opposite to intuition.** The useful axis is not
+read-vs-write but *"is this send followed by a blocking wait for its reply?"*
+
+* A **request** is. The round trip already separates it from the next send,
+  so its gap is nearly redundant — which is exactly why 5ms was harmless.
+* A **write** is not. `set_parameters` emits up to 42 edits per frame and
+  several frames back to back with only the gap between them and nothing to
+  pace against. That gap is the sole protection against an overrun input
+  buffer, and its failure mode is **silent**: a lost edit raises nothing and
+  is found only by reading back.
+
+So the conservative gap belongs on writes, and reads — the overwhelming bulk
+of traffic in every sweep this app does — can be cut. `ThrottledOut` now
+takes `write_gap` alongside `gap`, applied as time owed *after* a send (how
+long the device gets to digest what it was handed), so a write's larger gap
+delays whatever follows it. `EosBridge._send(..., write=True)` marks the
+eight fire-and-forget sends: parameter edit(s), preset/sample naming, and the
+four destructive utilities. Dump ACK/NAK deliberately stay on the read gap —
+the device is streaming and pacing us there.
+
+**Verified live:** identical 40-preset read workload plus 4 write bursts, at
+a uniform 50ms vs a 5ms/50ms split — reads **12.4s → 9.4s** (24% faster),
+writes unchanged at 4.1s, zero lost edits either way.
+
+**Defaults deliberately unchanged.** `write_gap` defaults to `gap`, so
+nothing moves unless a caller asks. §15's crash is still not root-caused, and
+the sub-25ms figures have only ~20s of traffic behind them each, against
+~500s for 25ms — "not disproven", not validated. The split adds the
+*capability* to spend the margin where it is provably safe (reads) while
+keeping it where the failure would be silent (writes); adopting a lower
+default is a separate decision needing a sustained soak first.

@@ -68,6 +68,57 @@ def test_throttle_enforces_gap_for_sysex():
     assert time.time() - start >= 0.05
 
 
+def test_write_gap_defaults_to_the_read_gap():
+    """Omitting write_gap must reproduce the single-gap behaviour exactly."""
+    out = ThrottledOut(FakeOut(), gap=0.05)
+    start = time.time()
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x01, 0xF7], write=True)
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x01, 0xF7], write=True)
+    assert time.time() - start >= 0.05
+
+
+def test_write_gap_applies_after_a_write_not_after_a_read():
+    """The gap is time owed *after* a send -- how long the device gets to
+    digest what it was just handed -- so a write's larger gap must delay
+    whatever follows it, while a read keeps the small one."""
+    out = ThrottledOut(FakeOut(), gap=0.0, write_gap=0.20)
+
+    start = time.time()                      # read then read: no write gap owed
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
+    assert time.time() - start < 0.10
+
+    start = time.time()                      # write then anything: write gap owed
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x01, 0xF7], write=True)
+    out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
+    assert time.time() - start >= 0.20
+
+
+def test_bridge_flags_only_fire_and_forget_sends_as_writes():
+    """Requests block for a reply, so the round trip paces them; writes have
+    nothing to pace against and must be the ones marked."""
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PARAMETER_EDIT:
+            return None                       # a write: no reply exists
+        return m.ParameterEdit(values=[(1, 5)]).encode()
+
+    bridge = _bridge_with(handler)
+    device = bridge.midi_out
+
+    bridge.get_parameter(1)
+    assert device.writes[-1] is False, "a parameter request is not a write"
+
+    bridge.set_parameter(1, 5)
+    assert device.writes[-1] is True, "a parameter edit is a write"
+
+    bridge.set_preset_name(3, "x")
+    assert device.writes[-1] is True, "a rename is a write"
+
+    bridge.delete_preset(3)
+    assert device.writes[-1] is True, "a destructive utility is a write"
+
+
 def test_non_sysex_is_not_throttled():
     out = ThrottledOut(FakeOut(), gap=1.0)
     start = time.time()
@@ -364,11 +415,13 @@ class FakeDevice:
     def __init__(self, handler):
         self.handler = handler
         self.sent = []
+        self.writes = []      # per-send: was it flagged as a fire-and-forget write?
         self.inbox = []
 
-    def send_message(self, message):
+    def send_message(self, message, *, write: bool = False):
         frame = bytes(message)
         self.sent.append(frame)
+        self.writes.append(write)
         reply = self.handler(frame)
         if reply is None:
             return
