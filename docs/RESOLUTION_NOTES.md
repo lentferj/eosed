@@ -1185,3 +1185,25 @@ since every voice is a sequential `VOICE_SELECT` + read round trip. That is
 the cost of correctness here, but it is also the strongest argument yet for
 the §17 pipelining work — this walk has the same "one request, block for
 reply" shape the name catalogs do.
+
+### §19a — 25ms send gap, tested
+
+`SEND_GAP` has been 0.05 with the module docstring admitting it was
+"conservative; NOT reverse-engineered for EOS". Tried 0.025 against the real
+device, A/B against the known-good 0.1, separating the two risk profiles:
+
+* **reads are self-pacing** — we block for each reply, so the gap only adds
+  latency. 40 presets: 20.4s at 100ms vs **8.4s at 25ms**, zero errors, and
+  the two runs returned byte-identical data.
+* **writes are not** — `set_parameters` fires frames back to back with only
+  the gap between them and no reply to throttle against, so this is where a
+  short gap would overrun the device's input buffer, losing edits silently.
+  3 bursts x 145 voice parameters, read back each time: **zero lost or wrong
+  at either gap**, and the original values restored cleanly afterwards.
+
+Then sustained: the full 990-preset walk above ran ~500s of continuous
+traffic at 25ms with no errors and no §15-style crash. So 25ms is safe for
+this device on this interface, for both short and sustained load. Not
+changed as the default in `eos/bridge.py` — §15's crash is still not
+root-caused, and there is no reason to spend the safety margin globally when
+the callers that care can pass `gap=`.

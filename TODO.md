@@ -35,6 +35,15 @@ has exactly two negative values (§18a), and caught a separate real bug —
 overruns (94-voice drum kits, a 62-zone voice), silently truncating those
 presets with no error. Both raised to the protocol's own 256 ceiling.
 
+**A 25ms send gap has been tested and holds (RESOLUTION_NOTES §19a)** —
+A/B'd against the known-good 100ms on both risk profiles (self-pacing
+reads, and the write bursts that have no reply to throttle against), then
+sustained over ~500s of continuous traffic with no errors and no §15-style
+crash. **Deliberately not adopted as the `SEND_GAP` default**: §15's crash
+is still not root-caused, so there is no reason to spend that safety margin
+globally when a caller that wants the speed can pass `gap=`. Worth
+revisiting if §15 is ever closed.
+
 - Not actually blocked on `~/mididings_e4xt.py`: autodetect finds the real
   hardware send/receive ports directly (bypassing mididings' filter chain
   entirely) rather than routing through it — see RESOLUTION_NOTES §7. No
