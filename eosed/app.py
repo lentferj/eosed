@@ -307,6 +307,19 @@ class _BankState:
         self.cache: Dict[int, str] = {}
 
 
+def _slot_label(kind: str, number: int) -> str:
+    """A preset/sample slot in the device's own notation: P000..P999 and
+    S000..S999.
+
+    This is how the E4XT's front panel labels them, how the EOS manual refers
+    to them, and how this project's own docs already do ("P075", "S195"), so
+    the pane matching it means one less mental translation when comparing the
+    screen against the hardware. The Voice pane already did the same thing
+    with "V1"/"V2". Display only -- every row *key* stays the plain number.
+    """
+    return f"{'S' if kind == 'sample' else 'P'}{number:03d}"
+
+
 def _voice_sample_info(bridge, preset: int, voice: int) -> Optional[Tuple[int, List[int]]]:
     """Best-effort: (zone count, [raw sample number(s)]) for one voice, or
     ``None`` if this voice index doesn't exist on this preset at all.
@@ -1210,7 +1223,8 @@ class EosedApp(App):
         table = self.query_one("#presets", _FillWidthDataTable)
         table.clear()
         for number in range(start, start + window):
-            table.add_row(str(number), names.get(number, ""), key=str(number))
+            table.add_row(_slot_label(self.bank, number), names.get(number, ""),
+                          key=str(number))
         table.call_after_refresh(table._stretch_last_column)
         # Rebuilding the table resets the cursor to row 0 (the window's
         # first item) — without this, "goto 125" would visibly land on
@@ -1283,7 +1297,8 @@ class EosedApp(App):
             return  # switched banks while this was loading -- cache is still updated for later
         table = self.query_one("#presets", _FillWidthDataTable)
         for number in extend_range:
-            table.add_row(str(number), names.get(number, ""), key=str(number))
+            table.add_row(_slot_label(self.bank, number), names.get(number, ""),
+                          key=str(number))
         table.call_after_refresh(table._stretch_last_column)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -1318,7 +1333,8 @@ class EosedApp(App):
         self._current_param_label = f"sample {sample}"
         table = self.query_one("#params", _FillWidthDataTable)
         table.clear()
-        table.add_row("—", "Sample number", str(sample), "", key="sample_number")
+        table.add_row("—", "Sample number", _slot_label("sample", sample), "",
+                      key="sample_number")
         table.add_row("—", "Name", name, "", key="sample_name")
         table.call_after_refresh(table._stretch_last_column)
         self.query_one("#samples", _FillWidthDataTable).clear()
@@ -1748,7 +1764,8 @@ class EosedApp(App):
         table = self.query_one("#samples", _FillWidthDataTable)
         table.clear()
         for number, name, voices_label in rows:
-            table.add_row(str(number), name, voices_label, key=str(number))
+            table.add_row(_slot_label("sample", number), name, voices_label,
+                          key=str(number))
         table.call_after_refresh(table._stretch_last_column)
 
     # -- reverse lookup: which presets use this sample (opt-in, expensive) --
@@ -1797,7 +1814,8 @@ class EosedApp(App):
         samples_table = self.query_one("#samples", _FillWidthDataTable)
         samples_table.clear()
         for preset, name in matches:
-            samples_table.add_row(str(preset), name, "", key=str(preset))
+            samples_table.add_row(_slot_label("preset", preset), name, "",
+                                  key=str(preset))
         samples_table.call_after_refresh(samples_table._stretch_last_column)
 
         # #samples is hidden in compact view (see the "compact" CSS class)
@@ -1810,7 +1828,8 @@ class EosedApp(App):
         params_table = self.query_one("#params", _FillWidthDataTable)
         params_table.clear()
         for preset, name in matches:
-            params_table.add_row("—", f"preset {preset}", name, "", key=f"usage_{preset}")
+            params_table.add_row("—", _slot_label("preset", preset), name, "",
+                                 key=f"usage_{preset}")
         params_table.call_after_refresh(params_table._stretch_last_column)
 
         where = ", ".join(f"{preset} {name!r}" for preset, name in matches[:5])
@@ -2146,7 +2165,10 @@ class EosedApp(App):
             # Aligned form here specifically: this is the one place values are
             # read as a *column*, so the sign goes outside the digits.
             display = "" if value is None else p.describe_value_aligned(param, value)
-            table.add_row(str(pid), param.name, display, param.unit or "", key=str(pid))
+            # Right-aligned: ids run 0..271, and a ragged left edge under a
+            # column of names reads as noise.
+            table.add_row(f"{pid:>3}", param.name, display, param.unit or "",
+                          key=str(pid))
         table.call_after_refresh(table._stretch_last_column)
         self.set_status(f"preset {self.current_preset}: {label} parameters ({len(ids)})")
 

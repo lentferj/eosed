@@ -80,7 +80,7 @@ async def test_switch_to_samples_bank_and_back():
         await pilot.pause()
         assert app.bank == "sample"
         assert await _wait_for(pilot, lambda: "samples" in app.last_status)
-        assert table.get_row_at(0) == ["0", "Demo Kick"]
+        assert table.get_row_at(0) == ["S000", "Demo Kick"]
 
         await pilot.press("p")
         await pilot.pause()
@@ -145,7 +145,7 @@ async def test_selecting_sample_shows_info_in_params_pane_not_stale_data():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
         assert app._current_param_ids == []
         assert await _wait_for(pilot, lambda: params.row_count == 2)
-        assert params.get_row_at(0)[1:3] == ["Sample number", "0"]
+        assert params.get_row_at(0)[1:3] == ["Sample number", "S000"]
         assert params.get_row_at(1)[1:3] == ["Name", "Demo Kick"]
         assert "sample 0 'Demo Kick'" in app.last_status
 
@@ -247,7 +247,7 @@ async def test_find_sample_usage_scans_full_range_and_reports_matches():
         samples = app.query_one("#samples")
         assert samples.row_count == 3
         rows = {samples.get_row_at(i)[0]: samples.get_row_at(i)[1] for i in range(3)}
-        assert rows == {"5": "Foo", "130": "Bar", "269": "Baz"}
+        assert rows == {"P005": "Foo", "P130": "Bar", "P269": "Baz"}
 
 
 async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
@@ -585,7 +585,7 @@ async def test_find_sample_usage_shows_results_in_the_params_pane_too():
         params = app.query_one("#params")
         assert await _wait_for(pilot, lambda: params.row_count == 2)
         rows = {params.get_row_at(i)[1]: params.get_row_at(i)[2] for i in range(2)}
-        assert rows == {"preset 5": "Foo", "preset 130": "Bar"}
+        assert rows == {"P005": "Foo", "P130": "Bar"}
 
 
 async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
@@ -953,7 +953,7 @@ async def test_selecting_preset_loads_voices_global_params_and_samples():
         assert "voice(s)" in app.last_status
 
         assert await _wait_for(pilot, lambda: samples.row_count == 1)
-        assert samples.get_row_at(0) == ["0", "Demo Kick", "V1"]
+        assert samples.get_row_at(0) == ["S000", "Demo Kick", "V1"]
 
 
 async def test_selecting_voice_loads_voice_params_and_that_voices_samples():
@@ -969,7 +969,7 @@ async def test_selecting_voice_loads_voice_params_and_that_voices_samples():
 
         samples = app.query_one("#samples")
         assert await _wait_for(pilot, lambda: samples.row_count == 1)
-        assert samples.get_row_at(0) == ["0", "Demo Kick", "V1"]
+        assert samples.get_row_at(0) == ["S000", "Demo Kick", "V1"]
 
 
 async def test_escape_returns_to_preset_level_view():
@@ -1356,7 +1356,7 @@ async def test_goto_preset_jumps_window_and_highlights_the_right_row():
         await _goto(pilot, app, "125")
         assert await _wait_for(pilot, lambda: app.current_preset == 125)
         assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == expected_start)
-        assert await _wait_for(pilot, lambda: presets.get_row_at(presets.cursor_row) == ["125", ""])
+        assert await _wait_for(pilot, lambda: presets.get_row_at(presets.cursor_row) == ["P125", ""])
         assert presets.cursor_row == 125 - expected_start
 
 
@@ -1485,8 +1485,8 @@ async def test_scrolling_near_bottom_of_page_extends_with_more_rows():
         assert await _wait_for(pilot, lambda: table.row_count > initial_count, tries=100)
         assert table.row_count == initial_count + BROWSER_EXTEND_CHUNK
         # The new rows must actually be usable, not placeholders.
-        assert table.get_row_at(table.row_count - 1) == [str(initial_count + BROWSER_EXTEND_CHUNK - 1),
-                                                         f"P{initial_count + BROWSER_EXTEND_CHUNK - 1}"]
+        last = initial_count + BROWSER_EXTEND_CHUNK - 1
+        assert table.get_row_at(table.row_count - 1) == [f"P{last:03d}", f"P{last}"]
 
 
 async def test_extend_reuses_cache_all_data_with_no_new_midi():
@@ -1530,7 +1530,7 @@ async def test_page_down_up_step_through_the_bank():
         await pilot.click("#presets")
         await pilot.press("pagedown")
         assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == window)
-        assert table.get_row_at(0) == [str(window), f"P{window}"]
+        assert table.get_row_at(0) == [f"P{window:03d}", f"P{window}"]
 
         await pilot.press("pageup")
         assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == 0)
@@ -1665,8 +1665,8 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
         samples = app.query_one("#samples")
         assert await _wait_for(pilot, lambda: samples.row_count == 2)
         rows = {samples.get_row_at(i)[0]: samples.get_row_at(i) for i in range(samples.row_count)}
-        assert rows["7"] == ["7", "Shared Kick", "V1,V2,V3"]
-        assert rows["9"] == ["9", "Extra Snare", "V3"]
+        assert rows["S007"] == ["S007", "Shared Kick", "V1,V2,V3"]
+        assert rows["S009"] == ["S009", "Extra Snare", "V3"]
 
 
 async def test_view_defaults_to_compact_with_no_stored_preference():
