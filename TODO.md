@@ -205,21 +205,19 @@ indistinguishable from an empty slot and would quietly corrupt the very
 catalogs this is meant to speed up. Procedure, and why the voice walk is
 *not* a candidate for the same treatment, in RESOLUTION_NOTES §17.
 
-## Housekeeping (OPEN, none of it blocking)
+## Housekeeping
 
-- **No CI.** All 374 tests are synthetic and hardware-free, so a GitHub
-  Actions job would run them on every push. Worth having: the drift this
-  project keeps finding by hand (stale key tables, stale "unverified"
-  claims) is exactly what a green/red signal catches early.
-- **`pyproject.toml` has no `[project.urls]` or classifiers** — the repo is
-  public now, so both are worth filling in.
-- **`HW_CHECKLIST.md` is stale** (local-only, never committed): no rows for
-  the `c`/`C`/`x` cache keys, and its section C still treats the Master/erase
-  actions as unfired — all four are now verified (§21a-§21d). Row C10 in
-  particular says "do not fire a destructive op", which the §21 campaign has
-  superseded.
-- **`review-fixes` branch is stale** — merged long ago, and orphaned by the
-  history rewrites since. `git branch -D review-fixes`.
+**Done (2026-08-01).** CI added (`.github/workflows/tests.yml` — the full
+synthetic suite on Python 3.11/3.12/3.13, on every push and PR);
+`pyproject.toml` gained `[project.urls]`, classifiers and keywords (no
+`License ::` classifier — the `license` field already carries the SPDX
+expression and PEP 639 deprecates saying it twice); `HW_CHECKLIST.md`
+refreshed (new section E for the cache/sweep features, C10 and D7 ticked,
+D5 marked partial, and the §21-superseded "do not fire a destructive op"
+note removed); the merged `review-fixes` branch deleted.
+
+**Still open:**
+
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a
   commercial preset's, and the file is public. Either keep it as a small

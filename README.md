@@ -5,6 +5,8 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 
 # eosed
 
+[![tests](https://github.com/lentferj/eosed/actions/workflows/tests.yml/badge.svg)](https://github.com/lentferj/eosed/actions/workflows/tests.yml)
+
 A terminal tool for the E-mu **EOS** sampler family (E4, E4XT, E4XT Ultra,
 E6400, …) driven over MIDI System Exclusive — a command-line explorer
 (`eoscli`) plus a full Textual TUI editor (`eosed`) for the
