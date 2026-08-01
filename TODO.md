@@ -303,16 +303,29 @@ globs the brackets. Plain `pip install -e .` is the default now (nothing in
 `eos/` or `eosed/` imports pytest, so the dev extra was never needed to
 *run* the tool), with the quoted extra offered for the suite.
 
+**Then actually executed from an empty directory**, rather than left as
+another fixed-by-inspection claim: `git clone` → `python3 -m venv` →
+`pip install -e .` → `eoscli --demo inquire` → the TUI (launched headless
+against `DemoBridge`, since the real thing needs a terminal) → the quoted
+dev extra → the full suite, **384 passed** from the fresh clone. No wheel
+fallback was needed; `python-rtmidi` 1.5.8 and `textual` 8.2.8 installed
+from wheels on Python 3.11.2. The clone also confirmed the gitignores hold
+in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
+`HW_CHECKLIST.md` in the published tree.
+
 **Still open:**
 
 - **CI runs on deprecated Node 20 actions.** `actions/checkout@v4` and
   `actions/setup-python@v5` both warn; GitHub is force-running them on Node
   24 and everything passes, so this is noise, not breakage. One-line bumps
   when it is worth clearing.
-- **The install instructions have never been executed end-to-end.** They
-  were fixed by inspection — the pytest-import check was real, but nobody
-  has run `git clone` into an empty directory and followed them. Cheap to
-  do, and exactly the class of thing this session found twice.
+- **The zsh half of the install note is still asserted, not tested.** The
+  rest of the Quick Start was run end-to-end from an empty directory and
+  works (see below), but this box has no zsh, so the claim that unquoted
+  `.[dev]` fails there rests on knowledge rather than a run. Bash was
+  checked and leaves an unmatched glob literal, so pip receives the string
+  intact — which is exactly why the breakage is invisible from here. Worth
+  30 seconds on any macOS machine.
 
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a
