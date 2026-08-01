@@ -7,6 +7,7 @@
 
 import pytest
 
+from eos import bridge as bridge_mod
 from eos import messages as m
 from eosed import cli
 from eosed.demo import DemoBridge
@@ -112,6 +113,55 @@ def test_ports_lists_something(capsys):
     out = capsys.readouterr().out
     assert "MIDI inputs:" in out
     assert "MIDI outputs:" in out
+
+
+def test_ports_survives_a_host_with_no_midi_backend(capsys, monkeypatch):
+    # The regression CI found on its first run. The test above asserts this
+    # works but cannot verify it on a dev box that *has* an ALSA sequencer:
+    # rtmidi enumerates fine there and returns an empty list. A host with no
+    # /dev/snd/seq at all (containers, headless runners, WSL without sound)
+    # raises out of the rtmidi *constructor* instead, which nothing caught.
+    # Simulated here so the case is covered regardless of what the host has.
+    import rtmidi
+
+    def no_backend(*args, **kwargs):
+        raise SystemError(
+            "MidiInAlsa::initialize: error creating ALSA sequencer client object.")
+
+    monkeypatch.setattr(rtmidi, "MidiIn", no_backend)
+    monkeypatch.setattr(rtmidi, "MidiOut", no_backend)
+
+    cli.main(["ports"])  # must not raise
+    captured = capsys.readouterr()
+    assert "MIDI inputs:" in captured.out
+    assert "MIDI outputs:" in captured.out
+    # ... and must say the subsystem is missing, not imply nothing is plugged in.
+    assert "no MIDI backend available" in captured.err
+
+
+def test_list_ports_distinguishes_no_backend_from_no_ports(monkeypatch):
+    # The distinction the exception exists to preserve: an empty result is a
+    # legitimate answer ("nothing plugged in"), so it must not be conflated
+    # with "this machine cannot do MIDI".
+    import rtmidi
+
+    class _EmptyProbe:
+        def get_ports(self):
+            return []
+
+        def delete(self):
+            pass
+
+    monkeypatch.setattr(rtmidi, "MidiIn", _EmptyProbe)
+    monkeypatch.setattr(rtmidi, "MidiOut", _EmptyProbe)
+    assert bridge_mod.list_ports() == ([], [])
+
+    def no_backend(*args, **kwargs):
+        raise SystemError("error creating ALSA sequencer client object.")
+
+    monkeypatch.setattr(rtmidi, "MidiIn", no_backend)
+    with pytest.raises(bridge_mod.MidiUnavailable):
+        bridge_mod.list_ports()
 
 
 def test_help_does_not_raise(capsys):

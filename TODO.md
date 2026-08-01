@@ -247,6 +247,23 @@ refreshed (new section E for the cache/sweep features, C10 and D7 ticked,
 D5 marked partial, and the §21-superseded "do not fire a destructive op"
 note removed); the merged `review-fixes` branch deleted.
 
+**CI earned its keep on the first run**, which is worth recording because it
+is the exact argument that motivated adding it. `test_ports_lists_something`
+asserts `eoscli ports` "must not raise even on a host with no MIDI hardware"
+— and had been passing **vacuously** on the dev box for the whole life of the
+project, because that machine has an ALSA sequencer (it has real MIDI
+hardware attached), so rtmidi enumerates fine and simply returns an empty
+list. A hosted runner has no `/dev/snd/seq` at all, which is the harder case:
+rtmidi raises out of the *constructor*, so nothing was catching it, and the
+command traced back. Anyone running `eoscli ports` in a container, on a
+headless server, or on WSL without sound would have hit the same thing —
+plausibly the very first command they tried. Fixed with a typed
+`eos.bridge.MidiUnavailable`, deliberately **not** flattened to two empty
+lists: "nothing is plugged in" and "this machine cannot do MIDI" need
+different fixes, so `ports` now prints which one it is. Two real tests
+replace the vacuous one, both simulating the failure so the case stays
+covered on a host that has a sequencer.
+
 **Still open:**
 
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**

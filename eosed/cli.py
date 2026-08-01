@@ -44,7 +44,17 @@ def _build_bridge(args: argparse.Namespace) -> "bridge_mod.EosBridge":
 
 
 def cmd_ports(args: argparse.Namespace) -> None:
-    ins, outs = bridge_mod.list_ports()
+    # 'ports' is the first thing a new user runs to see whether anything is
+    # wired up, so it answers rather than traces back when the host has no
+    # MIDI subsystem at all -- but it says *which* of the two situations it
+    # is, since "no ports" and "no ALSA sequencer" need very different
+    # fixes.
+    try:
+        ins, outs = bridge_mod.list_ports()
+        both = bridge_mod.bidirectional_ports()
+    except bridge_mod.MidiUnavailable as exc:
+        ins = outs = both = []
+        print(f"warning: {exc}", file=sys.stderr)
     print("MIDI inputs:")
     for name in ins:
         print(f"  {name}")
@@ -52,7 +62,7 @@ def cmd_ports(args: argparse.Namespace) -> None:
     for name in outs:
         print(f"  {name}")
     print("\nBidirectional (standard-rig candidates):")
-    for name in bridge_mod.bidirectional_ports():
+    for name in both:
         print(f"  {name}")
 
 

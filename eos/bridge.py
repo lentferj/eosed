@@ -307,6 +307,24 @@ def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[b
 # exit — on a host with many MIDI ports, a single autodetect scan could
 # exhaust the ALSA sequencer's client slots.
 
+class MidiUnavailable(RuntimeError):
+    """This host has no usable MIDI backend at all.
+
+    Distinct from "no ports": a machine with an ALSA sequencer and nothing
+    plugged in enumerates cleanly and returns empty lists. This is the
+    harder failure — no ``/dev/snd/seq`` whatsoever, so rtmidi cannot even
+    construct a client. Containers, headless servers and WSL images without
+    sound all land here, and "no MIDI ports found" would be a misleading
+    thing to tell someone in that position: the ports are not missing, the
+    subsystem is.
+
+    Found by CI on its first run. The local dev box has a sequencer (it has
+    real MIDI hardware attached), so ``test_ports_lists_something`` had been
+    passing vacuously — it asserted this case worked without ever reaching
+    it.
+    """
+
+
 def _delete_quiet(port) -> None:
     try:
         port.delete()
@@ -314,8 +332,21 @@ def _delete_quiet(port) -> None:
         pass
 
 
+def _probe(factory, what: str):
+    """Construct a transient rtmidi probe, or say why we couldn't.
+
+    rtmidi raises out of the *constructor* when the backend is missing, so
+    this cannot be handled at the get_ports() call.
+    """
+    try:
+        return factory()
+    except Exception as exc:  # rtmidi raises SystemError/RuntimeError here
+        raise MidiUnavailable(
+            f"no MIDI backend available on this host ({what}: {exc})") from exc
+
+
 def _enum_in() -> List[str]:
-    probe = rtmidi.MidiIn()
+    probe = _probe(rtmidi.MidiIn, "input")
     try:
         return probe.get_ports()
     finally:
@@ -323,7 +354,7 @@ def _enum_in() -> List[str]:
 
 
 def _enum_out() -> List[str]:
-    probe = rtmidi.MidiOut()
+    probe = _probe(rtmidi.MidiOut, "output")
     try:
         return probe.get_ports()
     finally:
@@ -331,7 +362,12 @@ def _enum_out() -> List[str]:
 
 
 def list_ports() -> Tuple[List[str], List[str]]:
-    """Return ``(input_port_names, output_port_names)`` available on this host."""
+    """Return ``(input_port_names, output_port_names)`` available on this host.
+
+    Raises ``MidiUnavailable`` if the host has no MIDI backend at all --
+    deliberately not flattened to two empty lists, so a caller can tell
+    "nothing is plugged in" from "this machine cannot do MIDI".
+    """
     return _enum_in(), _enum_out()
 
 
