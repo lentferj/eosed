@@ -93,10 +93,29 @@ set-differencing against it would flag every sample above the stop point as
 missing. The per-sample name resolved during the walk has no such dependency
 on how far the sweep ran.
 
-**Not verified live** (HW_CHECKLIST E8): reproducing it on purpose means
-erasing a sample a preset still references, so it wants an expendable bank —
-the same §21 setup. Covered by 7 synthetic tests, including a fake bridge
-that returns the placeholder for one erased slot.
+**A stale-cache false negative was found and fixed straight after, while
+checking what live confirmation actually existed.** `_resolve_sample_rows`
+consulted `_catalog_cache["sample"]` before the device — and that cache is
+the *previous* sweep's output. A sample erased **outside this app** (front
+panel, or another session) is invisible here, so the stale cached name came
+back, the voice still pointing at it looked healthy, and the check reported
+the bank clean. That is precisely the §21c scenario the check exists for, and
+`x` did not help: it clears the usage index but not the name catalog, so even
+a forced re-sweep answered from the stale names. Fixed by having the sweep
+pass `use_catalog_cache=False` — a re-sweep that answers from the last
+sweep's cache is not a re-sweep. Costs one name fetch per *distinct* sample
+per sweep (the within-sweep memo still collapses repeats), and only on the
+sweep path; `_load_preset_overview` still uses the cache. Pinned by
+`test_re_sweep_sees_a_sample_erased_outside_the_app`.
+
+**How much of this is confirmed live.** Every fact the check rests on is,
+including the exact detection rule: §21c records `P000`'s voices still
+reading `E4_GEN_SAMPLE = 1` after the erase *while `get_sample_name(1)`
+returned `"Empty Sample"`* — an erased-and-still-referenced slot, not merely
+an unused one. What has never run against hardware is the assembled code
+path. Covered by 8 synthetic tests (HW_CHECKLIST E8); reproducing it live
+means erasing a sample a preset still references, so it wants an expendable
+bank — the same §21 setup.
 
 Worth having beyond the erase case: a bank restored from disk with missing
 samples, or one assembled by an external writer (mpc2emu writes E4B banks),

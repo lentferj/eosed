@@ -1831,6 +1831,52 @@ async def test_second_integrity_check_answers_from_cache_with_no_midi():
         assert "1 dangling reference(s)" in app.last_status
 
 
+async def test_re_sweep_sees_a_sample_erased_outside_the_app():
+    # The regression this pins: _resolve_sample_rows consulted
+    # _catalog_cache["sample"] first, and that cache is the *previous*
+    # sweep's output. A sample erased from the front panel (or another
+    # session) is invisible to this app, so the stale cached name came back
+    # and the voice still pointing at it looked healthy -- the integrity
+    # check reported the bank clean for exactly the §21c scenario it exists
+    # to catch, even after 'x' forced a fresh sweep.
+    class _FrontPanelErase(_ErasedSampleBridge):
+        def __init__(self):
+            super().__init__()
+            self.preset_names = {0: "Test Kit A"}
+            self.erased = False
+
+        def get_parameter(self, param_id, *, timeout=None):
+            if param_id != p.lookup("E4_GEN_SAMPLE").id:
+                return 0
+            if self._preset not in self.preset_names or self._voice != 0:
+                return -2
+            return 7  # P000's one voice always plays S007
+
+        def get_sample_name(self, sample, *, timeout=None):
+            if sample == 7:
+                return _EMPTY_SAMPLE_NAME if self.erased else "Low Thump"
+            raise LookupError(f"demo has no sample {sample}")
+
+    bridge = _FrontPanelErase()
+    app = EosedApp(bridge, allow_write=False, demo=True)
+    async with app.run_test() as pilot:
+        await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
+
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: "no dangling sample references" in app.last_status)
+        assert app._catalog_cache["sample"] == {7: "Low Thump"}
+
+        bridge.erased = True  # front-panel erase: the app is never told
+
+        await pilot.press("x")  # the documented way to force a fresh sweep
+        await pilot.pause()
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: "1 dangling reference(s)" in app.last_status)
+        assert "P000 V1 → S007" in app.last_status
+
+
 async def test_integrity_check_reports_a_clean_bank_as_clean():
     # DemoBridge's get_sample_name raises for an unknown slot rather than
     # returning the placeholder, so its presets resolve to blank names --

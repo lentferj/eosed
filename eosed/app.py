@@ -1784,7 +1784,8 @@ class EosedApp(App):
 
     # -- samples pane: resolve raw sample numbers to names -------------------
     def _resolve_sample_rows(self, by_voice: Dict[int, List[int]],
-                             memo: Optional[Dict[int, str]] = None) -> List[Tuple[int, str, str]]:
+                             memo: Optional[Dict[int, str]] = None,
+                             *, use_catalog_cache: bool = True) -> List[Tuple[int, str, str]]:
         # Assumes self._bridge_lock is already held (called from within the
         # same worker/lock scope as the voice/param reads above).
         # A set, not a list: a voice with several zones that happen to share
@@ -1796,7 +1797,16 @@ class EosedApp(App):
             for number in numbers:
                 users.setdefault(number, set()).add(voice)
         rows = []
-        sample_cache = self._catalog_cache["sample"]
+        # `use_catalog_cache=False` for the sweep itself: that cache is the
+        # *previous* sweep's output, and a re-sweep that answers from it is
+        # not a re-sweep. It cost a real false negative -- a sample erased
+        # outside this app (front panel, or another session) leaves the
+        # cached name in place, so the voice still pointing at it resolved to
+        # its old, real name and the integrity check reported the bank clean.
+        # Exactly the §21c scenario the check exists for. The within-sweep
+        # memo below still collapses repeat lookups, so this costs one fetch
+        # per distinct sample per sweep, not one per reference.
+        sample_cache = self._catalog_cache["sample"] if use_catalog_cache else {}
         for number in sorted(users):
             if number in sample_cache:
                 name = sample_cache[number]  # already known from a cache-all sweep — no MIDI
@@ -2210,7 +2220,8 @@ class EosedApp(App):
                             found_voices = voice_count > 0
                             global_values = (self.bridge.get_parameters(global_ids)
                                              if depth == "full" else None)
-                            sample_rows = self._resolve_sample_rows(by_voice, sample_name_memo)
+                            sample_rows = self._resolve_sample_rows(
+                                by_voice, sample_name_memo, use_catalog_cache=False)
                             overviews[preset] = (voice_count, zone_counts, global_ids,
                                                  global_values, sample_rows)
                             if found_voices:
