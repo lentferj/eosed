@@ -103,12 +103,25 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 
 ## Quick Start
 
+Needs **Python 3.11+** and nothing else to try out — no MIDI interface, no
+sampler, no sound hardware of any kind.
+
 ```sh
+git clone https://github.com/lentferj/eosed
+cd eosed
 python3 -m venv .venv
-.venv/bin/pip install -e .[dev]
+.venv/bin/pip install -e .
 .venv/bin/eoscli --demo inquire
 .venv/bin/eosed --demo
 ```
+
+To run the test suite as well, install the dev extra instead —
+`.venv/bin/pip install -e '.[dev]'`. **Quote it**: zsh (the default shell on
+macOS) treats the brackets as a glob and fails with `no matches found`.
+
+`python-rtmidi` normally installs from a wheel. If pip falls back to
+building it from source you will also need the ALSA development headers —
+`sudo apt install libasound2-dev` on Debian/Ubuntu.
 
 `--demo` on both entry points runs against a canned in-memory device —
 no MIDI port opened, no hardware required, no local config touched. This
@@ -125,6 +138,7 @@ Parameters (right) — preset 0 selected, its GLOBAL parameter group shown.</sub
 Real hardware use requires a MIDI interface connected to the E4/E4XT:
 
 ```sh
+.venv/bin/eoscli ports                   # what this host can see at all
 .venv/bin/eoscli inquire                 # autodetect, read-only identify
 .venv/bin/eosed                      # TUI, writes disabled by default
 .venv/bin/eosed --allow-write        # enables edit/rename/Master — see the warning above
@@ -995,12 +1009,17 @@ tests/
 
 ## Tests
 
+Needs the dev extra (`pip install -e '.[dev]'`, see [Quick Start](#quick-start)):
+
 ```sh
 .venv/bin/python -m pytest
 ```
 
 All tests are synthetic (fake MIDI ports / fake device replies) — no
-hardware is touched or required.
+hardware is touched or required, and none is reachable from them. That is
+what lets the same suite run unchanged in
+[CI](https://github.com/lentferj/eosed/actions) on Python 3.11, 3.12 and
+3.13.
 
 ## License and Third-Party Sources
 
