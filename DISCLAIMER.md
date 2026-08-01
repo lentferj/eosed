@@ -116,10 +116,12 @@ eosed talks to vintage hardware over MIDI System Exclusive. Driving
 vintage instruments this way carries inherent risk, above and beyond the
 No Warranty terms above.
 
-The E4/EOS remote editor protocol includes several **one-shot,
-unconfirmed** destructive operations with no device-side "are you
-sure": Preset Delete (`71h`), Erase Current RAM Bank (`74h`), Erase All
-RAM Presets (`75h`), and Erase All RAM Samples (`76h`). None of these are
+The E4/EOS remote editor protocol includes several **one-shot**
+destructive operations with no device-side "are you sure": Preset Delete
+(`71h`), Erase Current RAM Bank (`74h`), Erase All RAM Presets (`75h`),
+and Erase All RAM Samples (`76h`). All four have been fired against real
+hardware and do exactly what their names say (see below) — they are
+confirmed to work, which makes them more dangerous, not less. None are
 ever key-bound in this tool; they are only reachable through a modal
 arm-then-fire screen in the TUI — but a scripting mistake using `eoscli`
 directly, or a bug in the editor, could still fire one. Write mode

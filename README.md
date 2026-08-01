@@ -62,7 +62,7 @@ sweep. Live use is also what caught several real protocol bugs no amount
 of reading the specification would have surfaced — see
 [The "Number Of X" trap](#the-number-of-x-trap) below.
 
-**Write paths are now partly verified — but not the destructive ones.**
+**Write paths are now verified, destructive ones included.**
 Parameter edits and renames have been exercised against a real E4XT Ultra
 across ten scratch presets: every preset-scoped parameter written, read
 back, then re-read after selecting away and returning — 3340 comparisons
@@ -74,11 +74,11 @@ the arm-then-fire modal with the state verified over SysEx before and after
 (`docs/RESOLUTION_NOTES.md` §21a-§21d). Writing `E4_GEN_SAMPLE` and the
 device-global `master.*` parameters remain unverified, and writes still
 default to **disabled** (`--allow-write`, or `w` at runtime) against real
-hardware. The E4/EOS
-protocol also has several **one-shot, unconfirmed destructive**
-operations (Preset Delete, Erase RAM Bank/Presets/Samples) with no
-device-side "are you sure" — none are ever bound to a single keypress in
-the TUI, only reachable through a modal arm-then-fire screen, but a
+hardware. Those four Master actions are **one-shot destroyers** with no
+device-side "are you sure", and being confirmed to work is precisely what
+makes them dangerous rather than reassuring — Erase RAM Bank took a real
+bank apart exactly as documented. None are ever bound to a single keypress
+in the TUI, only reachable through a modal arm-then-fire screen, but a
 scripting mistake with `eoscli` directly could still fire one. **Make
 current backups before pointing this at anything you care about.**
 
@@ -262,7 +262,7 @@ touches local state).
 | | |
 |---|---|
 | **Navigate** | `p` Presets · `s` Samples · `g` Goto · `r` Refresh · `escape` Back to preset |
-| **Inspect** | `v` Voices · `l` Links · `u` Find usage · `h` History |
+| **Inspect** | `v` Voices · `l` Links · `u` Find usage · `i` Integrity · `h` History |
 | **Cache** | `c` Cache structure · `C` Cache everything · `x` Clear usage cache |
 | **Edit** | `Enter` Edit value · `+` Value +1 · `-` Value -1 · `o` Rename · `z` Undo · `Z` Undo all · `w` Write mode |
 | **Other** | `e` Extended view · `m` Master · `q` Quit |
@@ -324,6 +324,21 @@ are the slow ones — see the timings below):
   to always sweep completely, or to a specific number to change the
   threshold. `x` clears the cached result on demand to force a fresh
   sweep.
+- **`i`** — **bank integrity check**: every preset whose voices still point
+  at a sample that no longer exists, reported as `P012 V3 → S045 (missing)`.
+  A voice keeps its sample number after that sample is erased, and nothing
+  at the voice level distinguishes a live reference from a dead one — so
+  the Samples pane and `u` both display an erased sample exactly as they
+  would a present one. Useful beyond the erase case: a bank restored from
+  disk with samples missing, or one assembled by an external writer (such
+  as [mpc2emu](https://github.com/lentferj/mpc2emu), which writes E4B
+  banks), shows the same symptom with no other way to spot it short of
+  checking every voice by hand. Read-only, so it needs no write mode.
+  It uses the *same* sweep as `u` and `c` and no MIDI beyond it, so it is
+  instant once any of the three has run; run cold it costs one sweep.
+  A voice with nothing assigned reads sample 0 and is never reported, and
+  neither is a sample whose name lookup simply *failed* — that is
+  "unknown", not "missing".
 - **`c` / `C`** — cache the bank: the same full-bank sweep as `u`, but keeps
   *everything* it fetches instead of just the sample-usage index —
   preset and sample names, each preset's voice/zone/sample structure,

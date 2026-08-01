@@ -13,8 +13,8 @@ from textual.widgets import Header
 from eos import params as p
 from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
-    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _voice_sample_info, ConfirmSweepScreen,
-    EosedApp)
+    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _EMPTY_SAMPLE_NAME, _dangling_sample_refs,
+    _voice_sample_info, ConfirmSweepScreen, EosedApp)
 from eosed.demo import DemoBridge
 
 
@@ -1694,6 +1694,158 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
         rows = {samples.get_row_at(i)[0]: samples.get_row_at(i) for i in range(samples.row_count)}
         assert rows["S007"] == ["S007", "Shared Kick", "V1,V2,V3"]
         assert rows["S009"] == ["S009", "Extra Snare", "V3"]
+
+
+def _overview(sample_rows):
+    """One _preset_overviews entry: (voice_count, zone_counts, global_ids,
+    global_values, sample_rows). Only the last element matters here."""
+    return (1, {0: 1}, None, None, sample_rows)
+
+
+def test_dangling_sample_refs_flags_only_the_erased_slots():
+    # The erased slot answers with the device's own literal placeholder --
+    # a real, well-formed reply, not a blank or an error (RESOLUTION_NOTES
+    # §13), which is exactly what makes it usable as the signal here.
+    overviews = {
+        4: _overview([(7, "Deep Kick", "V1"),
+                      (9, _EMPTY_SAMPLE_NAME, "V1,V3")]),
+        6: _overview([(7, "Deep Kick", "V2")]),
+    }
+    assert _dangling_sample_refs(overviews) == [(4, 9, "V1,V3")]
+
+
+def test_dangling_sample_refs_never_flags_sample_zero():
+    # A voice with nothing assigned reads E4_GEN_SAMPLE = 0, and S000 reads
+    # the placeholder on every bank seen so far -- flagging it would report
+    # every empty voice on the bank.
+    overviews = {0: _overview([(0, _EMPTY_SAMPLE_NAME, "V1")])}
+    assert _dangling_sample_refs(overviews) == []
+
+
+def test_dangling_sample_refs_does_not_flag_a_failed_name_fetch():
+    # _resolve_sample_rows falls back to "" when the name lookup *raises*.
+    # That is a transport failure -- "unknown", not "missing" -- and
+    # reporting it as dangling would be a false positive.
+    overviews = {0: _overview([(9, "", "V1"), (11, "   ", "V2")])}
+    assert _dangling_sample_refs(overviews) == []
+
+
+def test_dangling_sample_refs_are_sorted_by_preset_then_sample():
+    overviews = {
+        9: _overview([(30, _EMPTY_SAMPLE_NAME, "V1"),
+                      (12, _EMPTY_SAMPLE_NAME, "V2")]),
+        2: _overview([(44, _EMPTY_SAMPLE_NAME, "V1")]),
+    }
+    assert _dangling_sample_refs(overviews) == [
+        (2, 44, "V1"), (9, 12, "V2"), (9, 30, "V1")]
+
+
+class _ErasedSampleBridge(DemoBridge):
+    """P000's one voice plays a sample that exists; P001's plays an erased
+    one. Nothing past P001, so the sweep's early-stop heuristic ends the
+    walk quickly instead of grinding through all 1000 slots."""
+
+    def __init__(self):
+        super().__init__()
+        self.preset_names = {0: "Test Kit A", 1: "Test Kit B"}
+        self.sample_names = {7: "Low Thump"}
+        self._preset = 0
+        self._voice = 0
+
+    def set_parameter(self, param_id, value):
+        if param_id == p.lookup("PRESET_SELECT").id:
+            self._preset = value
+        elif param_id == p.lookup("VOICE_SELECT").id:
+            self._voice = value
+        super().set_parameter(param_id, value)
+
+    def get_parameter(self, param_id, *, timeout=None):
+        if param_id != p.lookup("E4_GEN_SAMPLE").id:
+            return 0
+        if self._preset not in self.preset_names or self._voice != 0:
+            return -2  # 3FFEh "no such voice" -- stops the voice walk
+        return 7 if self._preset == 0 else 9
+
+    def get_sample_name(self, sample, *, timeout=None):
+        if sample in self.sample_names:
+            return self.sample_names[sample]
+        if sample == 9:
+            return _EMPTY_SAMPLE_NAME  # erased, but still a normal reply
+        raise LookupError(f"demo has no sample {sample}")
+
+
+async def test_integrity_check_sweeps_and_reports_the_dangling_reference():
+    # Read-only, so deliberately run with write mode *disarmed*: the check
+    # must not be gated the way edits/renames/Master actions are.
+    app = EosedApp(_ErasedSampleBridge(), allow_write=False, demo=True)
+    async with app.run_test() as pilot:
+        await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
+
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: "dangling" in app.last_status)
+
+        assert "1 dangling reference(s) across 1 preset(s)" in app.last_status
+        assert "P001 V1 → S009" in app.last_status
+
+        # Mirrored into #params, which is visible in *both* view modes --
+        # #samples is hidden in the default compact view.
+        params = app.query_one("#params")
+        assert params.row_count == 1
+        assert params.get_row_at(0) == ["—", "P001", "V1", "→ S009 (missing)"]
+
+        samples = app.query_one("#samples")
+        assert samples.row_count == 1
+        assert samples.get_row_at(0) == ["S009", "(missing)", "P001 V1"]
+
+        # Nothing in that pane is an editable parameter, so Enter must not
+        # try to open an edit dialog on it.
+        assert app._current_param_ids == []
+        await pilot.press("enter")
+        await pilot.pause()
+        assert len(app.screen_stack) == 1
+
+
+async def test_second_integrity_check_answers_from_cache_with_no_midi():
+    bridge = _ErasedSampleBridge()
+    app = EosedApp(bridge, allow_write=False, demo=True)
+    async with app.run_test() as pilot:
+        await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
+
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: "dangling" in app.last_status)
+
+        lookups = []
+        original = bridge.get_preset_name
+
+        def counting_get_preset_name(*args, **kwargs):
+            lookups.append(1)
+            return original(*args, **kwargs)
+
+        bridge.get_preset_name = counting_get_preset_name
+
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: "(cached)" in app.last_status)
+        assert lookups == []  # the promoted sweep already holds both halves
+        assert "1 dangling reference(s)" in app.last_status
+
+
+async def test_integrity_check_reports_a_clean_bank_as_clean():
+    # DemoBridge's get_sample_name raises for an unknown slot rather than
+    # returning the placeholder, so its presets resolve to blank names --
+    # "unknown", which must read as clean rather than as dangling.
+    app = EosedApp(DemoBridge(), allow_write=False, demo=True)
+    async with app.run_test() as pilot:
+        await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
+
+        app._preset_overviews = {0: _overview([(7, "Low Thump", "V1")])}
+        app._sample_usage_scanned_range = SAMPLE_USAGE_SCAN_RANGE
+
+        await pilot.press("i")
+        assert await _wait_for(pilot, lambda: "no dangling sample references" in app.last_status)
+        assert app.query_one("#params").row_count == 0
+        assert app.query_one("#samples").row_count == 0
 
 
 async def test_view_defaults_to_compact_with_no_stored_preference():

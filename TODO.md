@@ -55,40 +55,52 @@ are gone, since P000 always exists; and `sample_memory()` never reaches 0 —
 ~3.00 MB is overhead, and that figure *is* empty. Still untested live: the
 device-global `master.*` parameters, and *writing* `E4_GEN_SAMPLE`.
 
-### Find presets with dangling sample references (planned, from §21c)
+### Find presets with dangling sample references — BUILT, never run live
 
 A voice keeps its `E4_GEN_SAMPLE = N` after sample N is erased — confirmed
-live. Nothing at the voice level distinguishes a live reference from a dead
-one, so the Samples pane, `u`, and the cache-all sweep all currently display
-erased samples as though they were present.
+live (§21c). Nothing at the voice level distinguishes a live reference from a
+dead one, so the Samples pane, `u`, and the cache-all sweep all display an
+erased sample exactly as they would a present one.
 
-Wanted: **an action reporting every preset that references a sample which no
-longer exists** — a bank integrity check.
+**Built as `i` (bank integrity check), 2026-08-01.** `EosedApp.
+action_check_dangling_samples` plus the pure `eosed.app._dangling_sample_refs`,
+reporting `P012 V3 → S045 (missing)` in the status line and mirrored into
+`#params` (visible in both view modes, unlike `#samples`). Read-only, so
+deliberately not gated on write mode. Bound to `i` rather than the equally
+free `d` — a single letter that reads as "delete" has no business next to
+this protocol's one-shot destroyers.
 
-**Cheap, because the data is already collected.** A `"structure"`-depth
-`_run_full_sweep` returns *both* halves in one walk: which sample numbers each
-preset's voices/zones reference, and the sample-name catalog (a slot is empty
-iff its name is the `"Empty Sample"` placeholder, §13). Dangling = referenced
-minus present. So this needs **no new MIDI beyond a sweep the app already
-does**, and is instant once `c`/`C` or a `u` lookup has filled the caches.
+**No new MIDI:** it is a filter over what a `"structure"`-depth
+`_run_full_sweep` already collects, so it is instant once `c`/`C` or a `u`
+lookup has run, and costs exactly one sweep when run cold.
 
-Design notes:
+Two exclusions, both deliberate and tested:
 
-* Report preset, voice and missing sample — `P012 V3 → S045 (missing)`. The
-  preset number is what the user needs in order to go fix it.
-* **Sample 0 is not dangling.** A voice with nothing assigned reads
-  `E4_GEN_SAMPLE = 0` (seen on the §18 scratch presets) and `S000` reads
-  `"Empty Sample"` on every bank seen so far. Reporting it would flag every
+* **Sample 0 is never dangling** — an unassigned voice reads
+  `E4_GEN_SAMPLE = 0` (seen on the §18 scratch presets) and `S000` reads the
+  placeholder on every bank seen so far, so flagging it would report every
   empty voice on the bank.
-* Reuse `u`'s presentation: status line plus the full list mirrored into
-  `#params`, since `#samples` is hidden in compact view.
-* Read-only — no write-mode gate.
-* Key: `c`/`C`/`x` are taken by the cache actions; `d`, `f`, `i`, `t` are
-  free.
+* **A blank name is not evidence.** `_resolve_sample_rows` falls back to `""`
+  when the name fetch *raises* — a transport failure, i.e. "unknown", not
+  "missing". Only the device's own literal `"Empty Sample"` reply (§13)
+  counts. This is the second feature to depend on that §13 finding being a
+  real, well-formed reply rather than a blank one.
+
+The "referenced minus present" formulation in the original design was
+**not** used, and deliberately so: `sample_names` is truncated by the
+sample-name pass's own early stop (it stopped at 204 on the bank in §13), so
+set-differencing against it would flag every sample above the stop point as
+missing. The per-sample name resolved during the walk has no such dependency
+on how far the sweep ran.
+
+**Not verified live** (HW_CHECKLIST E8): reproducing it on purpose means
+erasing a sample a preset still references, so it wants an expendable bank —
+the same §21 setup. Covered by 7 synthetic tests, including a fake bridge
+that returns the placeholder for one erased slot.
 
 Worth having beyond the erase case: a bank restored from disk with missing
 samples, or one assembled by an external writer (mpc2emu writes E4B banks),
-shows the same symptom with no current way to detect it short of checking
+shows the same symptom with no other way to detect it short of checking
 every voice by hand.
 
 **Re-verified against a full commercial bank (RESOLUTION_NOTES §19).** 990

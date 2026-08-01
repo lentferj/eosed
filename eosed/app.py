@@ -320,6 +320,55 @@ def _slot_label(kind: str, number: int) -> str:
     return f"{'S' if kind == 'sample' else 'P'}{number:03d}"
 
 
+def _dangling_sample_refs(overviews: Dict[int, Tuple]) -> List[Tuple[int, int, str]]:
+    """Every voice still pointing at a sample the device no longer holds.
+
+    A voice keeps its ``E4_GEN_SAMPLE = N`` after sample N is erased --
+    confirmed live (docs/RESOLUTION_NOTES.md §21c) -- and nothing at the
+    voice level distinguishes a live reference from a dead one, so the
+    Samples pane and 'u' both display an erased sample exactly as they would
+    a present one. This is the check that tells them apart.
+
+    Input is the preset-keyed overview map a "structure"-depth sweep builds
+    (``EosedApp._preset_overviews``); each entry's fifth element is
+    ``_resolve_sample_rows``' output, ``(sample number, name, "V1,V3")``,
+    whose *name* was resolved from the device during that same walk. So this
+    is a pure filter over data already collected -- no MIDI of its own, and
+    instant once 'c'/'C' or a 'u' lookup has filled the caches.
+
+    Two exclusions, both deliberate:
+
+    * **Sample 0 is never dangling.** A voice with nothing assigned reads
+      ``E4_GEN_SAMPLE = 0`` (seen on the §18 scratch presets) and S000 reads
+      the empty placeholder on every bank seen so far, so flagging it would
+      report every empty voice on the bank.
+    * **A blank name is not evidence of anything.** ``_resolve_sample_rows``
+      falls back to ``""`` when the name fetch *raises*, which is a transport
+      failure, not an erased sample -- "unknown" must not be reported as
+      "missing". Only the device's own literal ``"Empty Sample"`` placeholder
+      (§13) counts, which is precisely why that string being a real,
+      well-formed reply rather than a blank one is load-bearing here.
+
+    Returns ``(preset, sample number, voices label)``, sorted by preset and
+    then by sample number. The per-preset sort is done here rather than
+    inherited from ``_resolve_sample_rows`` (which does already emit its rows
+    in sample order): this function states the ordering as part of its own
+    contract, so it should not quietly depend on an upstream invariant that
+    nothing would fail if someone changed.
+    """
+    found: List[Tuple[int, int, str]] = []
+    for preset in sorted(overviews):
+        entry = overviews[preset]
+        sample_rows = entry[4] if len(entry) > 4 else None
+        dangling = [(number, voices_label)
+                    for number, name, voices_label in sample_rows or ()
+                    if number != 0
+                    and name.strip().casefold() == _EMPTY_SAMPLE_NAME.casefold()]
+        found.extend((preset, number, voices_label)
+                     for number, voices_label in sorted(dangling))
+    return found
+
+
 def _voice_sample_info(bridge, preset: int, voice: int) -> Optional[Tuple[int, List[int]]]:
     """Best-effort: (zone count, [raw sample number(s)]) for one voice, or
     ``None`` if this voice index doesn't exist on this preset at all.
@@ -774,6 +823,7 @@ class EosedApp(App):
         Binding("v", "browse_voices", "Voices"),
         Binding("l", "browse_links", "Links"),
         Binding("u", "find_sample_usage", "Find usage"),
+        Binding("i", "check_dangling_samples", "Integrity"),
         Binding("c", "cache_structure", "Cache structure"),
         Binding("C", "cache_everything", "Cache everything"),
         Binding("x", "clear_sample_usage_cache", "Clear usage cache"),
@@ -1840,6 +1890,84 @@ class EosedApp(App):
             where += f", +{len(matches) - 5} more — see the Parameters pane"
         summary = f"sample {sample}: used by {len(matches)} preset(s){note}"
         self.set_status(f"{summary} — {where}" if matches else summary)
+
+    # -- bank integrity: presets referencing samples that no longer exist ---
+    def action_check_dangling_samples(self) -> None:
+        """`i` -- report every preset whose voices point at an erased sample.
+
+        Read-only, so unlike the edit/rename/Master paths it is not gated on
+        write mode. Bound to 'i' (integrity) rather than the equally free
+        'd': a single letter that reads as "delete" has no business sitting
+        next to a bank full of one-shot destroyers, however harmless this
+        particular action is.
+
+        Costs nothing beyond a sweep the app already does -- and nothing at
+        all once one has run.
+        """
+        if self._scan_active:
+            self.set_status("a scan is already running ('escape' to cancel)")
+            return
+        if self._sample_usage_scanned_range == SAMPLE_USAGE_SCAN_RANGE:
+            # A complete "structure"-or-better sweep already collected both
+            # halves of the answer -- instant, no MIDI at all.
+            self._show_dangling_results(
+                _dangling_sample_refs(self._preset_overviews), note=" (cached)")
+            return
+        self._start_dangling_check()
+
+    @work(thread=True)
+    def _start_dangling_check(self) -> None:
+        result = self._run_full_sweep("structure")
+        findings = _dangling_sample_refs(result["overviews"])
+        if result["cancelled"]:
+            # Partial findings are still shown -- a dangling reference that
+            # was found *is* found, and hiding it helps nobody. What must not
+            # happen is a cancelled sweep reading as a clean bank, so the
+            # note says so outright and the result is not promoted into the
+            # caches (the same "no way to tell 'not found' from 'not
+            # reached'" reasoning 'u' already applies).
+            note = (f" (cancelled at preset {result['stopped_at']} — partial, "
+                    f"not a clean bill of health)")
+        else:
+            self._promote_sweep_result(result)
+            note = self._sweep_note(result)
+        self.call_from_thread(self._show_dangling_results, findings, note)
+
+    def _show_dangling_results(self, findings: List[Tuple[int, int, str]],
+                               note: str = "") -> None:
+        samples_table = self.query_one("#samples", _FillWidthDataTable)
+        samples_table.clear()
+        for preset, number, voices_label in findings:
+            samples_table.add_row(_slot_label("sample", number), "(missing)",
+                                  f"{_slot_label('preset', preset)} {voices_label}",
+                                  key=f"dangling_{preset}_{number}")
+        samples_table.call_after_refresh(samples_table._stretch_last_column)
+
+        # Same reason 'u' mirrors its results here: #samples is hidden in
+        # compact view (the default), so that pane alone would leave a
+        # compact-view user with nothing but the status line's truncation.
+        self._current_param_ids = []  # nothing here is a real, editable parameter
+        self._current_param_label = "dangling sample references"
+        params_table = self.query_one("#params", _FillWidthDataTable)
+        params_table.clear()
+        for preset, number, voices_label in findings:
+            params_table.add_row("—", _slot_label("preset", preset), voices_label,
+                                 f"→ {_slot_label('sample', number)} (missing)",
+                                 key=f"dangling_{preset}_{number}")
+        params_table.call_after_refresh(params_table._stretch_last_column)
+
+        if not findings:
+            self.set_status(f"no dangling sample references{note}")
+            return
+        affected = len({preset for preset, _, _ in findings})
+        where = ", ".join(
+            f"{_slot_label('preset', preset)} {voices_label} → {_slot_label('sample', number)}"
+            for preset, number, voices_label in findings[:5])
+        if len(findings) > 5:
+            where += f", +{len(findings) - 5} more — see the Parameters pane"
+        self.set_status(
+            f"{len(findings)} dangling reference(s) across {affected} preset(s)"
+            f"{note} — {where}")
 
     # -- cache-all: one full-bank sweep filling every cache at once ---------
     def action_cache_structure(self) -> None:
