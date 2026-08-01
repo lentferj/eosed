@@ -7,16 +7,46 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 
 *What* is open. `docs/RESOLUTION_NOTES.md` tracks *how* to resolve each item.
 
-**Status, 2026-08-01.** Public at `github.com/lentferj/eosed`. 374 tests, all
-synthetic. Every command in the editor protocol is now either verified against
-a real E4XT Ultra or explicitly listed below as not — including all four
-destructive Master utilities (§21a-§21d), the parameter write path (§18), and
-the read paths. Nothing in the protocol is undocumented-and-unlabelled.
+**Status, 2026-08-01 (second session).** Public at
+`github.com/lentferj/eosed`, `main` at `cef04c7`. **384 tests, all synthetic,
+now running in CI** on Python 3.11/3.12/3.13 — green. Every command in the
+editor protocol is either verified against a real E4XT Ultra or explicitly
+listed below as not, including all four destructive Master utilities
+(§21a-§21d), the parameter write path (§18), and the read paths. Nothing in
+the protocol is undocumented-and-unlabelled.
 
-The largest open items are, in rough order of value: root-causing the §15
-device crash (the only thing that can take the machine down, and what blocks a
-faster default `SEND_GAP`), the §17 pipelining probe (minutes off every bank
-sweep), and the panel/mirror protocol (not started, needs capture).
+**This session** closed the whole housekeeping list (CI, packaging metadata,
+a refreshed `HW_CHECKLIST.md`, the stale `review-fixes` branch), built the
+`i` bank-integrity check that §21c called for, and made the README's Quick
+Start followable from a clean clone. Three bugs came out of it, none of them
+found by reading code:
+
+1. **The integrity check's own false negative** — a stale name catalog made
+   it report a bank clean in exactly the erase scenario it exists for. Found
+   by probing the assembled path when asked what live confirmation it had.
+2. **`eoscli ports` crashed on any host with no MIDI subsystem** — caught by
+   CI's *first* run, on a test that had asserted this case worked while never
+   reaching it (the dev box has an ALSA sequencer, so it passed vacuously).
+3. **`pip install -e .[dev]` fails in zsh**, the documented and until now
+   only install path, on the default shell of an entire platform.
+
+The pattern is worth naming, because it is the same one §11/§12/§21c already
+established for the protocol: **the things this project gets wrong are the
+things nothing ever executed.** A vacuous test and an unverified protocol
+assumption fail identically — quietly, and only on contact with something
+that isn't the author's own machine.
+
+The largest open items are unchanged, in rough order of value: root-causing
+the §15 device crash (the only thing that can take the machine down, and what
+blocks a faster default `SEND_GAP`), the §17 pipelining probe (minutes off
+every bank sweep), and the panel/mirror protocol (not started, needs
+capture). All three need hardware.
+
+**Next time there is hardware**, the two cheapest new items are
+`HW_CHECKLIST` **E8** and **E9** — run `i` against a bank with a deliberately
+erased-but-referenced sample, then repeat with the erase done from the
+*front panel*. E9 is the only way to confirm the fix in (1): nothing this app
+does can produce a genuinely out-of-band change to the device.
 
 ## Live hardware verification
 
@@ -260,11 +290,29 @@ headless server, or on WSL without sound would have hit the same thing —
 plausibly the very first command they tried. Fixed with a typed
 `eos.bridge.MidiUnavailable`, deliberately **not** flattened to two empty
 lists: "nothing is plugged in" and "this machine cannot do MIDI" need
-different fixes, so `ports` now prints which one it is. Two real tests
-replace the vacuous one, both simulating the failure so the case stays
-covered on a host that has a sequencer.
+different fixes, so `ports` now prints which one it is. The vacuous test
+stays (it does still cover the ordinary host) and two real ones join it,
+both simulating the constructor failure so the case remains covered on a
+machine that has a sequencer.
+
+**README Quick Start made followable from a clean clone**, which it had
+never been: no `git clone` step, no stated Python version (3.11+ lived only
+in `requires-python`), and `pip install -e .[dev]` as the sole documented
+install — which fails outright in zsh, the default shell on macOS, since it
+globs the brackets. Plain `pip install -e .` is the default now (nothing in
+`eos/` or `eosed/` imports pytest, so the dev extra was never needed to
+*run* the tool), with the quoted extra offered for the suite.
 
 **Still open:**
+
+- **CI runs on deprecated Node 20 actions.** `actions/checkout@v4` and
+  `actions/setup-python@v5` both warn; GitHub is force-running them on Node
+  24 and everything passes, so this is noise, not breakage. One-line bumps
+  when it is worth clearing.
+- **The install instructions have never been executed end-to-end.** They
+  were fixed by inspection — the pytest-import check was real, but nobody
+  has run `git clone` into an empty directory and followed them. Cheap to
+  do, and exactly the class of thing this session found twice.
 
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a
@@ -325,7 +373,7 @@ are multisample sharing the same 3 samples.
   renames a preset, and a modal arm-then-fire Master screen (Delete
   Preset / Erase RAM Bank / Erase All RAM Presets / Erase All RAM Samples —
   never bound to a single keypress). All MIDI I/O runs off the UI thread,
-  serialized by a lock (`EosBridge` is not thread-safe). 363 tests pass
+  serialized by a lock (`EosBridge` is not thread-safe). The suite passes
   against `--demo`/`DemoBridge`, including a dedicated fake-bridge test for
   the multi-voice/multi-zone sample-aggregation logic (DemoBridge itself
   only ever has 1 voice/1 zone, too simple to exercise dedup) and tests for
@@ -893,8 +941,8 @@ already used by `_FillWidthDataTable`'s column-stretch, rather than
 k2kremote's App-level `on_resize` override. Not a fixed two rows — however
 many lines the fold actually needs at the current width and binding count
 (1 on a wide terminal, 3+ on a narrow one). The binding count has since
-grown from the 14 that motivated this to 20, with `z`/`Z`/`h` and `+`/`-`
-joining, which the fold absorbed without any change.
+grown from the 14 that motivated this to 22 shown, with `z`/`Z`/`h`, `+`/`-`
+and `i` joining, which the fold absorbed without any change.
 
 ## Dump field order vs. E4B_FORMAT.md — partially verified
 
