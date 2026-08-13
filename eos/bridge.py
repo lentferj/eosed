@@ -82,7 +82,22 @@ def _read_config_dict(path: str) -> dict:
         return {}
     try:
         with open(path, "rb") as handle:
-            return tomllib.load(handle)
+            raw = handle.read()
+    except OSError:
+        return {}
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # A config written by a pre-fix build on Windows. _write_config_dict
+        # used to open in text mode with no encoding=, which means the locale
+        # codec, and cp1252 renders the em dash in our own header comment as
+        # 0x97 — not valid UTF-8, so tomllib rejected the whole file and every
+        # setting silently read back as unset. Decode leniently so a user's
+        # hand-edited keys survive the upgrade; the next save rewrites the
+        # file as UTF-8 and it stays readable from then on.
+        text = raw.decode("cp1252", errors="replace")
+    try:
+        return tomllib.loads(text)
     except Exception:
         return {}
 
@@ -97,7 +112,12 @@ def _write_config_dict(data: dict, path: str) -> None:
         else:
             lines.append(f"{key} = {value}")
     try:
-        with open(path, "w") as handle:
+        # encoding= is not optional here: without it Python uses the locale
+        # codec, which on Windows is cp1252, and the em dash in the header
+        # line above then lands as a byte tomllib cannot read back. The file
+        # is written by this app and read by tomllib, which is UTF-8-only by
+        # specification, so both ends have to say so.
+        with open(path, "w", encoding="utf-8") as handle:
             handle.write("\n".join(lines) + "\n")
     except OSError:
         pass  # the cache is a convenience, not required for correctness

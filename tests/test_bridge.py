@@ -358,6 +358,55 @@ def test_save_and_load_last_ports_roundtrip(tmp_path):
     assert bridge_mod.load_last_ports(path) == ("Out Port", "In Port")
 
 
+def test_config_is_written_as_utf8_regardless_of_the_locale_codec(tmp_path, monkeypatch):
+    # The Windows bug, pinned so it fails everywhere rather than only where
+    # the locale codec is cp1252. _write_config_dict used to open in text mode
+    # with no encoding=, so its own header comment's em dash was written as
+    # cp1252 0x97 -- which tomllib (UTF-8 only, by TOML spec) then refused,
+    # and _read_config_dict's blanket except turned that into an empty dict.
+    # Net effect on Windows: nothing ever persisted, silently.
+    # Asserting on the resulting bytes would be vacuous here: this box has a
+    # UTF-8 locale, so the buggy code produced a correct file locally and the
+    # test would pass while shipping the bug -- the same trap that let
+    # test_ports_lists_something pass without ever exercising its own claim.
+    # So assert on the call instead: the write must *name* its encoding, which
+    # is checkable regardless of what the host's locale happens to be.
+    import builtins
+
+    real_open = builtins.open
+    encodings = []
+
+    def recording_open(file, mode="r", *args, **kwargs):
+        if "w" in mode:
+            encodings.append(kwargs.get("encoding"))
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", recording_open)
+    bridge_mod.save_last_ports("Out Port", "In Port", str(tmp_path / "config.toml"))
+
+    assert encodings, "config was never written"
+    assert all(enc == "utf-8" for enc in encodings), (
+        f"config written with encoding={encodings!r} -- an unspecified encoding "
+        f"means the locale codec, which is cp1252 on Windows")
+
+
+def test_config_written_by_a_pre_fix_windows_build_is_recovered(tmp_path):
+    # Upgrade path: someone who ran the broken build has a cp1252 file on disk
+    # holding hand-edited keys. Those must survive rather than being silently
+    # dropped one last time on first read after the fix.
+    path = tmp_path / "config.toml"
+    path.write_bytes(
+        "# eosed local config — gitignored, safe to delete.\n"
+        'cache_depth = "full"\n'.encode("cp1252"))
+
+    assert bridge_mod.load_cache_depth(str(path)) == "full"
+
+    # ... and the next write repairs the file for good.
+    bridge_mod.save_compact_view(True, str(path))
+    path.read_bytes().decode("utf-8")
+    assert bridge_mod.load_cache_depth(str(path)) == "full"
+
+
 def test_load_compact_view_missing_file_returns_none(tmp_path):
     assert bridge_mod.load_compact_view(str(tmp_path / "does-not-exist.toml")) is None
 

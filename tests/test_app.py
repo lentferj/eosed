@@ -790,7 +790,11 @@ def test_readme_key_table_lists_every_binding():
     confidently lists the wrong keys is worse than one that lists none.
     """
     import re
-    readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text()
+    # encoding= is required: the README is UTF-8 (em dashes, arrows, the ⚠),
+    # and read_text() without it uses the locale codec — cp1252 on Windows,
+    # where this raised UnicodeDecodeError instead of checking anything.
+    readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text(
+        encoding="utf-8")
     section = readme.split("### Keys", 1)[1].split("###", 1)[0]
     # Only the table rows: the surrounding prose mentions config.toml keys in
     # backticks too, and matching those would let a binding pass by accident.
