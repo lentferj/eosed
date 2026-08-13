@@ -7,34 +7,56 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 
 *What* is open. `docs/RESOLUTION_NOTES.md` tracks *how* to resolve each item.
 
-**Status, 2026-08-01 (second session).** Public at
-`github.com/lentferj/eosed`, `main` at `cef04c7`. **384 tests, all synthetic,
-now running in CI** on Python 3.11/3.12/3.13 — green. Every command in the
-editor protocol is either verified against a real E4XT Ultra or explicitly
-listed below as not, including all four destructive Master utilities
-(§21a-§21d), the parameter write path (§18), and the read paths. Nothing in
-the protocol is undocumented-and-unlabelled.
+**Status, 2026-08-13 (third session).** Public at
+`github.com/lentferj/eosed`, `main` at `82de405`. **386 tests, all synthetic,
+running in CI on three operating systems** — Linux (Python 3.11/3.12/3.13),
+macOS and Windows (3.11/3.13), seven jobs, green. Every command in the editor
+protocol is either verified against a real E4XT Ultra or explicitly listed
+below as not, including all four destructive Master utilities (§21a-§21d), the
+parameter write path (§18), and the read paths. Nothing in the protocol is
+undocumented-and-unlabelled.
 
-**This session** closed the whole housekeeping list (CI, packaging metadata,
-a refreshed `HW_CHECKLIST.md`, the stale `review-fixes` branch), built the
-`i` bank-integrity check that §21c called for, and made the README's Quick
-Start followable from a clean clone. Three bugs came out of it, none of them
-found by reading code:
+**This session** was one question — *have the install instructions been run
+outside this machine, and do macOS/Windows need their own steps?* — and the
+answer cost three commits and turned up a shipped bug.
 
-1. **The integrity check's own false negative** — a stale name catalog made
-   it report a bank clean in exactly the erase scenario it exists for. Found
-   by probing the assembled path when asked what live confirmation it had.
-2. **`eoscli ports` crashed on any host with no MIDI subsystem** — caught by
-   CI's *first* run, on a test that had asserted this case worked while never
-   reaching it (the dev box has an ALSA sequencer, so it passed vacuously).
-3. **`pip install -e .[dev]` fails in zsh**, the documented and until now
-   only install path, on the default shell of an entire platform.
+Putting `macos-latest` and `windows-latest` in the CI matrix found that
+**`config.toml` was silently unreadable on Windows** (RESOLUTION_NOTES §23).
+`_write_config_dict` opened the file with no `encoding=`, so Windows used
+cp1252, so the em dash in *our own header comment* became byte `0x97`, so
+`tomllib` — UTF-8 only by TOML spec — rejected the whole file, so the blanket
+`except Exception: return {}` reported it as "no config". The port cache never
+persisted, the view preference never persisted, and any hand-edited key was
+destroyed the first time the app saved. **Nine tests asserting that exact
+round trip had been green on Linux for the life of the project.**
 
-The pattern is worth naming, because it is the same one §11/§12/§21c already
-established for the protocol: **the things this project gets wrong are the
-things nothing ever executed.** A vacuous test and an unverified protocol
-assumption fail identically — quietly, and only on contact with something
-that isn't the author's own machine.
+macOS, by contrast, needed nothing: green on both Python versions, first try.
+
+**The README was also wrong rather than merely incomplete** for non-Linux
+users: the Quick Start was unrunnable on Windows (`bin/` vs `Scripts\`), the
+zsh quoting advice was half wrong (single quotes are literal in `cmd.exe`),
+and "python-rtmidi normally installs from a wheel" is false on Python 3.13+,
+where there is no wheel for *any* platform and a source build is guaranteed.
+
+That makes **three** sessions running in which the same pattern produced the
+session's real finding, and it is the same one §11/§12/§21c established for
+the protocol: **the things this project gets wrong are the things nothing ever
+executed.** A vacuous test, an unverified protocol assumption, and a correct
+test that only ever runs where the bug does not reproduce all fail
+identically — quietly, and only on contact with something that isn't the
+author's own machine. The corollary is now explicit in §23: when fixing one,
+check that the regression test itself is not inheriting the same blind spot.
+The first attempt at the Windows test asserted on the resulting bytes and
+would have passed on Linux with the bug still in place.
+
+**Previous session (2026-08-01, `cef04c7`)** closed the housekeeping list
+(CI, packaging metadata, a refreshed `HW_CHECKLIST.md`, the stale
+`review-fixes` branch), built the `i` bank-integrity check that §21c called
+for, and made the Quick Start followable from a clean clone. Its three bugs,
+also none found by reading code: the integrity check's own stale-cache false
+negative; `eoscli ports` crashing on any host with no MIDI subsystem (caught
+by CI's *first* run, on a test that had been passing vacuously); and
+`pip install -e .[dev]` failing in zsh.
 
 The largest open items are unchanged, in rough order of value: root-causing
 the §15 device crash (the only thing that can take the machine down, and what
@@ -45,8 +67,9 @@ capture). All three need hardware.
 **Next time there is hardware**, the two cheapest new items are
 `HW_CHECKLIST` **E8** and **E9** — run `i` against a bank with a deliberately
 erased-but-referenced sample, then repeat with the erase done from the
-*front panel*. E9 is the only way to confirm the fix in (1): nothing this app
-does can produce a genuinely out-of-band change to the device.
+*front panel*. E9 is the only way to confirm the previous session's
+stale-cache fix: nothing this app does can produce a genuinely out-of-band
+change to the device.
 
 ## Live hardware verification
 
@@ -268,6 +291,15 @@ catalogs this is meant to speed up. Procedure, and why the voice walk is
 
 ## Housekeeping
 
+**Done (2026-08-13).** CI extended to **macOS and Windows** — seven jobs, and
+it paid for itself on the first run again by exposing the cp1252 config bug
+(RESOLUTION_NOTES §23). The workflow also smoke-tests both console scripts
+now, since "is `eoscli` on PATH after an install" is exactly what the Quick
+Start promises and exactly what differs between `bin/` and `Scripts\`. The
+README gained a Windows install block, a per-platform compiler table for
+Python 3.13+, and a Platform notes section; `pyproject.toml`'s classifiers
+widened from Linux-only to all three.
+
 **Done (2026-08-01).** CI added (`.github/workflows/tests.yml` — the full
 synthetic suite on Python 3.11/3.12/3.13, on every push and PR);
 `pyproject.toml` gained `[project.urls]`, classifiers and keywords (no
@@ -318,14 +350,30 @@ in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
 - **CI runs on deprecated Node 20 actions.** `actions/checkout@v4` and
   `actions/setup-python@v5` both warn; GitHub is force-running them on Node
   24 and everything passes, so this is noise, not breakage. One-line bumps
-  when it is worth clearing.
-- **The zsh half of the install note is still asserted, not tested.** The
-  rest of the Quick Start was run end-to-end from an empty directory and
-  works (see below), but this box has no zsh, so the claim that unquoted
-  `.[dev]` fails there rests on knowledge rather than a run. Bash was
-  checked and leaves an unmatched glob literal, so pip receives the string
-  intact — which is exactly why the breakage is invisible from here. Worth
-  30 seconds on any macOS machine.
+  when it is worth clearing — now on **seven** jobs rather than three, so the
+  annotation noise has more than doubled.
+- **The zsh half of the install note is still asserted, not tested**, but it
+  no longer gates anyone: the README now says to use *double* quotes, which
+  work in bash, zsh, PowerShell and `cmd.exe` alike, so the shell-specific
+  claim is an explanation rather than an instruction. This box still has no
+  zsh. Worth 30 seconds on any macOS machine if the sentence is ever
+  rewritten.
+- **Nobody has driven real hardware from macOS or Windows.** CI covers
+  install, both entry points, demo mode and the full suite on all three
+  platforms, but hosted runners have no MIDI interface, so every live claim
+  in this repo rests on Linux sessions with one E4XT Ultra. The README's
+  "Platform notes" is careful to describe what CoreMIDI and WinMM *do* rather
+  than what eosed has been seen doing on them; keep that distinction if the
+  section is edited. Needs someone with the hardware on one of those
+  platforms — see RESOLUTION_NOTES §23 for what the matrix does and does not
+  prove.
+- **Windows 3.11 flake, watching not fixing.**
+  `test_write_mode_starts_armed_when_launched_with_allow_write` failed once
+  on `windows-latest` / 3.11 with a Textual `NoMatches` on `#presets`, and
+  has passed on the two runs since (including 3.13 in the same failing run).
+  Reads as a mount-timing race on a slow runner rather than a platform bug.
+  If it recurs, look at how the test waits for the preset pane to mount, not
+  at the platform.
 
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a

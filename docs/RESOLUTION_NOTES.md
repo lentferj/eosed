@@ -1640,3 +1640,111 @@ frequency — is a question about conversion fidelity, not about this display.
 Recorded because it would be easy to mistake for a bug here later: if someone
 measures the E4XT's filter and finds `fil_freq` "wrong", this is why, and the
 answer is that they measured a different thing.
+
+---
+
+## §23 — The config file was silently unreadable on Windows, and the CI matrix is what found it (resolved, 2026-08-13)
+
+**The bug.** `eos/bridge.py`'s `_write_config_dict` opened `config.toml` in
+text mode with no `encoding=`:
+
+```python
+with open(path, "w") as handle:          # <- locale codec, whatever that is
+```
+
+Python then uses the *locale* codec, which is UTF-8 on this project's Linux
+box and **cp1252 on Windows**. The file's first line is our own header
+comment, and it contains an em dash:
+
+```
+# eosed local config — gitignored, safe to delete.
+```
+
+cp1252 encodes that em dash as the single byte `0x97`. TOML is UTF-8 **by
+specification**, and `tomllib` enforces it, so the read side —
+
+```python
+with open(path, "rb") as handle:
+    return tomllib.load(handle)
+```
+
+— raised `UnicodeDecodeError: 'utf-8' codec can't decode byte 0x97`. The
+blanket `except Exception: return {}` around it then converted that refusal
+into an empty dict, which is *indistinguishable from "no config file"*. So
+nothing failed loudly; the settings simply were not there.
+
+Reproduce it on any platform:
+
+```python
+with open(p, "w", encoding="cp1252") as h:      # what Windows did implicitly
+    h.write("# eosed local config — gitignored, safe to delete.\n"
+            'send_port = "Out Port"\n')
+tomllib.load(open(p, "rb"))                     # UnicodeDecodeError, byte 0x97
+```
+
+**What it cost a Windows user.** Three things, all silent:
+
+1. The last-known-good port cache never persisted, so **every** launch paid a
+   full autodetect sweep — tens of seconds on a host with many ports, and the
+   precise cost the cache exists to avoid.
+2. The compact/extended view preference never survived a restart.
+3. **Hand-edited keys were destroyed.** `save_*` round-trips through
+   `_read_config_dict` before writing, so a read that returned `{}` meant the
+   next save wrote *only* the key it was saving. A user's `cache_depth`,
+   `sample_usage_early_stop` or `send_pc_on_preset_select` vanished the first
+   time the app saved anything — with the file on disk looking perfectly
+   plausible to them.
+
+**The fix** (commit `a45d590`) names the encoding on write, and makes the read
+side tolerant so the damage is repairable rather than permanent:
+
+- write with `encoding="utf-8"` — both ends now agree with the TOML spec;
+- on read, decode UTF-8 and **fall back to cp1252** on `UnicodeDecodeError`,
+  so a file already written by a broken build still yields its hand-edited
+  keys, and the next write rewrites it as UTF-8. Self-healing, no manual
+  cleanup, no migration note for users.
+
+**How it was found, which is the transferable part.** Not by reading the code
+— it had been read many times — but by adding `macos-latest` and
+`windows-latest` to the CI matrix (commit `0a444dd`). Nine tests that assert
+this exact save/load round trip had been **passing on Linux for the life of
+the project** while the code was broken on another platform. They were not
+bad tests; they were correct tests running only where the bug does not
+reproduce.
+
+Note the shape: this is the same failure as `test_ports_lists_something`
+(§ Housekeeping in `TODO.md`) and the same as §21c's stale-cache false
+negative. A test that never executes the failing configuration and a protocol
+assumption that was never fired at hardware are the same defect wearing
+different clothes, and this project has now produced three of them.
+
+**The regression test had to avoid inheriting the bug.** The obvious test —
+write a config, assert the bytes on disk are valid UTF-8 — **passes on Linux
+with the bug still present**, because a UTF-8 locale produces a correct file.
+Writing that test would have re-created the exact vacuity it was meant to
+close. So `test_config_is_written_as_utf8_regardless_of_the_locale_codec`
+monkeypatches `builtins.open` and asserts the call *names* its encoding, which
+is checkable on any host regardless of locale. Verified to fail with the fix
+reverted, on Linux.
+
+**What the cross-platform matrix does and does not prove.** CI now runs the
+full synthetic suite on Linux (3.11/3.12/3.13), macOS and Windows (3.11/3.13),
+plus a smoke test of both console scripts. That covers install, entry points,
+demo mode and every test. It proves **nothing** about talking to an E4XT from
+macOS or Windows: hosted runners have no MIDI hardware. On both, `eoscli
+ports` enumerated cleanly and returned empty lists — worth noting, because it
+means CoreMIDI and WinMM construct fine even headless, and the
+`MidiUnavailable` path (§ the `ports` fix) is in practice a Linux-container
+condition rather than a general one.
+
+**Two platform facts worth keeping, neither exercised here:**
+
+- `python-rtmidi` 1.5.8 publishes wheels for CPython 3.8–3.12 only. On 3.13+
+  pip builds from source **on every platform** — our own 3.13 Linux job
+  installs `python_rtmidi-1.5.8-cp313-cp313-linux_x86_64.whl`, a locally built
+  wheel, not a manylinux one. That is why the README now recommends 3.11/3.12
+  rather than "3.11+".
+- WinMM grants a MIDI port to one application at a time, unlike ALSA, which
+  does not enforce exclusive access at all. On Windows the OS therefore
+  enforces this project's one-session-at-a-time rule; on Linux nothing does,
+  which is why `DISCLAIMER.md` has to say it in words.

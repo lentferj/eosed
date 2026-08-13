@@ -227,6 +227,12 @@ every setting has a working default — and **never read or written under
 Two of the keys are written *by* the app; the rest are yours to edit and the
 app only reads them.
 
+If you hand-edit it, **save it as UTF-8** — TOML is UTF-8 by specification and
+that is what the parser accepts. Only the app's own header comment has ever
+contained a non-ASCII character, so this rarely matters in practice; a file
+eosed cannot parse is treated as absent, which means your settings fall back
+to their defaults rather than raising an error.
+
 | key | type | default | what it does |
 |---|---|---|---|
 | `send_port` | string | *(unset)* | **App-written, but you may set it.** Last MIDI output port that answered a Device Inquiry, tried first on the next launch so a reconnect skips the full port sweep — see [Two machines on one host](#two-machines-on-one-host). |
@@ -1065,7 +1071,7 @@ tests/
 
 ## Tests
 
-Needs the dev extra (`pip install -e '.[dev]'`, see [Quick Start](#quick-start)):
+Needs the dev extra (`pip install -e ".[dev]"`, see [Quick Start](#quick-start)):
 
 ```sh
 .venv/bin/python -m pytest
@@ -1074,8 +1080,14 @@ Needs the dev extra (`pip install -e '.[dev]'`, see [Quick Start](#quick-start))
 All tests are synthetic (fake MIDI ports / fake device replies) — no
 hardware is touched or required, and none is reachable from them. That is
 what lets the same suite run unchanged in
-[CI](https://github.com/lentferj/eosed/actions) on Python 3.11, 3.12 and
-3.13.
+[CI](https://github.com/lentferj/eosed/actions) across seven jobs: Linux on
+Python 3.11, 3.12 and 3.13, and **macOS and Windows** on 3.11 and 3.13, plus
+a smoke test of both console scripts on each.
+
+Running on more than one operating system is not ceremony — it is the only
+reason a real bug in the config file's encoding was ever found, after nine
+tests asserting that exact behaviour had been passing on Linux for the life
+of the project (`docs/RESOLUTION_NOTES.md` §23).
 
 ## License and Third-Party Sources
 
