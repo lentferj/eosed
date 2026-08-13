@@ -1149,6 +1149,31 @@ class EosedApp(App):
             except Exception:
                 pass
 
+    def _ui_gone(self) -> bool:
+        """True once the app has shut down and its pane tree is unmounted.
+
+        Every ``_show_*``/``_append_*`` painter below is a worker completion:
+        the worker finished its MIDI round trip and hands the result back with
+        ``call_from_thread`` to put on screen. If the app exited in the
+        meantime the panes are gone, ``query_one`` raises ``NoMatches`` on the
+        main thread, and ``call_from_thread`` re-raises it *inside the worker*
+        — surfacing as ``WorkerFailed`` instead of a clean shutdown. The
+        window is not small on real hardware: a bank page load is a sequential
+        per-preset round trip taking seconds, and a cache-all sweep runs for
+        minutes, all of it quittable with ``q``.
+
+        Deliberately keyed on ``is_running`` rather than catching
+        ``NoMatches``: a pane missing while the app is still up is a real bug
+        and must keep raising loudly. This silences only the shutdown case.
+
+        Found on Windows CI, where the slower runner made a test exit its
+        ``run_test`` block while the startup page load was still in flight.
+        It reproduced on Linux only when the callback was invoked by hand
+        after teardown, which is why it read as a flake twice before it read
+        as a race.
+        """
+        return not self.is_running
+
     def set_status(self, text: str) -> None:
         self.last_status = text  # exposed for tests, matching k2kremote's convention
         try:
@@ -1258,6 +1283,8 @@ class EosedApp(App):
 
     def _show_bank_page(self, bank: str, start: int, window: int, names: Dict[int, str],
                         status: Optional[str] = None, cursor: Optional[int] = None) -> None:
+        if self._ui_gone():
+            return
         # ``status`` lets a caller that just performed an action (rename, a
         # Master fire) show its own confirmation instead of the generic
         # "presets/samples N-M" message this refresh would otherwise set —
@@ -1337,6 +1364,8 @@ class EosedApp(App):
         self.call_from_thread(self._append_bank_rows, bank, extend_range, names)
 
     def _append_bank_rows(self, bank: str, extend_range: range, names: Dict[int, str]) -> None:
+        if self._ui_gone():
+            return
         state = self._bank_state(bank)
         self._extending[bank] = False
         if state.cache_range is None or state.cache_range.stop != extend_range.start:
@@ -1596,6 +1625,8 @@ class EosedApp(App):
     def _show_preset_overview(self, preset: int, voice_count: int, zone_counts: Dict[int, int],
                               ids: List[int], values: Dict[int, int],
                               sample_rows: List[Tuple[int, str, str]]) -> None:
+        if self._ui_gone():
+            return
         self._show_voices(voice_count, zone_counts)
         self._show_params(ids, values, "global")
         self._show_samples(sample_rows)
@@ -1704,6 +1735,8 @@ class EosedApp(App):
 
     def _show_voice_detail(self, voice: int, ids: List[int], values: Dict[int, int],
                            sample_rows: List[Tuple[int, str, str]]) -> None:
+        if self._ui_gone():
+            return
         self._show_params(ids, values, f"voice V{voice + 1}")
         self._show_samples(sample_rows)
         self.set_status(self._take_pending_status()
@@ -1764,6 +1797,8 @@ class EosedApp(App):
         self.call_from_thread(self._show_link_detail, link, link_ids, link_values)
 
     def _show_link_detail(self, link: int, ids: List[int], values: Dict[int, int]) -> None:
+        if self._ui_gone():
+            return
         self._show_params(ids, values, f"link L{link + 1}")
         # _show_params set its own status; re-assert a pending confirmation
         # over it, same reason as the preset/voice views above.
@@ -1874,6 +1909,8 @@ class EosedApp(App):
 
     def _show_sample_usage_results(self, sample: int, matches: List[Tuple[int, str]],
                                    note: str = "") -> None:
+        if self._ui_gone():
+            return
         samples_table = self.query_one("#samples", _FillWidthDataTable)
         samples_table.clear()
         for preset, name in matches:
@@ -1945,6 +1982,8 @@ class EosedApp(App):
 
     def _show_dangling_results(self, findings: List[Tuple[int, int, str]],
                                note: str = "") -> None:
+        if self._ui_gone():
+            return
         samples_table = self.query_one("#samples", _FillWidthDataTable)
         samples_table.clear()
         for preset, number, voices_label in findings:
@@ -2297,6 +2336,8 @@ class EosedApp(App):
 
     # -- parameter table ------------------------------------------------
     def _show_params(self, ids: List[int], values: Dict[int, int], label: str) -> None:
+        if self._ui_gone():
+            return
         self._current_param_ids = ids
         self._current_param_label = label
         table = self.query_one("#params", _FillWidthDataTable)

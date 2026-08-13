@@ -8,6 +8,9 @@
 import pathlib
 import asyncio
 
+import pytest
+
+from textual.css.query import NoMatches
 from textual.widgets import Header
 
 from eos import params as p
@@ -1926,6 +1929,49 @@ async def test_toggle_view_shows_and_hides_voice_and_samples_panes():
         assert app.compact_view is True
         assert voices.display is False
         assert samples.display is False
+
+
+async def test_worker_results_arriving_after_shutdown_do_not_raise():
+    # The Windows CI race, made deterministic. Every _show_*/_append_* painter
+    # is a worker completion delivered by call_from_thread; if the app exited
+    # while the worker was still in flight, the panes are gone and query_one
+    # raises NoMatches on the main thread, which call_from_thread re-raises
+    # inside the worker as WorkerFailed. On real hardware the window is wide
+    # open -- a bank page load is seconds of sequential round trips and a
+    # cache-all sweep is minutes, all of it quittable with 'q'.
+    #
+    # This surfaced twice on windows-latest/3.11 and on two different tests
+    # before it was recognised as one race rather than two flakes, because the
+    # interleaving needs a runner slow enough to exit a run_test block mid-load.
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.is_running
+
+    assert not app.is_running, "precondition: the app has shut down"
+
+    # Each of these is what an in-flight worker would call on completion.
+    app._show_bank_page("preset", 0, 16, {0: "Anything"})
+    app._append_bank_rows("preset", range(16, 32), {16: "Anything"})
+    app._show_params([1], {1: 0}, "global")
+    app._show_preset_overview(0, 1, {0: 1}, [1], {1: 0}, [])
+    app._show_voice_detail(0, [1], {1: 0}, [])
+    app._show_link_detail(0, [1], {1: 0})
+    app._show_sample_usage_results(1, [], "")
+    app._show_dangling_results([], "")
+
+
+async def test_a_pane_missing_while_running_still_raises():
+    # The guard above must not become a blanket "ignore missing panes": while
+    # the app is up, a painter that cannot find its table is a real bug and
+    # has to fail loudly. Keyed on is_running for exactly this reason.
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.query_one("#presets").remove()
+        await pilot.pause()
+        with pytest.raises(NoMatches):
+            app._show_bank_page("preset", 0, 16, {0: "Anything"})
 
 
 async def test_view_preference_persists_across_restarts(tmp_path):
