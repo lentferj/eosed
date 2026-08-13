@@ -1643,6 +1643,85 @@ answer is that they measured a different thing.
 
 ---
 
+## §24 — The blanket `except` was not how §23 hid; it is a second bug, and it destroys files (resolved, 2026-08-13)
+
+**§23 is wrong about this, and the correction matters.** That entry treats
+the encoding as *the* bug and the blanket `except Exception: return {}` as
+merely the reason it was silent. The commit message went further and called
+the masking secondary. It is not secondary and it is not a symptom: it is an
+independent defect with a worse failure mode than the one it hid, and fixing
+the encoding left it live.
+
+**The mechanism.** Saving is read-modify-write, deliberately — the module
+comment says so, "not a blind overwrite, so unrelated keys survive each
+other's saves". That invariant holds only while a failed read is
+distinguishable from an empty one. It is not:
+
+```python
+try:
+    return tomllib.loads(text)
+except Exception:
+    return {}                 # "no settings" and "I could not read this"
+```
+
+So a parse failure turns the next save into a blind overwrite of a file the
+app never understood. Reproduced with a hand-typed bracket — no encoding
+involved, on a UTF-8 Linux box:
+
+```
+before:  cache_depth = "full"
+         send_pc_on_preset_select = false
+         this line is [broken
+
+after one unrelated save (the view preference):
+         # eosed local config — gitignored, safe to delete.
+         compact_view = true
+```
+
+Both hand-edited settings gone, silently. **The cp1252 em dash was one cause
+among many.** A stray bracket, a file truncated by a crash, a half-written
+config from a killed process, or the next encoding surprise all reach the
+same place.
+
+### Why the framing mattered, not just the code
+
+§23 read as history — a bug found and fixed. Anyone reading it would conclude
+the config path was now sound. The sentence describing the masking sat there
+as an explanation of a past failure while describing a present one, which is
+the specific way documentation goes wrong in this project: not by being
+false, but by describing a live mechanism in the past tense.
+
+### The fix, and the part most likely to have been got wrong
+
+`_read_config(path)` now returns `(settings, status)` with status
+`ok` / `missing` / `unreadable`. `_read_config_dict` stays as a thin wrapper
+for the ten readers that cannot act on a failure. Both savers go through
+`_update_config`, which **refuses to write when the existing file did not
+parse** and prints one line to stderr saying so.
+
+**`missing` and `unreadable` must stay distinct.** Conflating them is the
+original defect, and the obvious over-correction — refuse to write whenever
+the read produced nothing — would stop a first run ever creating a config,
+swapping one silent failure for another. There is a test for exactly that,
+because it is the mistake this fix invites.
+
+A preference that fails to persist is a nuisance. A file quietly emptied is
+not recoverable by a user who has no reason to suspect it happened, which is
+why the refusal is loud and the write is the thing that gives way.
+
+### What it shares with §23, and what it does not
+
+§23's lesson was that a correct test running only where the bug cannot
+reproduce proves nothing. This one is different: **the failing configuration
+was reachable on the author's own machine the whole time.** It needed no
+matrix, no second platform, and no hardware — one malformed file and one
+save. It survived because the code had been read as "the encoding was the
+problem" and nobody wrote the four-line reproduction.
+
+The existing test `test_read_config_dict_invalid_toml_returns_empty` pinned
+the returning-empty behaviour, so it was deliberate rather than overlooked.
+Pinning a behaviour is not the same as establishing that it is right.
+
 ## §23 — The config file was silently unreadable on Windows, and the CI matrix is what found it (resolved, 2026-08-13)
 
 **The bug.** `eos/bridge.py`'s `_write_config_dict` opened `config.toml` in
@@ -1672,6 +1751,14 @@ with open(path, "rb") as handle:
 blanket `except Exception: return {}` around it then converted that refusal
 into an empty dict, which is *indistinguishable from "no config file"*. So
 nothing failed loudly; the settings simply were not there.
+
+> **Corrected by §24.** This entry treats that blanket `except` as the reason
+> the encoding bug was silent. It is a second bug in its own right, and the
+> worse of the two: because saving is read-modify-write, any parse failure —
+> a hand-typed bracket, a truncated file, an encoding surprise — makes the
+> next save overwrite a file the app never read. Fixing the encoding did not
+> touch it. Read §24 before concluding from this entry that the config path
+> is sound.
 
 Reproduce it on any platform:
 

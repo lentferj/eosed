@@ -291,6 +291,16 @@ catalogs this is meant to speed up. Procedure, and why the voice walk is
 
 ## Housekeeping
 
+**`tools/capture_screenshots.py` produces a spurious full-file diff on every
+run.** Textual stamps a randomised CSS class name into each export
+(`.terminal-533059608-…` → `.terminal-2843853891-…`), so all five SVGs come
+back modified with no content change whatsoever. Left as folklore this will
+eventually get committed by someone who assumes the diff is real, or hide a
+change that is. Check with `git diff --numstat docs/screenshots/` — equal
+insert/delete counts on every file is the signature of pure noise. Only
+commit regenerated screenshots when a real UI change motivated the run.
+
+
 **Done (2026-08-13).** CI extended to **macOS and Windows** — seven jobs, and
 it paid for itself on the first run again by exposing the cp1252 config bug
 (RESOLUTION_NOTES §23). The workflow also smoke-tests both console scripts

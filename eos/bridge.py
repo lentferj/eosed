@@ -49,6 +49,7 @@ docs/RESOLUTION_NOTES.md before relying on this against real hardware.
 
 from __future__ import annotations
 
+import sys
 import time
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -74,17 +75,37 @@ DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's Bridge
 # Read-modify-write (not a blind overwrite) so unrelated keys survive each
 # other's saves — this file holds more than one independent setting.
 
-def _read_config_dict(path: str) -> dict:
+#: Set once, by the first save that had to leave a config alone. Keeps the
+#: warning to one line per run rather than one per setting saved.
+_warned_unreadable = False
+
+
+def _read_config(path: str) -> Tuple[dict, str]:
+    """``(settings, status)`` where status is ok / missing / unreadable.
+
+    The distinction is the point. A file that cannot be parsed and a file
+    that does not exist both yield no settings, and collapsing them is what
+    made the Windows encoding bug invisible: `tomllib` refused the whole file,
+    the blanket ``except`` reported "no config", and the next save -- which is
+    read-modify-write -- rewrote the file from an empty dict and dropped every
+    hand-edited key.
+
+    Fixing the encoding removed one cause. It did not remove the mechanism,
+    which fires for any parse failure: a stray bracket typed by hand, a file
+    truncated by a crash, the next encoding surprise. So the status travels
+    with the data and :func:`_update_config` refuses to overwrite a file it
+    could not read.
+    """
     import os
     import tomllib
 
     if not os.path.exists(path):
-        return {}
+        return {}, "missing"
     try:
         with open(path, "rb") as handle:
             raw = handle.read()
     except OSError:
-        return {}
+        return {}, "unreadable"
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -97,9 +118,38 @@ def _read_config_dict(path: str) -> dict:
         # file as UTF-8 and it stays readable from then on.
         text = raw.decode("cp1252", errors="replace")
     try:
-        return tomllib.loads(text)
+        return tomllib.loads(text), "ok"
     except Exception:
-        return {}
+        return {}, "unreadable"
+
+
+def _read_config_dict(path: str) -> dict:
+    """Just the settings, for the many readers that cannot act on a failure."""
+    return _read_config(path)[0]
+
+
+def _update_config(path: str, **changes) -> None:
+    """Read-modify-write one or more settings, or leave the file alone.
+
+    **Refuses to write when the existing file could not be parsed.** The
+    alternative is what this code used to do: treat unreadable as empty and
+    overwrite, which turns one typo in a hand-edited config into the silent
+    loss of every setting in it. A preference that fails to persist is a
+    nuisance; a file quietly emptied is not recoverable by the user, who has
+    no reason to suspect it happened.
+    """
+    global _warned_unreadable
+
+    data, status = _read_config(path)
+    if status == "unreadable":
+        if not _warned_unreadable:
+            _warned_unreadable = True
+            print(f"eosed: {path} could not be parsed, so settings are not "
+                  f"being saved. Fix or delete it; nothing has been "
+                  f"overwritten.", file=sys.stderr)
+        return
+    data.update(changes)
+    _write_config_dict(data, path)
 
 
 def _write_config_dict(data: dict, path: str) -> None:
@@ -141,10 +191,7 @@ def load_last_ports(path: str = DEFAULT_CONFIG_PATH) -> Optional[Tuple[str, str]
 
 
 def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_PATH) -> None:
-    data = _read_config_dict(path)
-    data["send_port"] = send_port
-    data["recv_port"] = recv_port
-    _write_config_dict(data, path)
+    _update_config(path, send_port=send_port, recv_port=recv_port)
 
 
 # --- remembered TUI view mode ------------------------------------------------
@@ -157,9 +204,7 @@ def load_compact_view(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
 
 
 def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
-    data = _read_config_dict(path)
-    data["compact_view"] = compact
-    _write_config_dict(data, path)
+    _update_config(path, compact_view=compact)
 
 
 # --- sample-usage reverse-lookup early-stop threshold ------------------------

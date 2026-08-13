@@ -109,7 +109,12 @@ async def shoot(name, setup, *, compact=True, bridge=None, size=SIZE):
         await pilot.pause()
         await asyncio.sleep(0.15)
         await pilot.pause()
-        (OUT / f"{name}.svg").write_text(app.export_screenshot(title="eosed"))
+        # encoding= is not optional: the export is full of box-drawing
+        # characters, and write_text() without it uses the locale codec --
+        # cp1252 on Windows, which cannot encode U+256D and raises. Same
+        # class as the config bug, in the tool rather than the app.
+        (OUT / f"{name}.svg").write_text(
+            app.export_screenshot(title="eosed"), encoding="utf-8")
         print(f"  wrote {name}.svg")
 
 

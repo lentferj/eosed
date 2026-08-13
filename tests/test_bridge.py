@@ -1220,3 +1220,65 @@ def test_dump_preset_old_raises_device_cancelled_when_nak_is_answered_with_cance
     bridge = _bridge_with(handler)
     with pytest.raises(bridge_mod.DeviceCancelled):
         bridge.dump_preset_old(0)
+
+
+def test_an_unparseable_config_is_left_alone_rather_than_overwritten(tmp_path, capsys):
+    """One hand-typed bracket must not cost the user every other setting.
+
+    Saving is read-modify-write, so a read that reports "no settings" for a
+    file that actually has some turns the next save into a blind overwrite.
+    That is the mechanism behind the Windows encoding bug, and fixing the
+    encoding removed only one of its causes -- a stray bracket, a truncated
+    file, or the next encoding surprise all still reach it.
+    """
+    # The warning is once-per-run, so the flag has to be cleared here or this
+    # test passes or fails depending on what ran before it.
+    bridge_mod._warned_unreadable = False
+
+    path = tmp_path / "config.toml"
+    original = ('cache_depth = "full"\n'
+                "send_pc_on_preset_select = false\n"
+                "this line is [broken\n")
+    path.write_text(original, encoding="utf-8")
+
+    bridge_mod.save_compact_view(True, str(path))
+
+    assert path.read_text(encoding="utf-8") == original, \
+        "an unreadable config must not be overwritten"
+    assert "could not be parsed" in capsys.readouterr().err, \
+        "and the refusal must be visible, or it is its own silent failure"
+
+
+def test_a_missing_config_is_still_created_normally(tmp_path):
+    """The refusal must distinguish unreadable from absent, not conflate them.
+
+    Conflating those is the original bug; a fix that also refused to create a
+    first config would have swapped one silent failure for another.
+    """
+    path = tmp_path / "config.toml"
+    bridge_mod.save_compact_view(True, str(path))
+    assert bridge_mod.load_compact_view(str(path)) is True
+
+
+def test_unrelated_settings_still_survive_each_others_saves(tmp_path):
+    """The read-modify-write invariant the module docstring promises."""
+    path = tmp_path / "config.toml"
+    bridge_mod.save_last_ports("Out", "In", str(path))
+    bridge_mod.save_compact_view(True, str(path))
+
+    assert bridge_mod.load_last_ports(str(path)) == ("Out", "In")
+    assert bridge_mod.load_compact_view(str(path)) is True
+
+
+def test_the_read_reports_why_it_returned_nothing(tmp_path):
+    """missing and unreadable must be distinguishable at the source."""
+    missing = tmp_path / "nope.toml"
+    assert bridge_mod._read_config(str(missing)) == ({}, "missing")
+
+    broken = tmp_path / "broken.toml"
+    broken.write_text("this is not [valid toml", encoding="utf-8")
+    assert bridge_mod._read_config(str(broken))[1] == "unreadable"
+
+    good = tmp_path / "good.toml"
+    good.write_text('compact_view = true\n', encoding="utf-8")
+    assert bridge_mod._read_config(str(good)) == ({"compact_view": True}, "ok")
