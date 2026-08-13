@@ -8,7 +8,7 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 *What* is open. `docs/RESOLUTION_NOTES.md` tracks *how* to resolve each item.
 
 **Status, 2026-08-13 (third session).** Public at
-`github.com/lentferj/eosed`, `main` at `82de405`. **386 tests, all synthetic,
+`github.com/lentferj/eosed`, `main` at `de7e7a7`. **392 tests, all synthetic,
 running in CI on three operating systems** — Linux (Python 3.11/3.12/3.13),
 macOS and Windows (3.11/3.13), seven jobs, green. Every command in the editor
 protocol is either verified against a real E4XT Ultra or explicitly listed
@@ -38,6 +38,14 @@ zsh quoting advice was half wrong (single quotes are literal in `cmd.exe`),
 and "python-rtmidi normally installs from a wheel" is false on Python 3.13+,
 where there is no wheel for *any* platform and a source build is guaranteed.
 
+The matrix then found a **second** bug the author's platform could not show:
+worker results landing after the app shut down (`WorkerFailed`/`NoMatches`),
+which had been dismissed as a Windows flake twice before two failures on two
+*different* tests made it read as a race. Fixed with an `is_running` guard on
+the eight `_show_*`/`_append_*` painters. Not a test artefact — on real
+hardware a bank page load is seconds and a cache-all sweep is minutes, all of
+it quittable with `q`.
+
 That makes **three** sessions running in which the same pattern produced the
 session's real finding, and it is the same one §11/§12/§21c established for
 the protocol: **the things this project gets wrong are the things nothing ever
@@ -48,6 +56,29 @@ author's own machine. The corollary is now explicit in §23: when fixing one,
 check that the regression test itself is not inheriting the same blind spot.
 The first attempt at the Windows test asserted on the resulting bytes and
 would have passed on Linux with the bug still in place.
+
+**But do not over-learn the CI lesson — §24 is the counterweight.** A second
+session reviewing this work found that the config bug had a half §23 named and
+did not fix: the blanket `except Exception: return {}` still let *any* parse
+failure (a stray bracket, a truncated file) silently empty the config, because
+saving is read-modify-write. That failing configuration was reachable on this
+Linux box the entire time — one malformed file, one save. **No matrix, no
+second platform, no hardware.** It survived because the mechanism had been
+described in a commit message and nobody wrote the four-line reproduction.
+
+So the session produced two rules, not one, and they are independent:
+
+1. **Run where you do not develop** (§23, the encoding half, the shutdown race).
+2. **Write the reproduction even when you think you already understand the
+   mechanism** (§24) — especially right after describing it confidently in
+   prose. Rule 2 would have caught §24 with none of rule 1's infrastructure.
+
+A third failure mode is worth naming because it is subtler than being wrong:
+§23 was *not* false. It described a live mechanism in the past tense, which is
+how a reader concludes a path is sound when it is not. §24 opens by
+contradicting §23 directly, and §23 carries a forward pointer, deliberately —
+see the "no stale claims" convention that the last three sessions have been
+about.
 
 **Previous session (2026-08-01, `cef04c7`)** closed the housekeeping list
 (CI, packaging metadata, a refreshed `HW_CHECKLIST.md`, the stale
@@ -377,13 +408,28 @@ in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
   section is edited. Needs someone with the hardware on one of those
   platforms — see RESOLUTION_NOTES §23 for what the matrix does and does not
   prove.
-- **Windows 3.11 flake, watching not fixing.**
-  `test_write_mode_starts_armed_when_launched_with_allow_write` failed once
-  on `windows-latest` / 3.11 with a Textual `NoMatches` on `#presets`, and
-  has passed on the two runs since (including 3.13 in the same failing run).
-  Reads as a mount-timing race on a slow runner rather than a platform bug.
-  If it recurs, look at how the test waits for the preset pane to mount, not
-  at the platform.
+- **~~Windows 3.11 flake~~ — resolved, and it was never a flake.** Filed here
+  as "watching not fixing" after one failure; it recurred on a *different*
+  test with the same signature, which is what made it legible as a race
+  rather than noise. Two real defects came out of it: worker completions
+  crashing when they land after shutdown (fixed with the `is_running` guard),
+  and then the new guard's own test racing the startup load it shared an app
+  with. **Kept in the record deliberately**: "intermittent on one platform"
+  read as noise twice before it read as a bug, and the cost of that reading
+  was two red CI runs on `main`. One failure on one platform is a sample of
+  one, not evidence of flakiness.
+- **No convention for two sessions in one working tree.** Two Claude sessions
+  worked in this tree simultaneously for the better part of an hour and
+  neither knew until a `git status` showed unexpected files — after both had
+  already written to disk and run the suite. Nothing was lost, but only
+  because one committed by explicit path rather than `git commit -a` and the
+  other checked before committing: two independent pieces of care, neither
+  required by anything. This is the same shape as the hardware rule in
+  `CLAUDE.md` (one session drives the E4XT at a time, because two on one MIDI
+  port corrupts a measurement) applied to a resource that has no such rule.
+  Open question for the author, not to be settled unilaterally: a lock file,
+  a peer check before the first *write* (reviewing concurrently is harmless —
+  contention starts at the first edit), or a line in each `CLAUDE.md`.
 
 - **`docs/samples/e4xt_ultra_preset0_old_format.bin` provenance is undecided.**
   The preset *name* was scrubbed (§7), but the parameter values are still a
