@@ -1965,11 +1965,32 @@ async def test_a_pane_missing_while_running_still_raises():
     # The guard above must not become a blanket "ignore missing panes": while
     # the app is up, a painter that cannot find its table is a real bug and
     # has to fail loudly. Keyed on is_running for exactly this reason.
+    #
+    # The startup page load has to be allowed to finish first. Removing
+    # #presets out from under a worker that is still in flight crashes *that*
+    # worker -- correctly, per the paragraph above -- and its WorkerFailed
+    # then propagates instead of the direct call below being caught. That is
+    # not hypothetical: this test failed exactly that way on windows-latest,
+    # where the runner is slow enough that pilot.pause() alone does not get
+    # the load finished.
+    # Two things can reach #presets on their own besides the direct call
+    # below, and either one crashing is a *correct* loud failure that would
+    # still fail this test: an in-flight page-load worker, and the debounced
+    # resize timer the first layout pass arms. Both are quiesced first, so
+    # what the assertion observes is the direct call and nothing else.
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
+        if app._resize_timer is not None:
+            app._resize_timer.stop()
+            app._resize_timer = None
+        await pilot.pause()
+
         app.query_one("#presets").remove()
         await pilot.pause()
+
+        assert app.is_running, "precondition: still running, so the guard is inactive"
         with pytest.raises(NoMatches):
             app._show_bank_page("preset", 0, 16, {0: "Anything"})
 
