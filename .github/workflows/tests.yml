@@ -6,6 +6,15 @@
 # no ALSA sequencer. That is the point of running it here: the drift this
 # project keeps finding by hand (stale key tables, stale "unverified" claims)
 # is exactly what a red build catches on the push that introduced it.
+#
+# The matrix is deliberately not Linux-only. The author develops on Linux, but
+# most people who own an E4XT are on macOS or Windows, and the install path is
+# the part of this project most likely to be broken in a way the author's own
+# machine can never show them — the same shape of blind spot that made
+# `test_ports_lists_something` pass vacuously for weeks. Linux sweeps every
+# supported Python; macOS and Windows cover the oldest and newest, which is
+# also the wheel/no-wheel split (python-rtmidi 1.5.8 ships no cp313 wheel on
+# any platform, so 3.13 exercises a from-source build and 3.11 does not).
 
 name: tests
 
@@ -20,11 +29,22 @@ permissions:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    name: pytest (${{ matrix.os }}, ${{ matrix.python-version }})
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.11"
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
@@ -35,16 +55,28 @@ jobs:
           cache: pip
 
       # python-rtmidi is imported at module scope by `eos.bridge`, so it has to
-      # be installed even though nothing here opens a port. It ships manylinux
-      # wheels; the ALSA headers are only needed if pip falls back to a source
-      # build on a version with no wheel yet.
-      - name: Install ALSA headers (source-build fallback for python-rtmidi)
+      # be installed even though nothing here opens a port. On Linux the ALSA
+      # headers are needed whenever pip falls back to a source build — which is
+      # not the rare case it sounds like: there is no cp313 wheel, so 3.13
+      # builds from source every time. macOS and Windows need no equivalent
+      # step: CoreMIDI and WinMM are part of the OS SDK, and the runners ship
+      # the toolchain (Xcode CLT / MSVC) that a source build needs.
+      - name: Install ALSA headers (needed for any python-rtmidi source build)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
+          python -m pip install -e ".[dev]"
+
+      # Proves the console scripts are actually on PATH and runnable from the
+      # venv the installer made — the thing a README Quick Start promises and
+      # the thing that differs most between platforms (bin/ vs Scripts/).
+      - name: Smoke-test the entry points
+        run: |
+          eoscli --demo inquire
+          eoscli ports
 
       - name: Run the suite
         run: python -m pytest -q
