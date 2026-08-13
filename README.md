@@ -103,8 +103,11 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 
 ## Quick Start
 
-Needs **Python 3.11+** and nothing else to try out — no MIDI interface, no
-sampler, no sound hardware of any kind.
+Needs **Python 3.11 or 3.12** (see [Python version](#python-version-pick-311-or-312)
+below — 3.13+ works but wants a compiler) and nothing else to try out: no MIDI
+interface, no sampler, no sound hardware of any kind.
+
+**Linux / macOS:**
 
 ```sh
 git clone https://github.com/lentferj/eosed
@@ -115,13 +118,40 @@ python3 -m venv .venv
 .venv/bin/eosed --demo
 ```
 
-To run the test suite as well, install the dev extra instead —
-`.venv/bin/pip install -e '.[dev]'`. **Quote it**: zsh (the default shell on
-macOS) treats the brackets as a glob and fails with `no matches found`.
+**Windows** (PowerShell) — a venv puts its executables in `Scripts\`, not
+`bin/`, so the paths differ throughout:
 
-`python-rtmidi` normally installs from a wheel. If pip falls back to
-building it from source you will also need the ALSA development headers —
-`sudo apt install libasound2-dev` on Debian/Ubuntu.
+```powershell
+git clone https://github.com/lentferj/eosed
+cd eosed
+py -3 -m venv .venv
+.venv\Scripts\pip install -e .
+.venv\Scripts\eoscli --demo inquire
+.venv\Scripts\eosed --demo
+```
+
+To run the test suite as well, install the dev extra instead — `pip install -e
+".[dev]"`. **Use double quotes.** Bare `.[dev]` is a glob in zsh (the default
+shell on macOS), which fails with `no matches found`; single quotes are literal
+characters in `cmd.exe`, which then looks for a package called `'.[dev]'`.
+Double quotes are the one form that works in bash, zsh, PowerShell and
+`cmd.exe` alike.
+
+### Python version: pick 3.11 or 3.12
+
+`python-rtmidi` 1.5.8 publishes wheels for CPython 3.8–3.12 only. On **3.13 and
+newer there is no wheel for any platform**, so pip builds it from source and
+you need a working C toolchain plus the MIDI development headers:
+
+| | 3.11 / 3.12 | 3.13+ (source build) |
+|---|---|---|
+| **Linux** | wheel, nothing else needed | `sudo apt install build-essential libasound2-dev` |
+| **macOS** | wheel, nothing else needed | `xcode-select --install` |
+| **Windows** | wheel, nothing else needed | [MSVC Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), "Desktop development with C++" |
+
+Everything here works on 3.13 — CI builds and tests it on Linux and macOS —
+it is just a much longer and more fragile install for no benefit. On 3.11 or
+3.12 all three platforms install from a wheel in a few seconds.
 
 `--demo` on both entry points runs against a canned in-memory device —
 no MIDI port opened, no hardware required, no local config touched. This
@@ -143,6 +173,32 @@ Real hardware use requires a MIDI interface connected to the E4/E4XT:
 .venv/bin/eosed                      # TUI, writes disabled by default
 .venv/bin/eosed --allow-write        # enables edit/rename/Master — see the warning above
 ```
+
+(On Windows, `.venv\Scripts\eoscli`, `.venv\Scripts\eosed`.)
+
+### Platform notes
+
+Installation, demo mode and the full test suite are verified by CI on
+**Linux, macOS and Windows**. Everything beyond that — talking to an actual
+E4XT — has only ever been done from Linux by the author, so the notes below
+are what the platform's MIDI stack does, not what this tool has been observed
+doing on it. `eoscli ports` is the cheap first check on any of them.
+
+- **macOS** — CoreMIDI is part of the OS; a class-compliant USB MIDI interface
+  needs no driver and shows up in `eoscli ports` directly. Nothing extra to
+  install. (The IAC Driver in *Audio MIDI Setup* only matters if you want
+  virtual ports between applications; it is not needed to reach hardware.)
+- **Windows** — WinMM likewise needs no driver for a class-compliant
+  interface, but it grants a MIDI port to **one application at a time**: if
+  your DAW is open and holding the interface, `eosed` cannot open it, and vice
+  versa. That is stricter than Linux, where ALSA does *not* enforce exclusive
+  access (see [DISCLAIMER.md](DISCLAIMER.md)) — so on Windows the OS happens to
+  enforce this project's one-session-at-a-time rule for you.
+  Run it in **Windows Terminal**; Textual renders poorly in the legacy
+  `cmd.exe` console host.
+- **Linux** — needs an ALSA sequencer (`/dev/snd/seq`). Containers, headless
+  servers and some WSL setups have no MIDI subsystem at all, and `eoscli ports`
+  says so explicitly rather than reporting an empty list.
 
 If you route through `mididings` or similar, make sure the route does
 **not** strip SysEx (see `docs/RESOLUTION_NOTES.md` §5 for a gotcha the
