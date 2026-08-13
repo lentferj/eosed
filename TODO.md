@@ -424,7 +424,11 @@ in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
   already written to disk and run the suite. Nothing was lost, but only
   because one committed by explicit path rather than `git commit -a` and the
   other checked before committing: two independent pieces of care, neither
-  required by anything. This is the same shape as the hardware rule in
+  required by anything — and, the uncomfortable half, **neither aimed at
+  this**. One ran `git status` to see what it was about to commit, not to
+  detect another session; the other used pathspecs for tidiness. The safety
+  was a by-product of ordinary habits, which is precisely the kind that stops
+  working the day someone is in a hurry. This is the same shape as the hardware rule in
   `CLAUDE.md` (one session drives the E4XT at a time, because two on one MIDI
   port corrupts a measurement) applied to a resource that has no such rule.
   Open question for the author, not to be settled unilaterally: a lock file,
