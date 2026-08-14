@@ -73,7 +73,9 @@ to each is very different:
 1. **The remote editor/librarian protocol** (`F0 18 21 <devID> 55 <cmd> …
    F7`) is fully documented by E-mu Systems in a public specification —
    see [LICENSE](LICENSE) for the exact document and how its facts are
-   used. This is what eosed implements today.
+   used. This is what eosed implements today — the editor half in full, the
+   librarian half only outbound: presets can be dumped from the device, never
+   sent back to it (see the README's "It is an editor, not a librarian").
 2. **The undocumented panel/remote-control protocol** (`F0 18 7F 00 00 …
    F7`) — used by tools that mirror the device's own LCD and inject
    front-panel button presses — was never published by E-mu. Only

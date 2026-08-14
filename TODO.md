@@ -102,6 +102,42 @@ erased-but-referenced sample, then repeat with the erase done from the
 stale-cache fix: nothing this app does can produce a genuinely out-of-band
 change to the device.
 
+## Preset restore — the missing half of "editor/librarian" (OPEN, 2026-08-14)
+
+**Status: not built, in either dump format.** `eoscli dump` reads a preset off
+the device; nothing sends one back. `eos/messages.py` already encodes the
+frames (`PRESET_DUMP` `0Dh` with its OLD/NEW sub-commands, ACK/NAK/WAIT/EOF
+handshake), so this is a missing *send path* — a bridge method and a CLI
+command — not missing protocol work.
+
+**Why it was worth opening as its own item.** The docs called this project an
+"editor/librarian" in six places while it could not put a preset back, which
+is the one capability the word *librarian* actually denotes (Galaxy,
+SoundDiver, MIDI Quest all mean transmit-back by it). Corrected 2026-08-14 —
+the phrase now names E-mu's protocol explicitly, not this tool's coverage of
+it, and the README carries an "It is an editor, not a librarian" section.
+
+Two contradictory claims fell out of the same bundling, each true of one half
+of "dump/restore" and false of the other:
+
+* README "Not yet implemented" said **NEW-format dump/restore** was missing —
+  but `dump_preset_new` and `eoscli dump --new-format` exist.
+* README "Known Limitations" said NEW-format **dump/restore is implemented**
+  but unverified — and restore is not implemented at all.
+
+Neither was a typo: writing an implemented and an absent capability as one
+slash-joined item is what let both survive. Worth remembering next to §23's
+"described a live mechanism in the past tense" — same family of documentation
+fault, where the sentence is not false so much as unreadable as false.
+
+**Before building it**, note that restore is a *write* to the device and a
+whole-preset one: it overwrites a preset slot outright. It belongs behind
+`--allow-write` and the arm-then-fire modal like the Master utilities, not on
+a plain key. The spec's one-preset-at-a-time rule (CLAUDE.md) applies, and the
+ACK/NAK/WAIT/EOF handshake is the part most likely to need a live probe — §7
+already caught the dump engine not ACKing its header, and the reverse
+direction has never been exercised at all.
+
 ## Live hardware verification
 
 **Status: in progress.** `eoscli inquire`, `config`, `memory`, `catalog`
@@ -1025,9 +1061,9 @@ the docstring; **the off-by-one direction (channel 1 at value 1 vs value
 the panel's own Link Type field — the same check `FX_A`/`FX_B_ALGORITHM`
 have been waiting on.
 
-Not built: NEW-format dump/restore, and anything from the panel/mirror
-protocol (see the section above — that's out of scope for this TUI
-entirely).
+Not built: preset **restore** in either format (NEW-format *dump* is built —
+see the Preset restore section), and anything from the panel/mirror protocol
+(see the section above — that's out of scope for this TUI entirely).
 
 **On `main` (not this branch): presets/params pane resizing — fixed,
 verified live.** The two panes weren't following terminal resizes

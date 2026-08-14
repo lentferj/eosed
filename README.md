@@ -9,7 +9,7 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 
 A terminal tool for the E-mu **EOS** sampler family (E4, E4XT, E4XT Ultra,
 E6400, …) driven over MIDI System Exclusive — a command-line explorer
-(`eoscli`) plus a full Textual TUI editor (`eosed`) for the
+(`eoscli`) plus a full Textual TUI **editor** (`eosed`) for the
 documented remote editor/librarian protocol, from the same author as the
 sibling **[k2kremote](https://github.com/lentferj/k2kremote)** (Kurzweil
 K2000/K2000R) and **[mpc2emu](https://github.com/lentferj/mpc2emu)** projects.
@@ -45,6 +45,27 @@ it does exactly what you tell it, it assumes you know what you want, and it is
 still on every Unix system decades after friendlier tools came and went.
 `eosed` takes the same bargain. Expect dense panes, terse keys, and numbers
 where a prettier tool would draw a knob.
+
+### It is an editor, not a librarian
+
+Worth saying plainly, because the protocol it speaks is conventionally called
+an *editor/librarian* protocol and that phrase appears throughout these docs.
+E-mu's specification earns both halves — it defines preset dump **and**
+restore. **eosed implements the editor half.**
+
+In the classical sense (Galaxy, SoundDiver, MIDI Quest), a librarian stores,
+organises and — the defining part — **transmits patches back** to the device.
+eosed does not. `eoscli dump` reads a preset off the machine into a file, and
+there is nothing that sends one the other way: no restore, in either dump
+format, at any layer. So what exists is a live parameter editor and browser,
+plus **one-way backup**. A file eosed wrote is a record, not something it can
+put back.
+
+Where these docs say "editor/librarian protocol" they are naming **E-mu's
+protocol**, not claiming its full scope — the protocol's own capabilities are
+tabulated under [Two protocols, one
+device](#two-protocols-one-device), with what is actually implemented marked
+there.
 
 ---
 
@@ -601,11 +622,24 @@ everything", and nothing here needs to survive a restart to be safe.
 
 ### Not yet implemented
 
-NEW-format dump/restore, editing a raw sample's own
-properties (loop points, root key, sample rate — this protocol has no
-generic parameter access to those; see `docs/RESOLUTION_NOTES.md` §10),
-Link browsing as a persistent pane (currently a modal, same as Voice),
-and anything touching the panel/mirror protocol. See [TODO.md](TODO.md).
+**Preset restore — sending a dumped preset back to the device — in either
+format.** The specification defines it and `eos/messages.py` can already
+encode the frames, but nothing wires them to a send path: there is no bridge
+method and no `eoscli` command. This is the one gap that decides what the
+tool *is* (see [It is an editor, not a
+librarian](#it-is-an-editor-not-a-librarian)), so it is listed first rather
+than among the smaller omissions.
+
+Also: editing a raw sample's own properties (loop points, root key, sample
+rate — this protocol has no generic parameter access to those; see
+`docs/RESOLUTION_NOTES.md` §10), Link browsing as a persistent pane
+(currently a modal, same as Voice), and anything touching the panel/mirror
+protocol. See [TODO.md](TODO.md).
+
+*NEW-format **dump** is implemented* (`eoscli dump --new-format`,
+`EosBridge.dump_preset_new`) — an earlier version of this list said it was
+not, while Known Limitations below said it was. Both were describing
+"dump/restore" as one item when only half of it exists.
 
 ---
 
@@ -630,7 +664,10 @@ on each is very different — keep the distinction sharp:
    edit/request with live min/max/default query, preset dump/restore,
    preset/sample naming, memory/config queries, and voice/link/sample-zone
    utilities. **This is the entire subject of this section, and what
-   `eos/` and `eoscli`/`eosed` implement.**
+   `eos/` and `eoscli`/`eosed` implement — with one exception: preset
+   *restore* is specified and frame-encodable but has no send path here, so
+   dumping is one-way.** That list describes E-mu's protocol, not this
+   tool's coverage of it.
 2. **The undocumented panel/remote-control protocol** — `F0 18 7F 00 00
    … F7`. What a tool like Ray Bellis's
    [e-remote](https://emu.tools) uses to mirror the
@@ -710,7 +747,7 @@ designator" byte in every frame) implemented by this project's
 | `SAMPLE_NAME_REQUEST` | `0Ah` | → device | Request the above |
 | `SAMPLE_NAME_CHAR_UPDATE` | `0Bh` | → device | Update a single character |
 | `SAMPLE_NAME_CHAR_REQUEST` | `0Ch` | → device | Request a single character |
-| `PRESET_DUMP` | `0Dh` | ↔ | Full preset dump/restore, sub-commanded (ACK/NAK/WAIT/EOF handshake) |
+| `PRESET_DUMP` | `0Dh` | ↔ | Full preset dump/restore, sub-commanded (ACK/NAK/WAIT/EOF handshake). **Dump implemented; restore not** — frames encode, nothing sends them |
 | `PRESET_DUMP_REQUEST` | `0Eh` | → device | Request an OLD-format single-preset dump |
 | `PRESET_MEMORY_REQUEST` / `_RESPONSE` | `10h`/`11h` | ↔ | Preset RAM total/free (KB) |
 | `SAMPLE_MEMORY_REQUEST` / `_RESPONSE` | `12h`/`13h` | ↔ | Sample RAM total/free (10 KB units) |
@@ -1054,8 +1091,10 @@ tests/
 - The undocumented panel/mirror protocol (screen mirroring, front-panel
   button injection) is entirely out of scope for the current codebase —
   see [Two protocols, one device](#two-protocols-one-device).
-- NEW-format preset dump/restore is implemented but not live-verified
-  (see [Preset dump formats](#preset-dump-formats)).
+- NEW-format preset **dump** is implemented but not live-verified (see
+  [Preset dump formats](#preset-dump-formats)). Preset **restore** is not
+  implemented in either format — eosed can read a preset off the device but
+  cannot send one back, which is why it is an editor and not a librarian.
 - A raw sample's own properties (loop points, root key, sample rate) have
   no generic parameter access in this protocol at all — not a gap in
   this project, a real protocol limitation (`docs/RESOLUTION_NOTES.md`
