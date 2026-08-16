@@ -477,15 +477,102 @@ in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
   interoperability artefact, or regenerate the equivalent from a
   self-authored preset and drop the question entirely.
 
-## Panel/remote (screen-mirror) protocol — reverse engineering not started
+## Panel/remote protocol — RE not started; **remote disk load is the reason**
 
-A true k2kremote-equivalent (LCD mirror + front-panel button injection) needs
-the undocumented `F0 18 7F 00 00 …` protocol, not the editor protocol this
-repo currently implements. See RESOLUTION_NOTES §3 for what fragments are
-already known (init/enable/close handshake, a button-press echo) and the RE
-method to fill in the rest (display-frame encoding, full button-code table,
-wheel encoding). Not started; requires live hardware + a browser running
-Ray Bellis's e-remote as the traffic source to capture against.
+**The use case, stated first because it is what makes this worth doing:**
+choose a disk, browse what is on it, and load a bank — from the desk, without
+walking to the rack. Banks are already written to HD images and mounted via a
+SCSI emulator (ZuluSCSI); the only step that still requires standing at the
+machine is telling it to load one.
+
+Until now this item read as "a k2kremote-equivalent would need this", which is
+a capability in search of a reason and is why it never got started. It has a
+reason now, and the reason **reorders the work**.
+
+**None of it is reachable from the editor protocol — checked, not assumed.**
+The full command table (`01h`-`7Ah` in `eos/messages.py`) has no disk surface
+whatsoever: no drive selection, no directory read, no load, no save, no mount.
+Every command is RAM-scoped. The EOS 4.0 manual documents no SysEx disk
+control either. **Auto Bank Load** (Master → Bank → Auto, F2/F3) is the only
+documented remote-ish path and is not this: it fires once at power-up, on a
+bank chosen at the panel, with no browsing.
+
+**The sibling technique does not port.** s3ked does remote loads on the Akai
+S3000 by writing the LOAD page's type-of-load register (its §75/§93 — value 1
+fires a load with no `GO`). That works because Akai's *documented* SysEx also
+carries the browse half: `RVOLLIST`/`VOLLIST` (`35h`/`36h`) for volumes and
+`RHDDIR`/`HDDIR` (`37h`/`38h`) for directory entries. EOS has no equivalent to
+aim at, so on this machine **both** halves — browse and load — have to come
+out of the undocumented panel protocol.
+
+**Which makes the display frame the blocker, not a later polish step.**
+Browsing a disk you cannot see is not browsing, and injecting keypresses at a
+machine whose screen you cannot read means navigating blind through menus that
+also contain the erase utilities. Order: **screen readback first**, then
+navigation, then the load trigger. Do not start at the buttons because they
+look easier.
+
+**Harness is built and waiting: `probes/panel_capture.py`.** Passive — it
+never transmits, since §3's rule forbids writing code against unverified
+bytes and a prober that sends is already breaking it. It listens while a
+browser running Ray Bellis's e-remote (<https://emu.tools>) drives the device,
+timestamps every frame, separates panel from editor traffic (and from
+Proteus/Morpheus, §4), supports typed markers so a capture records *what the
+operator did*, and diffs consecutive same-length frames to expose which byte
+offsets move — the shape a delta-encoded screen has. `--analyse FILE` re-runs
+the summary offline, so the thinking happens after the rack is closed.
+Analysis is unit-tested synthetically (`tests/test_panel_capture.py`), because
+a probe that mis-parses does not crash — it quietly wastes the session.
+
+### Scope decision, 2026-08-14: **no screen mirror.** Not negotiable on taste
+
+The first capture succeeded (§26) and the temptation it creates is to keep
+going straight: decode the bitmap fully, mirror the LCD, inject keypresses.
+**That is Ray Bellis's e-remote, rebuilt from its own traffic.** Permitted —
+the protocol is E-mu's, the facts are E-mu's, and §3 has always limited us to
+wire observation and never his code — but it is poor form, and it is not what
+this project is for. Ruled out deliberately, recorded so a later session does
+not drift back into it by momentum.
+
+**The model is s3ked.** s3ked does not mirror the Akai's screen. It finds the
+specific register an operation needs and drives it from its own UI. eosed
+should do the equivalent, which for this feature means:
+
+* **Browse from the disk image, not from the device.** The banks are written
+  to HD images here before they are ever mounted, so the directory is already
+  known off-device. mpc2emu parses E4B; `emu3fs`/`emu3bm` cover the EIII side.
+  Reading the image gives a real browser with names, sizes and slots — no
+  bitmap parsing, no OCR of a 240×64 screen.
+* **Use the panel protocol for one thing: select bank N and fire the load.**
+  A key-code table and a deterministic navigation sequence, not a display
+  decoder.
+
+This is a large reduction in scope *and* in risk. It also inverts the ordering
+this item carried a few hours ago ("screen readback first"): that was correct
+for a mirror and is wrong for this. The screen is still worth *reading* for
+confirmation — verifying the machine is on the page we think it is before
+firing a load — but confirming a known layout is a far smaller problem than
+decoding one well enough to browse from.
+
+### RE method changes too: capture the front panel, not e-remote
+
+§3 records that the E4XT **echoes its own front-panel activity** — every
+physical press emits a down/up pair. So the key-code table can be built by a
+human pressing keys on the actual machine while `probes/panel_capture.py`
+listens, with e-remote nowhere in the loop. It was only ever a convenient
+traffic source, never a necessary one.
+
+Open question for the next session, and the only thing that might still need
+his tool: whether the device echoes unprompted, or whether something must
+first "open" remote communication. If it echoes cold, the dependency is zero.
+
+**Also worth simply asking him.** Ray Bellis published fragments of this RE
+voluntarily. Saying what this project is building and asking whether he minds,
+or whether he would share what he knows, costs nothing and is the difference
+between deriving from someone's work and collaborating with them. Either way
+he is credited in the README's third-party table.
+
+Still needs live hardware for every part of it.
 
 ## Editor TUI (Phase 2 of the plan) — built, read paths verified live
 

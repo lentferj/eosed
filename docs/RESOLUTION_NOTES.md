@@ -1835,3 +1835,231 @@ condition rather than a general one.
   does not enforce exclusive access at all. On Windows the OS therefore
   enforces this project's one-session-at-a-time rule; on Linux nothing does,
   which is why `DISCLAIMER.md` has to say it in words.
+
+---
+
+## §25 — EOS has no disk surface at all, and what that costs the remote-load idea (resolved as a negative result, 2026-08-14)
+
+Recorded because a negative result that is not written down gets re-derived,
+and this one took a full command-table audit plus a manual search.
+
+**The question.** Banks are staged onto HD images and mounted with a SCSI
+emulator; the last manual step is walking to the E4XT to load one. Can a
+disk be chosen, browsed, and loaded remotely — the way `s3ked` does it on the
+Akai S3000?
+
+**Answer: not over the documented protocol, and not by s3ked's method.**
+
+**1. The editor protocol has no disk commands.** Full sweep of `Command` in
+`eos/messages.py` (`01h`–`7Ah`): parameter edit/request/min-max-default, preset
+and sample names, preset dump, memory/config/extended-config queries, the
+"number of X" family, voice/zone/link utilities, sample erase and defrag,
+preset copy/delete, multimode map, the three RAM erasers, and the NEW-dump
+ACK/NAK. **Every one is RAM-scoped.** There is no drive selection, no volume
+list, no directory read, no load, no save, no mount. This is not a gap in
+eosed's coverage — it is absent from E-mu's specification.
+
+**2. The manual agrees.** The EOS 4.0 manual documents no SysEx disk control.
+The only documented hands-off load is **Auto Bank Load** (Master → Bank →
+Auto, F2/F3): one designated bank, loaded at power-up, chosen at the panel.
+Useful for a fixed rig — and if the auto-load pointer is left on one slot, the
+*contents* of that slot can be changed remotely by rewriting the disk image,
+making a power cycle a crude remote trigger. It is not browsing, and it was
+not what was wanted.
+
+**3. s3ked's technique does not port, for a structural reason.** On the
+S3000, s3ked fires a load by writing the LOAD page's type-of-load register
+(its §75/§93: writing 1 acts, 0 and 2–7 store and do nothing). That is only
+half the feature, and the other half is *documented on the Akai*:
+`RVOLLIST`/`VOLLIST` (`35h`/`36h`) return volume-list items and
+`RHDDIR`/`HDDIR` (`37h`/`38h`) return harddisk directory entries. So on the
+Akai the browse is a supported query and only the trigger needed reverse
+engineering. **On EOS there is nothing to aim at**: both halves must come out
+of the undocumented panel protocol (`F0 18 7F 00 00 …`, §3).
+
+**4. What that implies about the order of work.** The display frame is the
+blocker, not a refinement. Browsing a disk you cannot see is not browsing, and
+button injection without screen readback means walking blind through menus
+that also hold the erase utilities — on a machine whose destructive operations
+are one-shot with no device-side confirmation. **Screen first, then
+navigation, then the trigger.** The buttons look like the easy start and are
+the wrong start.
+
+**5. Harness.** `probes/panel_capture.py` is built and tested, and is
+**passive by construction** — it never transmits. §3 forbids writing code
+against byte sequences this project has not captured, and the only panel
+sequences available are third-party fragments we have never verified, so a
+prober that sent them would be breaking the rule it exists to serve. Instead
+it sniffs while Ray Bellis's e-remote (<https://emu.tools>) drives the device:
+timestamps frames, classifies panel vs editor vs other-E-mu (§4), takes typed
+markers so the log records what the operator did, and diffs consecutive
+same-length frames so the offsets that move stand out. `--analyse FILE`
+reproduces the summary offline.
+
+Two defects were found by *running* it against a synthetic log rather than by
+reading it, both fixed and pinned by tests: the summary trusted a stored
+`known` field instead of deriving the label from the bytes, so a capture that
+did contain §3's handshake reported "no known fragments seen" — which reads as
+the finding that the published bytes are wrong, the most expensive possible
+wrong answer; and a truncated final line (what a Ctrl-C'd session leaves) took
+the whole analysis down with a `KeyError`. Same lesson as §24: run the thing,
+do not reason about it.
+
+**6. Cheapest next step, which may close the item without any of the above.**
+Point e-remote at the E4XT. It already mirrors the panel over this protocol.
+If it works, the actual problem — the desk is several meters from the rack —
+is solved with no protocol work, and eosed only needs a native pane if one is
+wanted for its own sake. If it does not work, that is a finding worth having
+before booking a capture session, and it is also §3's designated traffic
+source, so either outcome moves the RE forward.
+
+---
+
+## §26 — Panel protocol captured live: §3's published frame shape is WRONG, and the display is a 240×64 bitmap (2026-08-14, E4XT Ultra fw 4.70)
+
+First real capture of the panel/remote protocol. It corrects §3 on the most
+basic fact — the frame header — and answers the question §3 listed as the
+blocker, the display-frame encoding.
+
+**Setup.** Chrome's WebMIDI exposes only `Midi Through` on this host, so
+e-remote could not reach the interface directly. Bridged with:
+
+    aconnect 14:0 56:3     # Midi Through -> E4XT MIDI IN
+    aconnect 56:2 14:0     # E4XT MIDI OUT -> Midi Through
+
+Note the **asymmetry**, which cost a diagnosis: this rig sends on
+`ESI M4U eX MIDI 4` (56:3) and receives on `MIDI 3` (56:2) — different ports,
+as `config.toml`'s cached `send_port`/`recv_port` pair records. Bridging 56:3
+in both directions looks right and silently cannot work: replies arrive on
+56:2 and never reach the bridge. This is also why `eoscli --port` can never
+work on this rig — it uses one name for both directions — and why autodetect
+caches a *pair*.
+
+`--port` also defaults to device id 0 while this machine is id 5, so a forced
+`--port` inquiry gets no reply and looks exactly like dead hardware. Two
+independent reasons for the same symptom; neither was a fault.
+
+### The frame header is not what §3 says
+
+    §3 (third-party, unverified):   F0 18 7F 00 00 <cmd> … F7
+    observed live:                  F0 18 7F 05 7A <cmd> … F7
+                                             ^^ ^^
+                                             |  designator 7Ah
+                                             device id (5 = this machine's,
+                                             as reported by Device Inquiry)
+
+§3 states "device id fixed at `00`/`7F`". **It is a real device-id field**,
+carrying the same id the editor protocol uses, and `7Ah` sits where §3 shows
+`00`. None of §3's four published fragments appeared in the capture.
+
+That is not necessarily a contradiction of the sources — they may be a
+different firmware, a different EOS machine, or a different phase of the
+handshake — but it *is* a demonstration of why §3's rule exists: the harness
+was built matching §3's five-byte prefix and therefore classified **every real
+panel frame as generic "sysex"**. It watched the protocol it was written for
+go past and did not recognise it. Fixed by matching the three-byte
+`F0 18 7F` and reading the device id as a field.
+
+### Opcodes observed (byte 5)
+
+| op | n | what |
+|---|---|---|
+| `40h` | 6 | **button down/up** — `40 <key> 00 <01=down\|00=up>` |
+| `50h` | 3 | **display data** — 10-byte sub-header then a packed bitmap |
+| `52h` | 3 | always immediately precedes a `50h` |
+| `60h` | 3 | always immediately follows a button-down |
+| `61h` | 3 | `61 7F 7F` |
+
+The button layout was confirmed independently by the harness's own
+length-diffing rather than by eye: across the six 10-byte frames, only offsets
+6 and 8 ever varied — the key code and the down/up flag. Three distinct key
+codes were seen (`68h`, `73h`, `6Eh`) for three deliberate presses.
+
+`52h`/`60h`/`61h` are named from position and co-occurrence only, on one
+capture, one machine, one firmware. Handles for reading a log, not facts.
+
+### The display frame — solved
+
+`50h` payload: a constant 10-byte sub-header (`01 01 00 00 00 00 70 01 40 00`
+on every frame seen), then the screen as **standard MIDI 7→8 packed data**
+(one MSB byte carrying the high bits of the following seven).
+
+    full frame:  2195 septets  ->  1920 bytes  ==  240 × 64 / 8
+
+**Exactly** the E4XT's 240×64 monochrome LCD, with nothing left over. Two
+shorter `50h` frames (86 and 112 bytes total) followed screen changes, so
+partial/delta updates exist as well — their region encoding is not yet known
+and is the obvious next question.
+
+Pixel *layout* within those 1920 bytes is still unsolved: a naive row-major
+30-bytes-per-row render produces recognisable text-like structure but skewed,
+so it is some other order (column-major pages, or interleaved halves — a
+240×64 panel is commonly driven as two 120-wide or two 32-high halves).
+
+### Pixel layout: row-major, 30 bytes per row, MSB = leftmost
+
+Settled by rendering candidates and looking, rather than by argument. Strides
+29, 31 and 32 shear progressively; **30 is horizontal**, which is also the
+arithmetic answer (240 / 8). Within a byte, MSB-first and LSB-first are nearly
+indistinguishable at this resolution and both read; the bit order inside the
+7→8 MSB byte likewise. A row/half interlace was tried and is clearly wrong.
+
+What comes out is unmistakably an EOS screen: three lines of text, one row in
+inverse video (the selection), and soft-key labels along the bottom edge.
+Glyphs are legible as glyphs but not yet crisp, so something small remains —
+most likely a bit-order detail, or the captured frame being mid-update.
+
+`probes/render_lcd.py` does the reconstruction and can emit the candidate
+grid; it writes PNG with nothing but `zlib` and `struct`, so it adds no
+dependency.
+
+### The capture in this repo
+
+`docs/captures/panel_e4xt_fw470_2026-08-14.jsonl`, complete — all 18 frames
+including the three `50h` display frames with their pixel payloads.
+
+It was first committed **with the pixel data stripped**, because an LCD bitmap
+is a screenshot and CLAUDE.md bans committing commercial preset names in any
+form, screenshots explicitly included. At that point the layout was not yet
+decodable, so the content could not be verified as clean, and "probably fine"
+is not the standard that rule sets. The author then confirmed nothing
+commercial was on the screen, and the full capture replaced it.
+
+Recorded because the order matters: the check came before the commit, not
+after, and the answer that unblocked it came from the one person who could
+actually see the machine. Re-capturing with a known pattern on screen is
+still the fastest way to finish the pixel layout.
+
+### Next — reordered by the 2026-08-14 scope decision (see TODO)
+
+The project will **not** build a screen mirror: that is Ray Bellis's e-remote
+rebuilt from its own traffic, and while the protocol facts are E-mu's and §3
+has always confined us to the wire rather than his code, cloning his tool is
+not what this is for. The target is the s3ked shape — browse from the disk
+*image* (already written off-device here, and parseable by mpc2emu/`emu3fs`),
+and use this protocol only to select a bank and fire the load.
+
+That inverts the ordering this section was originally written with. Decoding
+the display to *browse* is off the table; confirming a known layout before
+firing a destructive-adjacent action is still wanted, and is a much smaller
+problem.
+
+1. **Key-code table** — now the critical path. Press each panel key once in a
+   recorded order with `probes/panel_capture.py` listening. Note this needs
+   **no e-remote at all**: §3 records that the device echoes its own
+   front-panel activity, so a human at the machine generates the traffic.
+2. **Does it echo cold?** Determine whether the device emits panel activity
+   unprompted or whether something must first open remote communication. If
+   cold, the dependency on any third-party tool is zero.
+3. **Navigation sequence to the disk pages**, deterministic and recorded.
+4. **Enough display decoding to confirm state** — which page is showing,
+   which item is selected — not enough to browse from. The pixel layout is
+   already row-major/30-bytes-per-row; a re-capture with a known pattern on
+   screen (a name field of `W`s vs blank) would finish the bit-order detail
+   in one press if it turns out to matter.
+5. `52h`/`60h`/`61h` by exercising them in isolation.
+
+Direction is **not** recoverable from this capture: Midi Through carries both
+ways on one port, so host→device and device→host are indistinguishable in the
+log. Next session should capture the two directions on separate ports, or log
+e-remote's output client separately.
