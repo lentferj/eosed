@@ -1467,12 +1467,24 @@ async def test_browser_window_grows_and_shrinks_with_terminal_height():
         await _wait_for(pilot, lambda: app.browser_window > small_window)
         grown_window = app.browser_window
         assert grown_window > small_window
+        # Wait for the *table*, not just the window value. browser_window is
+        # set as soon as the resize settles; the rows arrive later, from the
+        # worker that refetches them. Asserting on row_count straight after
+        # waiting on browser_window is waiting for the wrong signal, and it
+        # failed on windows-latest/3.13 with 24 == 63 -- the window had grown
+        # and the fetch had not landed. Same shape as the #presets race.
+        await _wait_for(pilot, lambda: presets.row_count == grown_window)
         assert presets.row_count == grown_window
         assert len(scans) == 1  # exactly one re-fetch for the grow
 
         await pilot.resize_terminal(80, 24)
         await asyncio.sleep(BROWSER_RESIZE_SETTLE + 0.2)
         await _wait_for(pilot, lambda: app.browser_window == small_window)
+        # Same wrong-signal race as the grow above, fixed here too rather than
+        # only where it happened to fail. This half repaints from cache so the
+        # window is narrower, but a window that closes on one runner and not
+        # another is not a property worth relying on.
+        await _wait_for(pilot, lambda: presets.row_count == small_window)
         assert presets.row_count == small_window
         # shrinking back reuses the cached names from the larger fetch above
         assert len(scans) == 1
