@@ -68,6 +68,8 @@ from textual.theme import Theme
 from textual.widgets import DataTable, Header, Input, Static
 
 from eos import bridge as bridge_mod
+from eos import lcd as lcd_mod
+from eos import panel as panel_proto
 from eos import messages as m
 from eos import params as p
 from eosed.demo import DemoBridge
@@ -844,7 +846,8 @@ class EosedApp(App):
     ]
 
     def __init__(self, bridge, *, allow_write: bool, demo: bool,
-                connect_kwargs: Optional[dict] = None):
+                connect_kwargs: Optional[dict] = None,
+                panel_render: str = "quadrant"):
         super().__init__()
         self.register_theme(E4XT_THEME)
         self.theme = "e4xt"
@@ -852,6 +855,7 @@ class EosedApp(App):
         self.allow_write = allow_write
         self.demo = demo
         self._connect_kwargs = connect_kwargs or {}
+        self.panel_render = panel_render
         self._bridge_lock = threading.Lock()
 
         # Remembered across restarts in config.toml (see eos.bridge.load_
@@ -2702,14 +2706,15 @@ class EosedApp(App):
 
         Speaks the *panel* protocol (`F0 18 7F ...`), not the editor protocol
         the rest of this app uses -- see CLAUDE.md on keeping the two apart.
-        Opening it transmits nothing; sending needs write mode plus a separate
-        arm inside the screen.
+        Opening it transmits nothing beyond the session open; sending keys
+        needs write mode plus a separate arm inside the screen.
 
         Under `--demo` there is no bridge at all, so the screen runs with no
-        send path: the layout and bindings are explorable, and nothing can
-        reach hardware that isn't there.
+        send path and no poll: the layout and bindings are explorable, and
+        nothing can reach hardware that isn't there.
         """
         send = None
+        poll = None
         device_id = m.DEFAULT_DEVICE_ID
         if self.bridge is not None and not self.demo:
             device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
@@ -2718,8 +2723,56 @@ class EosedApp(App):
                 # write=True: a panel press is fire-and-forget with no reply to
                 # pace against, the same category as a parameter edit.
                 send = lambda frame: out.send_message(list(frame), write=True)  # noqa: E731
-        self.push_screen(PanelScreen(allow_write=self.allow_write,
-                                     device_id=device_id, send=send))
+            poll = self._panel_poll
+            self._open_panel_session(device_id)
+        screen = PanelScreen(allow_write=self.allow_write,
+                             device_id=device_id, send=send, poll=poll)
+        screen.render_mode = self.panel_render
+        self.push_screen(screen)
+
+    def _open_panel_session(self, device_id: int) -> None:
+        """Send the §28 session open. The device is silent until it arrives.
+
+        Sent even when the panel will only be looked at, because §27 showed
+        the device does not echo panel activity at all until a session is
+        open -- without this the pane would show nothing and look broken.
+        """
+        try:
+            with self._bridge_lock:
+                self.bridge._send(bytes(panel_proto.open_session(device_id)), write=True)
+        except Exception as exc:
+            self.set_status(f"panel session could not be opened: {exc}")
+
+    def _panel_poll(self):
+        """§33b's refresh policy, over the app's own bridge.
+
+        Runs under ``_bridge_lock`` because it shares one MIDI port pair with
+        the editor protocol: ``send_and_receive`` drains and then takes the
+        *next* SysEx, so an editor request in flight would have its reply
+        eaten. The lock is what makes the two protocols safe on one wire.
+        """
+        if self.bridge is None or self.demo:
+            return None
+        device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
+        try:
+            with self._bridge_lock:
+                reply = list(self.bridge.send_and_receive(
+                    bytes(panel_proto.update_screen(device_id)), timeout=1.5))
+                decision = lcd_mod.classify_update(reply)
+                if decision == lcd_mod.RefreshDecision.IDLE:
+                    return None
+                if decision == lcd_mod.RefreshDecision.USE:
+                    return lcd_mod.decode_display(reply)
+                full = list(self.bridge.send_and_receive(
+                    bytes(panel_proto.request_screen(device_id)), timeout=3.0))
+            return lcd_mod.decode_display(full)
+        except TimeoutError:
+            # Ordinary: the device may be busy. Keep the last frame.
+            return None
+        # Anything else propagates. PanelScreen._poll_failed shows it in the
+        # status line, which is the whole point -- a blanket except here hid
+        # the reason the pane stayed empty, which is exactly the fault the
+        # config bug (§23) was about.
 
     def action_master_menu(self) -> None:
         self.push_screen(MasterScreen(self.current_preset), self._on_master_result)
@@ -2775,18 +2828,24 @@ def main(argv: Optional[List[str]] = None) -> None:
                              "preferences (default: config.toml; ignored if absent)")
     parser.add_argument("--demo", action="store_true",
                         help="use a canned in-memory device; never opens a MIDI port")
+    parser.add_argument("--panel-render", default="quadrant",
+                        choices=("quadrant", "half", "braille"),
+                        help="how the front panel (k) draws the LCD: quadrant "
+                             "and braille need 124 columns, half-block 244")
     parser.add_argument("--allow-write", action="store_true",
                         help="enable writes to real hardware (parameter edits, rename, the Master "
                              "menu's destructive operations); always on for --demo")
     args = parser.parse_args(argv)
 
     if args.demo:
-        app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+        app = EosedApp(DemoBridge(), allow_write=True, demo=True,
+                       panel_render=args.panel_render)
     else:
         app = EosedApp(
             None, allow_write=args.allow_write, demo=False,
             connect_kwargs=dict(port=args.port, device_id=args.device_id, timeout=args.timeout,
-                                config_path=args.config))
+                                config_path=args.config),
+            panel_render=args.panel_render)
     app.run()
 
 

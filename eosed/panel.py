@@ -64,6 +64,7 @@ from typing import Dict, List, Optional, Tuple
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual import work
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Static
@@ -124,7 +125,29 @@ WHEEL: Dict[str, int] = {
 }
 
 
-PANEL_WIDTH = 124
+#: Render modes for the LCD, cheapest-to-widest. k2kremote offers the same
+#: three for the K2000's identically-sized screen; which one reads best
+#: depends on how much terminal width you can spare.
+RENDER_MODES = ("quadrant", "half", "braille")
+
+#: Columns each mode needs for the display itself.
+_MODE_WIDTH = {"quadrant": lcd_mod.WIDTH // 2,     # 120, 2x2 px per cell
+               "half": lcd_mod.WIDTH,              # 240, 1x2 px per cell
+               "braille": lcd_mod.WIDTH // 2}      # 120, 2x4 px per cell
+
+_MODE_RENDER = {"quadrant": lambda bm: lcd_mod.to_quadrants(bm),
+                "half": lambda bm: lcd_mod.to_halfblocks(bm),
+                "braille": lambda bm: lcd_mod.to_braille(bm)}
+
+#: The button layout needs this much; the display may need more.
+MIN_PANEL_WIDTH = 124
+
+
+def panel_width(mode: str = "quadrant") -> int:
+    return max(MIN_PANEL_WIDTH, _MODE_WIDTH.get(mode, 120) + 4)
+
+
+PANEL_WIDTH = panel_width()
 
 
 class _Cell:
@@ -147,7 +170,8 @@ def _gap(width: int = 9) -> _Cell:
     return _Cell("", "", None, width)
 
 
-def _row(cells: List[_Cell], active: Optional[int], indent: int = 2) -> Tuple[str, str]:
+def _row(cells: List[_Cell], active: Optional[int], indent: int = 2,
+         width: int = PANEL_WIDTH) -> Tuple[str, str]:
     """Two markup lines (labels, key hints) for one row of controls.
 
     Width is tracked explicitly rather than measured off the result: Rich
@@ -171,7 +195,7 @@ def _row(cells: List[_Cell], active: Optional[int], indent: int = 2) -> Tuple[st
         else:
             labels += f"[b]{label}[/b] "
             hints += f"[dim]{hint}[/dim] "
-    pad = max(0, PANEL_WIDTH - used)
+    pad = max(0, width - used)
     return labels + " " * pad, hints + " " * pad
 
 
@@ -186,12 +210,67 @@ def visible_width(markup: str) -> int:
     return Text.from_markup(markup).cell_len
 
 
-def _caption(text: str) -> str:
-    return "[dim]" + text.ljust(PANEL_WIDTH)[:PANEL_WIDTH] + "[/dim]"
+def _placed(items, active: Optional[int], indent: int,
+            width: int = PANEL_WIDTH) -> Tuple[str, str]:
+    """Two lines with each label centred on an explicit column.
+
+    Used for the soft keys, which must line up with the boxes drawn along the
+    bottom of the LCD rather than sit in an evenly-spaced row of their own.
+    The labels above them change per page -- six narrow boxes on one screen,
+    three wide ones on another -- but the keys are physically at sixths of the
+    display, so the column is what stays true.
+    """
+    labels = [" "] * width
+    hints = [" "] * width
+    spans = []
+    for column, label, hint, code in items:
+        for text, buf in ((label, labels), (f"({hint})", hints)):
+            start = indent + column - len(text) // 2
+            start = max(0, min(start, width - len(text)))
+            for offset, char in enumerate(text):
+                buf[start + offset] = char
+            if buf is labels:
+                spans.append((start, len(text), code))
+
+    def paint(buf, bold):
+        out = ""
+        index = 0
+        while index < width:
+            hit = next((s for s in spans if s[0] == index), None)
+            if hit and active is not None and hit[2] == active:
+                chunk = "".join(buf[index:index + hit[1]])
+                out += f"[reverse b]{chunk}[/reverse b]"
+                index += hit[1]
+                continue
+            out += buf[index]
+            index += 1
+        return out if bold else "[dim]" + out + "[/dim]"
+
+    return paint(labels, True), paint(hints, False)
+
+
+def _headings(*items, width: int = PANEL_WIDTH, indent: int = 3) -> str:
+    """A dim caption line with each label centred on a column.
+
+    Headings are placed the same way the keys are, because on the hardware
+    they *label groups*: PRESET arcs over MANAGE/EDIT, PAGE over PREV/NEXT.
+    Laying them out as free text drifts out of register with the buttons the
+    moment a column moves.
+    """
+    buf = [" "] * width
+    for column, text in items:
+        start = max(0, min(indent + column - len(text) // 2, width - len(text)))
+        for offset, char in enumerate(text):
+            buf[start + offset] = char
+    return "[dim]" + "".join(buf) + "[/dim]"
+
+
+def _caption(text: str, width: int = PANEL_WIDTH) -> str:
+    return "[dim]" + text.ljust(width)[:width] + "[/dim]"
 
 
 def render_panel(active: Optional[int] = None, *, armed: bool = False,
-                 status: str = "", bitmap=None) -> str:
+                 status: str = "", bitmap=None, mode: str = "quadrant") -> str:
     """The panel as Rich markup. Pure -- no widgets, so it is testable.
 
     ``active`` is the key code to highlight (the one just pressed). It matters
@@ -208,6 +287,7 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
     centre-right, cursor diamond and numeric keypad on the right.
     """
     out: List[str] = []
+    total = panel_width(mode)
 
     def line(body: str = "", visible: Optional[int] = None) -> None:
         """One panel line, closed on both sides.
@@ -217,17 +297,17 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
         length is exactly how the first draft came out ragged.
         """
         width = visible_width(body) if visible is None else visible
-        out.append("[dim]│[/dim]" + body + " " * max(0, PANEL_WIDTH - width)
+        out.append("[dim]│[/dim]" + body + " " * max(0, total - width)
                    + "[dim]│[/dim]")
 
     out.append("[dim]╭─[/dim] [b]E4XT ULTRA[/b] [dim]"
-               + "─" * (PANEL_WIDTH - 13) + "╮[/dim]")
+               + "─" * (total - 13) + "╮[/dim]")
 
     # --- display + wheel -----------------------------------------------------
     # The LCD is rendered as braille (2x4 pixels per cell), which turns the
     # device's 240x64 screen into 120x16 characters -- no kitty graphics
     # protocol, no sixel, nothing but a font with U+2800..U+28FF. See §32.
-    inner = lcd_mod.WIDTH // 2                      # 120 braille columns
+    inner = _MODE_WIDTH.get(mode, lcd_mod.WIDTH // 2)
     state = ("[b red] ARMED — keys reach the device [/b red]" if armed
              else "[dim] disarmed (ctrl+t to arm) [/dim]")
     line("  [dim]┌" + "─" * inner + "┐[/dim]")
@@ -241,81 +321,113 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
                      " against hardware"):
             line("  [dim]│[/dim][dim]" + text.ljust(inner) + "[/dim][dim]│[/dim]")
     else:
-        for braille in lcd_mod.to_braille(bitmap):
-            line("  [dim]│[/dim]" + braille.ljust(inner) + "[dim]│[/dim]")
+        # Quadrant blocks, not braille: same 120 columns but twice the
+        # vertical resolution, and solid cells rather than dots, so the
+        # device's 1px font strokes read as strokes. Braille turned the
+        # screen into texture (§34).
+        for row in _MODE_RENDER.get(mode, _MODE_RENDER["quadrant"])(bitmap):
+            line("  [dim]│[/dim]" + row.ljust(inner) + "[dim]│[/dim]")
     line("  [dim]└" + "─" * inner + "┘[/dim]")
+
+    # --- soft keys, aligned under the display's own soft-menu boxes ----------
+    columns = lcd_mod.soft_key_columns(inner)
+    for text in _placed(
+            [(columns[n], f"F{n + 1}", f"f{n + 1}", KEYMAP[f"f{n + 1}"])
+             for n in range(6)],
+            active, indent=3, width=total):
+        line(text)
     line()
     line("  " + state + "     [dim]wheel ([ ]) ([{ }] ×10)[/dim]")
     line()
 
-    # --- soft keys -----------------------------------------------------------
-    line(_caption("      - - - - - - - - - -  soft keys  - - - - - - - - - -"))
-    soft = [_gap(4)] + [_cell(f"F{n}", f"f{n}", 7) for n in range(1, 7)]
-    for text in _row(soft, active):
-        line(text)
-    line()
+    # --- buttons, laid out against the hardware photograph -------------------
+    # Columns, not evenly-spaced rows. The panel groups things the way the
+    # metal does: MASTER and DISK/BROWSE alone at the left, PRESET's
+    # MANAGE/EDIT pair above SAMPLE's, AUDITION beside them, and then -- all
+    # on the *lower* row -- the three assignables, EXIT, the PAGE pair, and
+    # ENTER. An earlier version put the assignables and EXIT on the top row
+    # and ENTER on a third, which reads fine in isolation and matches nothing
+    # on the device.
+    #
+    # The headings matter as much as the keys: "PRESET" belongs over
+    # MANAGE/EDIT rather than over MASTER, and "PAGE" spans PREV/NEXT only --
+    # on the hardware it is a printed arc over exactly those two.
+    # Columns are expressed against the narrow layout and then scaled to the
+    # panel's actual width, so the buttons spread with the display instead of
+    # huddling on the left in half-block mode. On the hardware the keys span
+    # the whole width of the unit; a fixed 124-column cluster under a
+    # 244-column display is a text-grid artefact, not the panel.
+    def sx(column: int) -> int:
+        return round(column * (total - 4) / MIN_PANEL_WIDTH)
 
-    # --- mode buttons, assignables, page group, cursor -----------------------
-    line(_caption("   PRESET                      ASSIGNABLE        PAGE          CURSOR"))
-    upper = [
-        _cell("MASTER", "q", 10),
-        _cell("MANAGE", "w", 9),
-        _cell("EDIT", "e", 8),
-        _cell("AUDITION", "r", 10),
-        _gap(3),
-        _cell("1", "f", 5), _cell("2", "g", 5), _cell("3", "h", 5),
-        _gap(2),
-        _cell("EXIT", "j", 7),
-        _gap(8),
-        _cell("▲", "up", 8),
-    ]
-    for text in _row(upper, active):
-        line(text)
-    line()
+    C_MODE, C_MANAGE, C_EDIT, C_AUDITION = sx(7), sx(19), sx(29), sx(40)
+    C_A1, C_A2, C_A3 = sx(50), sx(62), sx(74)
+    C_EXIT, C_PREV, C_NEXT, C_ENTER = sx(84), sx(92), sx(100), sx(108)
+    C_LEFT, C_MID, C_RIGHT = sx(112), sx(116), sx(120)
 
-    line(_caption("   SAMPLE"))
-    lower = [
-        _cell("DISK/BR", "a", 10),
-        _cell("MANAGE", "s", 9),
-        _cell("EDIT", "d", 8),
-        _gap(7),
-        _gap(3),
-        _gap(5), _gap(5), _gap(5),
-        _gap(2),
-        _cell("PREV", "k", 7), _cell("NEXT", "l", 7),
-        _cell("◀", "left", 8), _cell("▶", "right", 8),
-    ]
-    for text in _row(lower, active):
-        line(text)
-
-    tail = [
-        _gap(10), _gap(9), _gap(8), _gap(10), _gap(3),
-        _gap(5), _gap(5), _gap(5), _gap(2),
-        _cell("ENTER", ";", 7),
-        _gap(8),
-        _cell("▼", "down", 8),
-    ]
-    line()
-    for text in _row(tail, active):
-        line(text)
-    line()
-
-    # --- numeric keypad + DEC/INC --------------------------------------------
-    line(_caption("   keypad                                        DEC / INC"))
-    pad_rows = [
-        [("1", "1"), ("2", "2"), ("3", "3")],
-        [("4", "4"), ("5", "5"), ("6", "6")],
-        [("7", "7"), ("8", "8"), ("9", "9")],
-        [("+/-", ","), ("0", "0"), (".", ".")],
-    ]
-    for index, keys in enumerate(pad_rows):
-        cells = [_gap(3)] + [_cell(label, key, 7) for label, key in keys]
-        if index == 0:
-            cells += [_gap(16), _cell("DEC", "-", 7), _cell("INC", "=", 7)]
-        for text in _row(cells, active):
+    def placed(items):
+        for text in _placed(items, active, indent=3, width=total):
             line(text)
 
-    out.append("[dim]╰" + "─" * (PANEL_WIDTH) + "╯[/dim]")
+    line(_caption("", total).replace("[dim][/dim]", "") if False else
+         _headings([(C_MANAGE + C_EDIT) // 2, "PRESET"],
+                   [(C_A1 + C_A3) // 2, "ASSIGNABLE KEYS"],
+                   [(C_PREV + C_NEXT) // 2, "PAGE"],
+                   [C_MID, "CURSOR"], width=total, indent=3))
+    placed([
+        (C_MODE, "MASTER", "q", KEYMAP["q"]),
+        (C_MANAGE, "MANAGE", "w", KEYMAP["w"]),
+        (C_EDIT, "EDIT", "e", KEYMAP["e"]),
+        (C_AUDITION, "AUDITION", "r", KEYMAP["r"]),
+        (C_MID, "▲", "↑", KEYMAP["up"]),
+    ])
+    line(_headings([(C_MANAGE + C_EDIT) // 2, "SAMPLE"],
+                   [(C_A1 + C_A3) // 2, "HOLD SET/SHIFT"],
+                   width=total, indent=3))
+    placed([
+        (C_MODE, "DISK/BR", "a", KEYMAP["a"]),
+        (C_MANAGE, "MANAGE", "s", KEYMAP["s"]),
+        (C_EDIT, "EDIT", "d", KEYMAP["d"]),
+        (C_A1, "1", "f", KEYMAP["f"]),
+        (C_A2, "2", "g", KEYMAP["g"]),
+        (C_A3, "3", "h", KEYMAP["h"]),
+        (C_EXIT, "EXIT", "j", KEYMAP["j"]),
+        (C_PREV, "PREV", "k", KEYMAP["k"]),
+        (C_NEXT, "NEXT", "l", KEYMAP["l"]),
+        (C_ENTER, "ENTER", ";", KEYMAP[";"]),
+        (C_LEFT, "◀", "←", KEYMAP["left"]),
+        (C_RIGHT, "▶", "→", KEYMAP["right"]),
+    ])
+    # The assignables carry printed sub-labels on the metal; the cursor
+    # diamond's bottom key sits on this line too.
+    line(_headings([C_A1, "SEQUENCER"], [C_A2, "NEW SAMPLE"], [C_A3, "RAM/ROM"],
+                   width=total, indent=3))
+    placed([(C_MID, "▼", "↓", KEYMAP["down"])])
+    line()
+
+    # --- numeric keypad + DEC/INC, far right as on the hardware --------------
+    # On the metal these sit to the *right* of the cursor diamond, not under
+    # the mode buttons. Putting them bottom-left was the last thing in this
+    # layout that came from the convenience of a text grid rather than from
+    # the photograph.
+    K1, K2, K3 = sx(96), sx(106), sx(116)
+    # DEC/INC live above the keypad on the metal, not beside the PAGE keys --
+    # they were borrowing PREV/NEXT's columns, which put them under the wrong
+    # heading entirely.
+    line(_headings([K2, "DEC / INC"], width=total, indent=3))
+    for text in _placed([(K1 + 4, "DEC", "-", KEYMAP["-"]),
+                         (K3 - 4, "INC", "=", KEYMAP["="])],
+                        active, indent=3, width=total):
+        line(text)
+    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"),
+                ("+/-", "0", ".")):
+        keys = {"+/-": ",", ".": "."}
+        items = [(col, label, keys.get(label, label), KEYMAP[keys.get(label, label)])
+                 for col, label in zip((K1, K2, K3), row)]
+        for text in _placed(items, active, indent=3, width=total):
+            line(text)
+
+    out.append("[dim]╰" + "─" * total + "╯[/dim]")
     if status:
         out.append("")
         out.append(status)
@@ -328,10 +440,17 @@ class PanelScreen(ModalScreen):
     BINDINGS = [
         Binding("escape", "close", "Close"),
         Binding("ctrl+t", "toggle_arm", "Arm/disarm sending"),
+        Binding("ctrl+r", "force_refresh", "Force a full screen"),
+        Binding("ctrl+g", "cycle_render", "Cycle LCD render"),
     ]
 
+    #: Poll interval for the cheap 52h update request. 70ms per poll (§33b),
+    #: so twice a second is about 14% of the MIDI link -- responsive without
+    #: queueing the user's keypresses behind screen traffic.
+    POLL_SECONDS = 0.5
+
     def __init__(self, *, allow_write: bool, device_id: int, send=None,
-                 bitmap=None):
+                 bitmap=None, poll=None):
         super().__init__()
         self.allow_write = allow_write
         self.device_id = device_id
@@ -342,19 +461,83 @@ class PanelScreen(ModalScreen):
         self.bitmap = None
         self.sent_frames: List[List[int]] = []   # exposed for tests
         self.bitmap = bitmap
+        # poll() -> bitmap | None, implementing §33b's policy. Owned by the
+        # caller because it needs the MIDI input port, which this screen
+        # deliberately does not.
+        self._poll = poll
+        self._polling = False
+        self.render_mode = "quadrant"
 
     def compose(self) -> ComposeResult:
         yield Static(render_panel(), id="panel")
 
     def on_mount(self) -> None:
         self._refresh("panel open — sending disabled")
+        if self._poll is not None:
+            self.set_interval(self.POLL_SECONDS, self._tick)
+
+    def _tick(self) -> None:
+        # One poll in flight at a time. A 52h round trip is ~70ms but an
+        # escalation to 51h is ~716ms (§33b), and overlapping requests would
+        # interleave two conversations on one wire.
+        if self._polling or self._poll is None:
+            return
+        self._polling = True
+        self._poll_worker()
+
+    @work(thread=True)
+    def _poll_worker(self) -> None:
+        try:
+            bitmap = self._poll()
+        except Exception as exc:                      # a dead port must not kill the UI
+            self.app.call_from_thread(self._poll_failed, str(exc))
+            return
+        self.app.call_from_thread(self._poll_done, bitmap)
+
+    def _poll_done(self, bitmap) -> None:
+        self._polling = False
+        if bitmap is not None:
+            self.bitmap = bitmap
+            self._refresh()
+
+    def _poll_failed(self, message: str) -> None:
+        self._polling = False
+        self._refresh(f"screen poll failed: {message}")
+
+    def action_cycle_render(self) -> None:
+        """`ctrl+g` -- quadrant -> half-block -> braille.
+
+        Not a cosmetic choice. Quadrant (120 cols) reads best in the space the
+        panel already needs; half-block (240 cols) keeps horizontal pixels 1:1
+        and is the most faithful if the terminal is wide enough; braille is
+        the same width as quadrant but 2x4 per cell, which merges this
+        device's 1-pixel strokes -- kept because it is the compact option and
+        some fonts render it better than blocks.
+        """
+        index = RENDER_MODES.index(self.render_mode)
+        self.render_mode = RENDER_MODES[(index + 1) % len(RENDER_MODES)]
+        need = panel_width(self.render_mode)
+        note = "" if need <= self.size.width else f" — needs {need} columns, you have {self.size.width}"
+        self._refresh(f"LCD render: {self.render_mode}{note}")
+
+    def action_force_refresh(self) -> None:
+        """`ctrl+r` -- ask for a full screen regardless of what the delta says.
+
+        Every automatic refresh scheme eventually disagrees with reality; this
+        is the way to say "just ask again" without restarting anything.
+        """
+        if self._poll is None:
+            self._refresh("no device connected — nothing to refresh")
+            return
+        self._refresh("forcing a full screen ...")
+        self._tick()
 
     def _refresh(self, status: str = "") -> None:
         if status:
             self.last_status = status
         self.query_one("#panel", Static).update(
             render_panel(self.last_key, armed=self.armed, status=self.last_status,
-                         bitmap=self.bitmap))
+                         bitmap=self.bitmap, mode=self.render_mode))
 
     def action_close(self) -> None:
         self.dismiss(None)
@@ -385,8 +568,13 @@ class PanelScreen(ModalScreen):
         key = event.key
         char = getattr(event, "character", None)
 
-        if key in ("escape", "ctrl+t"):
-            return                       # leave these to BINDINGS
+        # Derived from BINDINGS rather than listed literally. The literal
+        # version silently swallowed ctrl+r the moment it was added: this
+        # handler consumes every key by design, so any new binding is dead on
+        # arrival unless it is also named here, and nothing fails loudly when
+        # it is not. Deriving the set means adding a Binding is enough.
+        if key in {binding.key for binding in self.BINDINGS}:
+            return
 
         # Exclusive by design: every other key is consumed here, mapped or
         # not. This screen is a *mode*, and a mode that lets unrecognised keys

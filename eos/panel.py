@@ -177,6 +177,16 @@ def request_screen(device_id: int) -> List[int]:
     return _frame(device_id, PanelCommand.DISPLAY_REQUEST, [])
 
 
+def update_screen(device_id: int) -> List[int]:
+    """`52h` -- the cheap update request: 86 bytes and ~70ms when nothing has
+    changed, against 716ms for a full screen (§33b).
+
+    Classify the reply with :func:`eos.lcd.classify_update` *before* decoding
+    it; deciding from the frame's length is what makes polling cheap.
+    """
+    return _frame(device_id, PanelCommand.DISPLAY_UPDATE, [])
+
+
 def query_state(device_id: int) -> List[int]:
     """`60h` -- provokes a short `61h <a> <b>` reply of unknown meaning.
 

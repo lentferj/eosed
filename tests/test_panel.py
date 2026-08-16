@@ -152,9 +152,11 @@ def test_render_panel_draws_a_real_decoded_screen_when_given_one():
 
     art = render_panel(bitmap=bitmap)
     assert "decoder works" not in art
-    # braille, one row per 4 pixel rows
-    assert sum(1 for line in art.split("\n")
-               if any(0x2800 <= ord(ch) <= 0x28FF for ch in line)) == lcd.HEIGHT // 4
+    # quadrant blocks, one row per 2 pixel rows (§34) -- braille was too dense
+    # for the device's 1px font and read as texture rather than type.
+    quadrant_rows = sum(1 for line in art.split("\n")
+                        if any(ch in "▗▖▄▝▐▞▟▘▚▌▙▀▜▛█" for ch in line))
+    assert quadrant_rows >= lcd.HEIGHT // 2
 
 
 # --- the screen --------------------------------------------------------------
@@ -285,13 +287,14 @@ def test_every_panel_line_is_the_same_width():
     # count for box-drawing and em dashes. All of them are one assertion.
     from rich.text import Text
 
-    from eosed.panel import PANEL_WIDTH
+    from eosed.panel import RENDER_MODES, panel_width
 
-    for armed in (False, True):
-        art = render_panel(active=Key.MASTER, armed=armed)
-        widths = {Text.from_markup(line).cell_len for line in art.split("\n")}
-        assert widths == {PANEL_WIDTH + 2}, (
-            f"ragged panel (armed={armed}): widths {sorted(widths)}")
+    for mode in RENDER_MODES:
+        for armed in (False, True):
+            art = render_panel(active=Key.MASTER, armed=armed, mode=mode)
+            widths = {Text.from_markup(line).cell_len for line in art.split("\n")}
+            assert widths == {panel_width(mode) + 2}, (
+                f"ragged panel (mode={mode}, armed={armed}): {sorted(widths)}")
 
 
 def test_visible_width_ignores_markup_but_not_content_brackets():
@@ -340,3 +343,175 @@ def test_the_byte_pair_is_not_treated_as_a_direction_marker():
     assert pp.parse_button(device_button) == (0x5C, True)
     assert pp.parse_button(device_display) is None      # not a button, but not rejected for its bytes
     assert pp.parse_button([0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x40, 0x5C, 0x00, 0x01, 0xF7]) == (0x5C, True)
+
+
+# --- the refresh poll (§33b) -------------------------------------------------
+
+async def test_polling_updates_the_screen_and_survives_a_failing_port():
+    # This path had no test when it was written, and shipped an
+    # AttributeError: call_from_thread is a method on App, not on Screen, so
+    # the worker died on its first tick and the pane simply never updated.
+    # Nothing in the unit tests touched it because none of them passed a poll.
+    import json
+    import pathlib
+
+    from eos import lcd
+    from textual.app import App
+
+    capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
+               "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
+    frames = [json.loads(line)["bytes"] for line in
+              capture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    bitmap = lcd.decode_display(max(frames, key=len))
+
+    calls = []
+
+    def poll():
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("port went away")
+        return bitmap
+
+    class Host(App):
+        def on_mount(self):
+            screen = PanelScreen(allow_write=True, device_id=5,
+                                 send=lambda f: None, poll=poll)
+            screen.POLL_SECONDS = 0.05
+            self.push_screen(screen)
+
+    app = Host()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.wait_for_scheduled_animations()
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if len(calls) >= 2 and app.screen.bitmap is not None:
+                break
+        assert calls, "poll was never called"
+        assert app.screen.bitmap is not None, "a polled screen never reached the pane"
+        # ... and the failing poll must leave the app alive with a message
+        assert app.screen is not None
+
+
+def test_soft_keys_are_aligned_under_the_displays_soft_menu_positions():
+    # The physical F-keys sit under sixths of the display. The labels above
+    # them change per page -- six narrow boxes on one screen, three wide ones
+    # on the LOAD dialog -- so aligning to the *drawn* boxes would be right on
+    # one page and wrong on the next. Sixths are right on every page.
+    from eos import lcd
+
+    art = render_panel().split("\n")
+    fkey_line = next(line for line in art if "F1" in line and "F6" in line)
+    plain = "".join(ch for ch in fkey_line)
+    for marker in ("F1", "F2", "F3", "F4", "F5", "F6"):
+        assert marker in plain
+
+    columns = lcd.soft_key_columns(lcd.WIDTH // 2)
+    assert columns == [10, 30, 50, 70, 90, 110]
+    # evenly spaced, and none at the extreme edges
+    gaps = {columns[i + 1] - columns[i] for i in range(5)}
+    assert gaps == {20}
+    assert 0 < columns[0] and columns[-1] < lcd.WIDTH // 2
+
+
+def test_all_three_render_modes_draw_the_screen():
+    import json
+    import pathlib
+
+    from eos import lcd
+    from eosed.panel import RENDER_MODES, panel_width
+
+    capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
+               "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
+    frames = [json.loads(line)["bytes"] for line in
+              capture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    bitmap = lcd.decode_display(max(frames, key=len))
+
+    for mode in RENDER_MODES:
+        art = render_panel(bitmap=bitmap, mode=mode)
+        assert "decoder works" not in art, f"{mode} did not draw the screen"
+
+    # Half-blocks keep horizontal pixels 1:1 and so need the full 240 columns;
+    # the other two fit in the width the buttons already need. A mode that
+    # silently rendered narrower than its pixels would be lying about detail.
+    assert panel_width("half") > panel_width("quadrant")
+    assert panel_width("quadrant") == panel_width("braille")
+
+
+async def test_cycling_render_modes_warns_when_the_terminal_is_too_narrow():
+    # Half-blocks need 244 columns. Offering the mode is right; pretending it
+    # fits is not, so the status says what it needs against what there is.
+    app = await _panel()
+    async with app.run_test(size=(130, 50)) as pilot:
+        await pilot.pause()
+        assert app.screen.render_mode == "quadrant"
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert app.screen.render_mode == "half"
+        assert "needs" in app.screen.last_status
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert app.screen.render_mode == "braille"
+        assert "needs" not in app.screen.last_status
+
+
+async def test_every_binding_survives_the_exclusive_key_handler():
+    # The exclusive on_key consumes all keys by design, so a Binding added
+    # later is dead on arrival unless the handler lets it through -- and
+    # nothing fails loudly when it does not. ctrl+r shipped broken exactly
+    # this way. Assert the two sets agree rather than trusting a literal list.
+    handled = {binding.key for binding in PanelScreen.BINDINGS}
+    assert {"escape", "ctrl+t", "ctrl+r", "ctrl+g"} <= handled
+
+    app = await _panel()
+    async with app.run_test(size=(130, 50)) as pilot:
+        await pilot.pause()
+        for key in sorted(handled):
+            if key == "escape":
+                continue                      # would leave the screen
+            await pilot.press(key)
+            await pilot.pause()
+            assert isinstance(app.screen, PanelScreen), f"{key} broke the screen"
+
+
+def test_layout_matches_the_hardware_rows_and_headings():
+    # Checked against the front-panel photograph. The first version of this
+    # layout put the assignables and EXIT on the top row and ENTER on a third,
+    # and captioned MASTER with "PRESET" -- each of which reads fine on its
+    # own and matches nothing on the device.
+    lines = [line for line in render_panel().split("\n")]
+    plain = ["".join(ch for ch in line) for line in lines]
+
+    def row_with(*needles):
+        return next((i for i, line in enumerate(plain)
+                     if all(n in line for n in needles)), None)
+
+    upper = row_with("MASTER", "MANAGE", "EDIT", "AUDITION")
+    lower = row_with("DISK/BR", "MANAGE", "EDIT")
+    assert upper is not None and lower is not None
+    assert upper < lower
+
+    # the assignables, EXIT, the PAGE pair and ENTER are all on the LOWER row
+    for label in ("EXIT", "PREV", "NEXT", "ENTER"):
+        assert label in plain[lower], f"{label} should share the lower row"
+
+    # PRESET captions MANAGE/EDIT, not MASTER: its column must sit to the
+    # right of where MASTER is drawn.
+    heading = plain[upper - 1]
+    assert "PRESET" in heading
+    assert heading.index("PRESET") > plain[upper].index("MASTER")
+
+    # PAGE spans PREV/NEXT only -- on the hardware it is a printed arc over
+    # exactly those two keys, not over EXIT or ENTER.
+    page_col = heading.index("PAGE")
+    assert plain[lower].index("EXIT") < page_col < plain[lower].index("ENTER")
+
+
+def test_keypad_sits_to_the_right_like_the_hardware():
+    # On the metal the numeric keypad is right of the cursor diamond. It was
+    # bottom-left here, which came from the convenience of a text grid rather
+    # than from the panel.
+    lines = render_panel().split("\n")
+    digits = next(line for line in lines if "7" in line and "8" in line and "9" in line)
+    mode_row = next(line for line in lines if "DISK/BR" in line)
+    assert digits.index("7") > mode_row.index("DISK/BR") + 40

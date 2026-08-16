@@ -183,3 +183,43 @@ def classify_update(frame: Optional[Sequence[int]]) -> str:
     if len(frame) >= FULL_MIN_BYTES:
         return RefreshDecision.USE
     return RefreshDecision.ESCALATE
+
+
+#: Quadrant blocks: 2x2 pixels per cell, indexed by (tl,tr,bl,br) as a nibble.
+#: Same idiom as the sibling k2kremote project's braille.py, which renders the
+#: K2000's identically-sized 240x64 screen.
+_QUADRANTS = " ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█"
+
+
+def to_quadrants(bitmap: Bitmap) -> List[str]:
+    """The screen as quadrant blocks -- 120x32 characters.
+
+    The same width as braille but twice the vertical resolution, and solid
+    cells rather than dots, so the device's 1-pixel font strokes read as
+    strokes instead of texture. This is the one to default to: braille is
+    denser than the font can survive, and half-blocks need 240 columns.
+    """
+    lines: List[str] = []
+    for cy in range(0, HEIGHT, 2):
+        row = []
+        for cx in range(0, WIDTH, 2):
+            tl = bitmap[cy][cx]
+            tr = bitmap[cy][cx + 1] if cx + 1 < WIDTH else 0
+            bl = bitmap[cy + 1][cx] if cy + 1 < HEIGHT else 0
+            br = (bitmap[cy + 1][cx + 1]
+                  if cy + 1 < HEIGHT and cx + 1 < WIDTH else 0)
+            row.append(_QUADRANTS[(tl << 3) | (tr << 2) | (bl << 1) | br])
+        lines.append("".join(row))
+    return lines
+
+
+#: Where the six soft keys sit, as a fraction of the display width. The
+#: labels above them change per page -- some screens draw six narrow boxes,
+#: others three wide ones -- but the *keys* are physically at sixths, so this
+#: is the alignment that is right on every page.
+SOFT_KEY_CENTRES = tuple((2 * index + 1) / 12 for index in range(6))
+
+
+def soft_key_columns(render_width: int) -> List[int]:
+    """Column of each soft key's centre, for a render of ``render_width``."""
+    return [round(fraction * render_width) for fraction in SOFT_KEY_CENTRES]
