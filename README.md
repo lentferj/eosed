@@ -1136,6 +1136,16 @@ attribution table — the SysEx protocol facts transcribed from E-mu's
 specification, and the transport layer plus the TUI's key-hint legend
 folding ported from k2kremote/mpc2emu.
 
+The panel/remote protocol work (`probes/`, `docs/captures/`) carries its own
+attribution there too: its session handshake was **published in 2016 by an
+independent third party**
+([midimachines](https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/)),
+re-derived here against firmware 4.70 and found to be framed differently. Ray
+Bellis's [e-remote](https://emu.tools) was used as a traffic source for a
+single capture of the *device's* handshake — none of that tool was
+decompiled or copied, and eosed deliberately does not reimplement it. The
+display-frame decoding is original to this project.
+
 Note one attribution worth reading before reusing this code: a handful of
 display-conversion functions in `eos/params.py` (`fil_freq`,
 `filter_table_1/2/3`, `cnv_morph_freq`) follow C source printed in E-mu's

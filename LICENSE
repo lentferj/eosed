@@ -51,6 +51,36 @@ eos/messages.py, eos/params.py
 
   Everything else here is original work. Released under GPL-2.0-or-later.
 
+probes/panel_capture.py, docs/captures/, RESOLUTION_NOTES §3/§26-§28
+  (panel/remote protocol -- F0 18 7F ... , NOT the editor protocol above)
+
+  E-mu never documented this protocol. The session-open handshake and the
+  fact that a key press emits a down/up pair were published in 2016, before
+  this project existed, by an independent third party who observed the
+  traffic between Ray Bellis's e-remote and an E4 Ultra:
+    "Talking SysEx with E-MU Ultra", midimachines, 30 April 2016
+    https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/
+
+  What this project takes from that page is prior public knowledge about a
+  manufacturer's wire protocol -- opcodes 10h (open) and the 7F 11 00 08
+  reply -- which we then re-derived independently against an E4XT Ultra on
+  firmware 4.70 and found to be framed differently there (§28: the header is
+  <devID> 7Ah, not the 00 00 that page records). The opcodes were right; the
+  frame layout in the published fragments does not match this firmware.
+
+  Ray Bellis's e-remote (https://emu.tools) was used as a traffic source for
+  exactly one capture, to observe the device's own handshake. No part of that
+  tool was decompiled, disassembled, or copied, and this project deliberately
+  does NOT reimplement it: mirroring the LCD and injecting keypresses is what
+  e-remote does, and eosed's scope decision (TODO, 2026-08-14) rules it out.
+  eosed reads the disk contents off-device and uses this protocol only to
+  drive a load.
+
+  The display-frame decoding in §26 -- 240x64 monochrome, standard MIDI 7->8
+  packing, row-major at 30 bytes per row -- is not published on that page or
+  anywhere else found, and was derived here from this project's own captures.
+  Original work.
+
 eos/bridge.py
   The throttled-output queue (ThrottledOut), the MultiIn merged-input facade,
   the ALSA-client leak fix, and the MIDI port-enumeration helpers are ported

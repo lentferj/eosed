@@ -214,3 +214,34 @@ def test_report_says_so_when_no_known_fragment_appears():
     capture = pc.Capture()
     capture.add_frame([0xF0, 0x18, 0x7F, 0x00, 0x00, 0x42, 0xF7], port="x", at=0.0)
     assert "none" in capture.report()
+
+
+# --- data dial (§30) ---------------------------------------------------------
+
+def test_dial_delta_decodes_both_directions():
+    # 14-bit two's complement, LSB septet first. The negative encoding is the
+    # half that would silently read as +16383 if the sign step were dropped.
+    def dial(lo, hi):
+        return [0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x43, 0x01, lo, hi, 0xF7]
+
+    assert pc.dial_delta(dial(0x01, 0x00)) == 1
+    assert pc.dial_delta(dial(0x02, 0x00)) == 2
+    assert pc.dial_delta(dial(0x03, 0x00)) == 3
+    assert pc.dial_delta(dial(0x7F, 0x7F)) == -1
+    assert pc.dial_delta(dial(0x7E, 0x7F)) == -2
+    assert pc.dial_delta(dial(0x7D, 0x7F)) == -3
+
+
+def test_dial_delta_ignores_non_dial_frames():
+    assert pc.dial_delta(LIVE_BUTTON_DOWN) is None      # 40h, not 43h
+    assert pc.dial_delta(EDITOR_FRAME) is None
+    assert pc.dial_delta([0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x43]) is None   # truncated
+
+
+def test_dial_and_button_are_distinguished_by_opcode():
+    # The dial is not a button and must never be counted as one: no down/up
+    # pair, different opcode, and a payload that means something else.
+    dial = [0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x43, 0x01, 0x01, 0x00, 0xF7]
+    assert pc.panel_opcode(dial) == 0x43
+    assert pc.panel_opcode(LIVE_BUTTON_DOWN) == 0x40
+    assert "data dial" in pc.PANEL_OPCODES[0x43]

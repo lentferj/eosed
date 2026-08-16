@@ -2063,3 +2063,342 @@ Direction is **not** recoverable from this capture: Midi Through carries both
 ways on one port, so host→device and device→host are indistinguishable in the
 log. Next session should capture the two directions on separate ports, or log
 e-remote's output client separately.
+
+---
+
+## §27 — The device does NOT echo panel activity cold (2026-08-14, controlled test)
+
+§26 planned the key-code capture around §3's statement that the E4XT echoes
+its own front-panel presses, concluding the RE needed no third-party tool at
+all. **Tested, and that conclusion was wrong.**
+
+**Method.** Passive capture on `ESI M4U eX MIDI 3` (56:2, the device's MIDI
+OUT) started *before* a power cycle, deliberately: e-remote had been connected
+earlier the same day, and testing without a restart risks reading leftover
+remote-mode state as an inherent property. Nothing transmitted at any point.
+After boot the author pressed **F4 twice** (LOAD, then Merge).
+
+**Result.** Eight messages, all at the power-on instant, none SysEx:
+
+    80 00 40   ×8      (Note Off, ch 1) — boot chatter
+
+The two F4 presses produced **nothing at all**.
+
+This is a controlled negative rather than a silent one: the boot messages
+prove the port, the cabling and the capture path all work, on the same run
+that recorded no panel echo. Had the log simply been empty, "wrong port"
+would have been the likelier explanation.
+
+**Conclusion.** §3's echo claim is **conditional**: the device echoes panel
+activity only once remote communication has been opened, not inherently. The
+`F0 18 7F …` traffic in §26 was flowing because e-remote had opened the
+session first.
+
+**No front-panel escape hatch.** The EOS 4.0 manual documents no setting to
+enable remote/panel communication. Its only mention of the capability is a
+marketing line ("Emulators can be operated by remote control using an external
+computer") and a pointer to E-mu's web site for the SysEx specification —
+which is the *editor* protocol, already implemented here.
+
+**So an "open" message is required, and we do not have it.** §3 publishes
+`F0 18 7F 00 00 10 F7` for it, but §26 proved §3's frame *header* wrong, so
+its opcode semantics cannot be trusted either. The shape-corrected guess would
+be `F0 18 7F 05 7A 10 F7` — **do not send it on that reasoning alone.** An
+unverified opcode in an undocumented protocol on a machine whose documented
+protocol contains one-shot erase commands is precisely what §3's
+capture-before-code rule exists to prevent, and the header being wrong is
+direct evidence that this document's bytes do not describe this firmware.
+
+**Options, in order of preference:**
+
+1. **Ask Ray Bellis.** He published fragments of this RE voluntarily. The
+   enable sequence is one question.
+2. **One bounded capture of e-remote's *connect*.** Distinct from
+   reimplementing his tool (ruled out, see TODO): observing a device's
+   handshake once, on the wire, to learn a fact about E-mu's protocol. After
+   that the browser is never needed again — everything else can be captured
+   from the front panel, since echo works once the session is open.
+3. **Probing opcodes blind** — rejected. Not worth it for a convenience
+   feature on hardware this hard to replace.
+
+---
+
+## §28 — The session-open handshake, captured (2026-08-14). §3's opcodes were right; only its header was wrong
+
+§27 established that the device is silent until remote communication is
+opened, and that we did not have the message to open it. Captured now, on a
+freshly power-cycled machine with nothing else having spoken to it, so this is
+a complete cold open rather than a fragment of an existing session.
+
+    t+0.000  F0 18 7F 05 7A 10 F7             host->device   OPEN
+    t+0.006  F0 18 7F 7A 05 7F 11 00 08 F7    device->host   reply
+    t+0.012  F0 18 7F 05 7A 60 F7             host->device
+    t+0.018  F0 18 7F 05 7A 61 7F 7E F7
+    t+0.028  F0 18 7F 05 7A 51 F7             host->device
+    t+0.743  F0 18 7F 05 7A 50 <2205 septets> device->host   full 240x64 screen
+
+**The open message is `F0 18 7F <devID> 7A 10 F7`** — `05` here being this
+machine's SysEx device id, the same one Device Inquiry reports.
+
+**§3 was half right, and the half it got right is the useful half.** Its
+opcode `10h` for "enable remote communication" is correct, and the device's
+reply carries `7F 11 00 08` — byte-for-byte §3's published "init handshake"
+tail. What §3 got wrong was only the header: it records positions 3 and 4 as
+`00 00` where this firmware uses `<devID> 7A`. Most likely its source machine
+sat at device id 0 and the designator was mis-transcribed. The fragments are
+genuine; their framing is not.
+
+That is worth stating plainly because §26 rejected §3 wholesale on the
+strength of the header mismatch, and that was an over-correction. The right
+reading is narrower: **§3's opcode semantics are usable, its frame layout is
+not.**
+
+### A byte-order oddity, not yet a direction bit
+
+The device's init reply is `F0 18 7F **7A 05** …` while everything else in the
+capture — including the display frames the device itself sends — is
+`F0 18 7F **05 7A** …`. So the swap is *not* a general host/device marker; it
+appears only on this one reply. Recorded as an observation, not a rule.
+Direction still cannot be recovered from a Midi Through capture (§26), because
+that port carries both ways on one wire.
+
+### Screen request opcodes differ by context
+
+    §26 (after a button press):   60, 61 7F **7F**, **52**, then 50
+    §28 (on session open):        60, 61 7F **7E**, **51**, then 50
+
+`51h` vs `52h` and the final byte of `61h` both vary. The obvious hypothesis is
+full-screen vs partial/region refresh, with `61 <a> <b>` carrying a region or
+cursor coordinate — untested, one capture each, so treat it as a question to
+design a probe around rather than a finding.
+
+### What this unblocks
+
+eosed can now open a session itself, without any third-party tool, using a
+sequence this project captured rather than guessed — which is exactly what
+§3's capture-before-code rule asks for. Once open, §27's result inverts: the
+device *does* echo front-panel activity, so the key-code table and the whole
+disk-load navigation can be recorded with a human at the panel and nothing
+else in the loop.
+
+The next step is therefore the first time this project **transmits** on the
+undocumented protocol. That deserves its own small tool rather than being
+bolted into the passive harness, whose never-sends property is worth keeping
+intact.
+
+### §28a — Provenance: the handshake was already public; the display format was not
+
+Checked after the capture, because "did we take something that wasn't ours"
+is a fair question and the answer turned out to matter.
+
+**The handshake is prior public knowledge, published 2016.** The same
+midimachines page §3 already cites publishes it outright:
+
+| published there (2016) | captured here (fw 4.70) |
+|---|---|
+| `F0 18 7F 00 00 10 F7` — "enable communication" | `F0 18 7F 05 7A 10 F7` |
+| `F0 18 7F 00 00 7F 11 00 08 F7` — sampler's answer | `F0 18 7F 7A 05 7F 11 00 08 F7` |
+| `F0 18 7F 00 00 7F 11 06 04 F7` — key press, two per press (down/up) | `40 <key> 00 <01\|00>` |
+| `F0 7F 18 00 00 11 F7` — close on losing foreground | not yet captured |
+
+Same opcodes, different framing — which is the §28 reading confirmed from a
+second direction. Note the published close message reads `F0 **7F 18**  …`,
+manufacturer id and the 7Fh byte transposed relative to every other line on
+that page; almost certainly a transcription slip, and worth capturing before
+anyone writes code against it.
+
+**The display format is not published there or anywhere else located.** That
+page documents no screen sequences at all, and E-mu's specification covers
+only the editor protocol. §26's decoding — 240×64 monochrome, MIDI 7→8
+packing, row-major at 30 bytes per row — appears to be original to this
+project.
+
+**Why this settles the fairness question.** The session handshake is
+third-party prior art about a manufacturer's protocol, not something taken
+from e-remote itself; e-remote served as a traffic source for exactly one
+capture of the *device's* behaviour, and none of its code was touched (§3's
+standing rule). The one thing that would have been discourteous — rebuilding
+its screen mirror — is ruled out on its own merits (TODO, 2026-08-14).
+
+Attribution added to `LICENSE` alongside the E-mu specification and the
+k2kremote/mpc2emu ports: midimachines for the opcodes, e-remote named as the
+traffic source, and the display decoding claimed as original.
+
+---
+
+## §29 — eosed opened a panel session itself, and the first key codes (2026-08-14)
+
+**The dependency is now zero.** `probes/panel_open.py` sent §28's captured
+open message and the E4XT answered with the expected handshake:
+
+    sent   F0 18 7F 05 7A 10 F7
+    got    F0 18 7F 7A 05 7F 11 00 08 F7      (t+0.01s)
+
+No browser, no third-party tool, no guessed bytes — a sequence this project
+captured, replayed by this project. §27's finding (the device is silent until
+a session is opened) is therefore not a blocker but a step, and everything
+after it comes from a person at the front panel.
+
+`panel_open.py` is deliberately separate from `panel_capture.py`: it is the
+only thing here that transmits, and it transmits **exactly one frame, ever**.
+The harness keeps its never-sends property intact so it can be pointed at
+hardware without thought.
+
+### Key codes, confirmed against a narrated press order
+
+41 frames. The author pressed the soft keys in order, Preset Manage once, and
+**Master twice between each soft key** to back out of whatever the previous one
+opened — which is why `5Ch` appears in pairs throughout and is what made the
+mapping unambiguous without markers.
+
+| code | key | evidence |
+|---|---|---|
+| `58h` | Preset Manage | one press, narrated |
+| `5Ch` | Master | 14 presses, always in pairs between soft keys |
+| `62h` | F1 | press order |
+| `64h` | F2 | press order |
+| `66h` | F3 | press order |
+| `68h` | F4 | press order — **and** independently in the §26 e-remote capture |
+| `6Ah` | F5 | press order, then **confirmed in isolation** |
+| `6Ch` | F6 | press order, then **confirmed in isolation** |
+
+**The soft-key row is complete: EOS has six soft keys, F1–F6, and there are
+six codes — `62h` to `6Ch`, stepping by 2.**
+
+This entry first predicted `6Eh` = F7 and `70h` = F8 from the +2 step. **Both
+are wrong: the machine has no F7 or F8 keys.** The step was real and the
+extrapolation past the end of the physical hardware was not — a pattern
+correctly observed and then run off the edge of the device it describes.
+Corrected within the hour by the author, who owns one.
+
+`6Eh` therefore is *not* F7. It appears in the §26 capture and remains
+unidentified; whatever button it is, it is not a soft key. `70h` has never
+been observed at all and was pure extrapolation.
+
+F5 and F6 were then re-pressed **alone**, with nothing before, between or
+after, precisely to separate confirmation from inference:
+
+    t+211.99  40 6A 00 01   F5 down
+    t+212.21  40 6A 00 00   F5 up
+    t+215.41  40 6C 00 01   F6 down
+    t+215.57  40 6C 00 00   F6 up
+
+Clean, isolated, and matching the press-order reading exactly. That is the
+standard the other four rows should eventually be held to as well; they rest
+on a narrated sequence, which is weaker.
+
+Codes are **physical**, labels are **contextual**: `62h` is that button
+whatever the current page makes it do. This is what makes a deterministic
+navigation sequence possible, and also why "press F3" is meaningless in this
+protocol without knowing which page is showing — the reason a state-confirming
+read of the display is still wanted even though browsing moved off-device.
+
+Not all codes are even: the §26 capture contains `73h`, so the low bit is not
+simply unused.
+
+Frame shape, unchanged from §26 and consistent across all 40 press frames:
+
+    F0 18 7F 7A 05 40 <keycode> 00 <01=down|00=up> F7
+
+Note this is the `7A 05` byte order, not `05 7A` — the device→host direction,
+which §28a could not settle from a Midi Through capture because that port
+carries both ways on one wire. Captured here on the device's own output port
+with only the open message ever sent in the other direction, so **direction is
+now unambiguous**: device→host is `7A <devID>`, host→device is `<devID> 7A`.
+That resolves the question §26 and §28 both left open.
+
+One duplicated UP frame at t+92.01 (identical timestamp, identical bytes).
+Not explained; not obviously harmful; noted so a later session that sees
+doubled events has a precedent rather than a mystery.
+
+Capture: `docs/captures/panel_keycodes_e4xt_fw470_2026-08-14.jsonl`. No display
+frames in it, so nothing to scrub — the screen was never requested.
+
+---
+
+## §30 — Full front-panel key map, and the data dial is a different opcode (2026-08-15)
+
+Captured with `probes/panel_open.py` holding a session open while the author
+sat at the machine and named each button as it was pressed. No markers were
+possible (both hands on the panel), so the narration *is* the marker track —
+one message per key, matched to the frame that arrived between messages.
+
+### Buttons — opcode `40h`
+
+    F0 18 7F 7A 05 40 <keycode> 00 <01=down|00=up> F7
+
+**32 codes observed directly.** Eight more are inferred and labelled as such.
+
+| code | key | | code | key |
+|---|---|---|---|---|
+| `58` | Preset Manage | | `6C` | F6 |
+| `59` | Sample Manage | | `6D` | Enter |
+| `5A` | Preset Edit | | `6E` | Cursor Up |
+| `5B` | Sample Edit | | `6F` | Cursor Left |
+| `5C` | Master | | `70` | Cursor Right |
+| `5D` | Disk/Browse | | `71` | Cursor Down |
+| `5E` | Page Exit | | `72` | DEC |
+| `5F` | Assignable 1 | | `73` | INC |
+| `60` | Assignable 2 | | `74` | 1 |
+| `61` | **unknown** — never pressed | | `75`–`79` | 2–6 *(inferred)* |
+| `62` | F1 | | `7A` | 7 |
+| `63` | Assignable 3 | | `7B` | 8 *(inferred)* |
+| `64` | F2 | | `7C` | 9 |
+| `65` | Audition | | `7D` | +/− |
+| `66` | F3 | | `7E` | 0 |
+| `67` | **unknown** — never pressed | | `7F` | . (set/shift) |
+| `68` | F4 | | | |
+| `69` | Page Prev | | | |
+| `6A` | F5 | | | |
+| `6B` | Page Next | | | |
+
+Codes run `58h`–`7Fh` and **stop exactly at `7Fh`**, the top of the 7-bit
+range. Nothing below `58h` was ever emitted, so either the panel has no other
+keys or they live in an unexplored part of the space.
+
+Two methodological notes worth keeping:
+
+* **The number keys were not all pressed.** 1, 7, 9, 0, +/− and . were, and
+  the ends were tested deliberately — testing a sequence at its *boundary* is
+  what catches a break. It did: `0` is `7Eh`, not the `7Dh` a naive run would
+  predict, because `+/−` sits between 9 and 0. Only after both ends and a
+  midpoint landed were 2–6 and 8 inferred.
+* That discipline exists because of §29's mistake, where a real +2 step was
+  extrapolated into two keys the machine does not have.
+
+### Data dial — opcode `43h`, not a button at all
+
+    F0 18 7F 7A 05 43 01 <lo> <hi> F7
+
+One frame per movement, **no down/up pair**. The payload is a signed delta,
+**14-bit two's complement, least-significant septet first**:
+
+| observed | value |
+|---|---|
+| `01 00` | +1 |
+| `02 00` | +2 |
+| `03 00` | +3 |
+| `7F 7F` | −1 |
+| `7E 7F` | −2 |
+| `7D 7F` | −3 |
+
+**It coalesces.** Spinning fast does not raise the frame rate — the minimum
+observed gap is 32 ms, about 30 frames/sec — it raises the magnitude. So a
+client must treat the field as an accumulating delta and never as "one click
+per message", and a *driver* presumably may send >1 to move several steps in
+one frame. Untested in that direction.
+
+The `01` at position 6 is presumed an encoder or axis id; the E4XT has one
+dial, so nothing distinguishes it yet.
+
+### What this unblocks
+
+Navigation is now expressible: every key needed to walk to the disk pages and
+select an item has a code — Disk/Browse, the cursor cluster, Page Prev/Next,
+Enter, Page Exit to back out, and the dial for fast list movement. Combined
+with §28's session open, a deterministic sequence can be *written*; what is
+still missing is confirmation that the machine is on the page the sequence
+assumes, which is the narrow use the display frame (§26) is still wanted for.
+
+Capture: `docs/captures/panel_keymap_e4xt_fw470_2026-08-15.jsonl`. No display
+frames were requested, so there is nothing to scrub.

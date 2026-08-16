@@ -152,12 +152,28 @@ KNOWN_FRAGMENTS: Dict[Tuple[int, ...], str] = {
 #: co-occurrence only -- one capture, no second machine, no version spread --
 #: so treat them as handles for reading a log, not as protocol facts.
 PANEL_OPCODES: Dict[int, str] = {
-    0x40: "button down/up",       # 40 <key> 00 <01=down|00=up>, confirmed by 3 keys
+    0x40: "button down/up",       # 40 <key> 00 <01=down|00=up> -- full map in §30
+    0x43: "data dial delta",      # 43 01 <lo> <hi>, 14-bit two's complement, LSB first
     0x50: "display data",         # + 10-byte sub-header + 7-bit packed bitmap
-    0x52: "display follows?",     # always immediately precedes a 50
+    0x51: "screen request (full?)",   # seen on session open, before a 50
+    0x52: "screen request (partial?)",  # seen after a button press, before a 50
     0x60: "screen request?",      # always immediately follows a button-down
-    0x61: "screen ack?",          # 61 7F 7F
+    0x61: "screen ack?",          # 61 7F 7F / 61 7F 7E -- last byte varies
 }
+
+
+def dial_delta(frame: Sequence[int]) -> Optional[int]:
+    """Signed detent delta from a ``43h`` data-dial frame, else None.
+
+    14-bit two's complement, least-significant septet first (§30). The dial
+    *coalesces*: spinning faster raises this magnitude rather than the frame
+    rate, so callers must accumulate it and must not assume one click per
+    message.
+    """
+    if len(frame) < 9 or tuple(frame[:3]) != PANEL_PREFIX or frame[5] != 0x43:
+        return None
+    value = frame[7] | (frame[8] << 7)
+    return value - 0x4000 if value >= 0x2000 else value
 
 
 def panel_opcode(frame: Sequence[int]) -> Optional[int]:
