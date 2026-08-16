@@ -2760,3 +2760,43 @@ samples as anyone could want.
 Until then `eos.lcd.is_partial` refuses these frames and `classify_update`
 escalates them to a full `51h`, which is correct behaviour under uncertainty
 and costs one extra request in a case that appears to be rare.
+
+### §36 — The numeric keys do work; two things that make them look like they do not (2026-08-16)
+
+Reported as "the number keys do not work for selecting a preset -- typing
+012 ENTER jumps to P012 on the hardware". They do work, and finding that out
+turned up a real concurrency defect next door.
+
+**The keys and codes are correct.** Driving `0 1 2 ENTER` at the device
+produces exactly `7Eh 74h 75h 6Dh`, the display changes as the digits are
+typed, and ENTER commits it -- verified by reading the screen back either
+side. Note this incidentally exercises `75h` (digit 2), one of the codes §30
+marked *inferred* rather than observed, and it behaves.
+
+**First trap: the page.** Numeric entry only does anything where the machine
+itself accepts it. On Preset Manage, typing digits changes the display
+immediately. On the Master/Memory page it does nothing at all -- exactly as
+pressing those keys on the front panel would. A first attempt at reproducing
+this "failed" purely because the device was left on a page with no numeric
+field, which looks identical to a broken key map.
+
+**Second trap, and the real bug: two threads, one wire.** In the app the
+screen poll runs in a worker thread and sends under `_bridge_lock`, while a
+keypress went straight to `midi_out.send_message()` from the UI thread with
+no lock at all. `ThrottledOut` imports no threading and guards nothing.
+
+So a keypress could be emitted in the middle of a poll's screen transfer.
+That is not a rare window: the poll fires every 500ms and a full `51h` takes
+716ms (§33b), so the port is busy for a large fraction of wall time, and
+interleaving two SysEx streams on one ALSA port is a good way to lose one.
+
+Fixed by routing panel sends through the same lock. Worth noting the shape:
+the lock was added for the *poll* when it was written, and the send path --
+older, and correct while it was the only writer -- was not revisited when a
+second writer appeared. Nothing failed loudly; it just intermittently did
+nothing.
+
+**What is still true and worth telling a user:** the panel drives the
+device's own UI. Typing a preset number there moves the *machine*, not
+eosed's preset browser, and on a page with no numeric field it does nothing
+-- both exactly as the hardware behaves.

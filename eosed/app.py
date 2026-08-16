@@ -2720,9 +2720,19 @@ class EosedApp(App):
             device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
             out = getattr(self.bridge, "midi_out", None)
             if out is not None:
-                # write=True: a panel press is fire-and-forget with no reply to
-                # pace against, the same category as a parameter edit.
-                send = lambda frame: out.send_message(list(frame), write=True)  # noqa: E731
+                def send(frame):
+                    # Under the same lock as the screen poll. Both share one
+                    # MIDI port and ThrottledOut holds unguarded state (it
+                    # imports no threading at all), so an unlocked keypress
+                    # from the UI thread could land inside a poll's 716ms
+                    # screen transfer -- two writers on one wire. That is a
+                    # good fit for "the keys sometimes do nothing": the poll
+                    # runs every 500ms and a full screen occupies 716ms of it.
+                    #
+                    # write=True: a panel press is fire-and-forget with no
+                    # reply to pace against, same category as a parameter edit.
+                    with self._bridge_lock:
+                        out.send_message(list(frame), write=True)
             poll = self._panel_poll
             self._open_panel_session(device_id)
         screen = PanelScreen(allow_write=self.allow_write,

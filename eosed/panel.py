@@ -29,8 +29,16 @@ diamond is the arrow cluster (right-hand side on both).
 **It is an exclusive mode.** While this screen is up it consumes every
 keystroke, mapped or not, so the layout is free to reuse keys the main view
 already binds -- ``s`` is SAMPLE MANAGE here and the samples pane there, and
-neither has to know about the other. ``escape`` leaves; ``ctrl+t`` arms.
+neither has to know about the other. ``ctrl+e`` leaves; ``ctrl+t`` arms.
 Nothing else escapes to the app.
+
+``escape`` is deliberately *not* the way out: it is the E4XT's own EXIT key,
+which is what a hand on this panel means by it. Leaving is ``ctrl+e``, with
+the other meta-keys.
+
+The two are near-synonyms in English and must not read that way on screen, so
+the hint says "leave panel" for ``ctrl+e`` and EXIT keeps the device's own
+label. One exits the machine's page; the other exits this screen.
 
 **Sending is gated.** Opening this screen never transmits. Arming is a
 deliberate, separate act (``ctrl+t``) and requires write mode to be on
@@ -114,6 +122,28 @@ KEYMAP: Dict[str, int] = {
     "=": Key.INC,
 }
 
+#: Aliases: a second keyboard key for a panel key that has an obvious one.
+#: KEYMAP proper is positional -- ";" is ENTER because it sits where ENTER
+#: does, right of NEXT -- but nobody reaches for ";" when they mean Enter, and
+#: pressing Return got "'enter' is not a panel key" instead. Positional
+#: bindings are for the hand that already knows the hardware; aliases are for
+#: the one that does not.
+#:
+#: Advertised on their own line rather than inside the key cells: a cell is
+#: seven columns and "⏎" is double-width, so "(; ⏎)" lost its closing paren
+#: and ran into the cursor cluster.
+ALIASES: Dict[str, int] = {
+    "enter": Key.ENTER,
+    "escape": Key.PAGE_EXIT,
+    # INC's positional key is "=", which is only convenient on ANSI. On a
+    # German layout "=" is Shift+0 while "+" is a dedicated key beside Enter,
+    # so the pair a hand actually reaches for is "-" and "+". Both accepted;
+    # "-" needs no alias because it is a real key on both.
+    "plus": Key.INC,
+    "+": Key.INC,
+}
+
+
 #: Data-wheel steps. Not buttons -- these send 43h deltas (§30). The shifted
 #: pair sends 10 at once, which is what the device itself does when a human
 #: spins fast, rather than ten frames in a row.
@@ -122,6 +152,13 @@ WHEEL: Dict[str, int] = {
     "]": +1,
     "{": -10,
     "}": +10,
+    # Dedicated keys, unshifted on every layout. "[" and "]" are AltGr on a
+    # German keyboard and "{" "}" worse still, which is a poor fit for the one
+    # control you turn continuously.
+    "pagedown": -1,
+    "pageup": +1,
+    "end": -10,
+    "home": +10,
 }
 
 
@@ -148,6 +185,29 @@ def panel_width(mode: str = "quadrant") -> int:
 
 
 PANEL_WIDTH = panel_width()
+
+#: The E4XT's LCD is a backlit panel with **dark ink on a pale field** -- the
+#: photographs show near-black text on light green glass. Rendering lit pixels
+#: as bright-on-dark, which is what a terminal does by default, inverts the
+#: device: correct in content and wrong in appearance.
+#:
+#: No bit-flip is needed. A set bit in the captured bitmap *is* ink (that is
+#: how the text comes out solid), so the block glyphs already sit exactly
+#: where the dark pixels belong -- only the colours were backwards.
+LCD_INK = "#0d1512"
+LCD_GLASS = "#a9c6b5"
+
+#: Braille needs its own, harder pairing. A lit pixel there is a small round
+#: dot with glass visible all around it, so a solid black run covers roughly
+#: 40% of the cell -- while half-block and quadrant fill their sub-cells
+#: completely. The same ink/glass that reads as crisp type in those modes
+#: washes out to a grey haze in this one. Pure black on lighter glass, and
+#: bold, restores the contrast the dots lose to their own geometry.
+LCD_STYLE = {
+    "half": (LCD_INK, LCD_GLASS, ""),
+    "quadrant": (LCD_INK, LCD_GLASS, ""),
+    "braille": ("#000000", "#e4f1db", "b "),
+}
 
 
 class _Cell:
@@ -265,6 +325,11 @@ def _headings(*items, width: int = PANEL_WIDTH, indent: int = 3) -> str:
     return "[dim]" + "".join(buf) + "[/dim]"
 
 
+def _next_mode(mode: str) -> str:
+    """The mode ctrl+g will move to, so the hint says where it goes."""
+    return RENDER_MODES[(RENDER_MODES.index(mode) + 1) % len(RENDER_MODES)]
+
+
 def _caption(text: str, width: int = PANEL_WIDTH) -> str:
     return "[dim]" + text.ljust(width)[:width] + "[/dim]"
 
@@ -325,8 +390,11 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
         # vertical resolution, and solid cells rather than dots, so the
         # device's 1px font strokes read as strokes. Braille turned the
         # screen into texture (§34).
+        ink, glass, weight = LCD_STYLE.get(mode, LCD_STYLE["quadrant"])
         for row in _MODE_RENDER.get(mode, _MODE_RENDER["quadrant"])(bitmap):
-            line("  [dim]│[/dim]" + row.ljust(inner) + "[dim]│[/dim]")
+            line("  [dim]│[/dim]"
+                 + f"[{weight}{ink} on {glass}]" + row.ljust(inner) + "[/]"
+                 + "[dim]│[/dim]")
     line("  [dim]└" + "─" * inner + "┘[/dim]")
 
     # --- soft keys, aligned under the display's own soft-menu boxes ----------
@@ -337,7 +405,15 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
             active, indent=3, width=total):
         line(text)
     line()
-    line("  " + state + "     [dim]wheel ([ ]) ([{ }] ×10)[/dim]")
+    line("  " + state + "     [dim]wheel: scroll · PgUp/PgDn · Home/End ×10[/dim]")
+    # The screen's own meta-keys, shown here because nothing else shows them:
+    # the footer at the bottom of the terminal is the *main app's* legend, and
+    # this is a modal, so its bindings never reach it. ctrl+g in particular
+    # was unfindable -- the mode it switches is visible, the switch was not.
+    line("  [dim]ctrl+e[/dim] leave panel   [dim]ctrl+t[/dim] arm   "
+         "[dim]ctrl+r[/dim] full refresh   [dim]ctrl+g[/dim] render "
+         f"[b]{mode}[/b] [dim]→ {_next_mode(mode)}"
+         "    also: Return→ENTER  Esc→EXIT[/dim]")
     line()
 
     # --- buttons, laid out against the hardware photograph -------------------
@@ -416,7 +492,7 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
     # heading entirely.
     line(_headings([K2, "DEC / INC"], width=total, indent=3))
     for text in _placed([(K1 + 4, "DEC", "-", KEYMAP["-"]),
-                         (K3 - 4, "INC", "=", KEYMAP["="])],
+                         (K3 - 4, "INC", "+ =", KEYMAP["="])],
                         active, indent=3, width=total):
         line(text)
     for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"),
@@ -438,7 +514,7 @@ class PanelScreen(ModalScreen):
     """The front-panel surface. ``escape`` closes, ``ctrl+t`` arms."""
 
     BINDINGS = [
-        Binding("escape", "close", "Close"),
+        Binding("ctrl+e", "close", "Leave the panel"),
         Binding("ctrl+t", "toggle_arm", "Arm/disarm sending"),
         Binding("ctrl+r", "force_refresh", "Force a full screen"),
         Binding("ctrl+g", "cycle_render", "Cycle LCD render"),
@@ -585,7 +661,7 @@ class PanelScreen(ModalScreen):
         # without checking it against the main view's keys.
         event.stop()
 
-        code = KEYMAP.get(key)
+        code = KEYMAP.get(key) or ALIASES.get(key)
         if code is None and char is not None:
             code = KEYMAP.get(char)
         if code is not None:
@@ -599,7 +675,7 @@ class PanelScreen(ModalScreen):
             self._wheel(delta)
             return
 
-        self._refresh(f"{key!r} is not a panel key — escape to leave")
+        self._refresh(f"{key!r} is not a panel key — ctrl+e to leave the panel")
 
     def _press(self, code: int) -> None:
         self.last_key = code
@@ -610,6 +686,17 @@ class PanelScreen(ModalScreen):
         frames = panel_proto.press(self.device_id, code)
         self._transmit(frames)
         self._refresh(f"{label} ({code:#04x}) sent")
+
+    # The most direct mapping available: a wheel for a wheel. Scrolling over
+    # the panel turns the data wheel, which is what a hand expects and needs
+    # no key at all.
+    def on_mouse_scroll_up(self, event) -> None:
+        event.stop()
+        self._wheel(+1)
+
+    def on_mouse_scroll_down(self, event) -> None:
+        event.stop()
+        self._wheel(-1)
 
     def _wheel(self, delta: int) -> None:
         self.last_key = None

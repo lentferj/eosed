@@ -87,11 +87,37 @@ def test_no_keyboard_key_is_bound_twice():
     assert len(set(KEYMAP)) == len(KEYMAP)
 
 
-def test_no_panel_code_is_bound_twice():
-    # Two keyboard keys sending the same panel button would be a layout bug --
-    # the physical panel has one of each.
+def test_no_panel_code_is_bound_twice_in_the_positional_map():
+    # Two *positional* bindings for one button would be a layout bug -- the
+    # panel has one of each. Deliberate aliases live in ALIASES and are
+    # checked separately, so an alias cannot be mistaken for a layout error
+    # and a layout error cannot hide behind the word "alias".
     codes = list(KEYMAP.values())
     assert len(set(codes)) == len(codes), "a panel code is reachable from two keys"
+
+
+def test_aliases_reach_a_real_key_and_are_not_positional_duplicates():
+    from eosed.panel import ALIASES
+
+    known = {int(k) for k in Key}
+    for keyboard_key, code in ALIASES.items():
+        assert int(code) in known
+        assert keyboard_key not in KEYMAP, f"{keyboard_key!r} is already positional"
+
+
+async def test_the_return_key_sends_enter():
+    # Reported from a live session: pressing Return produced "'enter' is not a
+    # panel key". It is the key anyone reaches for when they mean ENTER, and
+    # the positional binding (";") is only obvious once you know why.
+    recorder = _Recorder()
+    app = await _panel(send=recorder)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert recorder.frames, "Return sent nothing"
+        assert recorder.frames[0][6] == int(Key.ENTER)
 
 
 def test_the_whole_panel_is_reachable():
@@ -121,7 +147,9 @@ def test_wheel_has_both_directions_and_a_coarse_step():
 def test_render_panel_shows_every_key_hint():
     art = render_panel()
     for keyboard_key in ("q", "w", "e", "r", "a", "s", "d", "f1", "f6", ";"):
-        assert f"({keyboard_key})" in art, f"{keyboard_key!r} missing from the drawn panel"
+        # open-paren + key, not the exact "(key)" string: a hint may list more
+        # than one way to press a button (ENTER shows both ";" and Return).
+        assert f"({keyboard_key}" in art, f"{keyboard_key!r} missing from the drawn panel"
 
 
 def test_render_panel_marks_the_armed_state_distinctly():
@@ -259,14 +287,29 @@ async def test_the_mode_is_exclusive_and_swallows_unmapped_keys():
         assert recorder.frames == []
 
 
-async def test_escape_leaves_the_panel():
+async def test_ctrl_q_leaves_the_panel():
     app = await _panel()
     async with app.run_test() as pilot:
         await pilot.pause()
         assert isinstance(app.screen, PanelScreen)
-        await pilot.press("escape")
+        await pilot.press("ctrl+e")
         await pilot.pause()
         assert not isinstance(app.screen, PanelScreen)
+
+
+async def test_escape_sends_the_devices_exit_key_and_does_not_leave():
+    # A hand on this panel means the E4XT's EXIT by escape, not "close the
+    # window". Leaving moved to ctrl+e so escape could mean what it looks
+    # like it means.
+    recorder = _Recorder()
+    app = await _panel(send=recorder)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(app.screen, PanelScreen), "escape should not close the panel"
+        assert recorder.frames and recorder.frames[0][6] == int(Key.PAGE_EXIT)
 
 
 async def test_a_press_is_highlighted_even_when_nothing_is_sent():
@@ -461,13 +504,13 @@ async def test_every_binding_survives_the_exclusive_key_handler():
     # nothing fails loudly when it does not. ctrl+r shipped broken exactly
     # this way. Assert the two sets agree rather than trusting a literal list.
     handled = {binding.key for binding in PanelScreen.BINDINGS}
-    assert {"escape", "ctrl+t", "ctrl+r", "ctrl+g"} <= handled
+    assert {"ctrl+e", "ctrl+t", "ctrl+r", "ctrl+g"} <= handled
 
     app = await _panel()
     async with app.run_test(size=(130, 50)) as pilot:
         await pilot.pause()
         for key in sorted(handled):
-            if key == "escape":
+            if key == "ctrl+e":
                 continue                      # would leave the screen
             await pilot.press(key)
             await pilot.pause()
@@ -515,3 +558,145 @@ def test_keypad_sits_to_the_right_like_the_hardware():
     digits = next(line for line in lines if "7" in line and "8" in line and "9" in line)
     mode_row = next(line for line in lines if "DISK/BR" in line)
     assert digits.index("7") > mode_row.index("DISK/BR") + 40
+
+
+def test_the_lcd_renders_as_dark_ink_on_a_pale_field():
+    # The device's screen is backlit: near-black text on light green glass.
+    # A terminal draws bright-on-dark by default, which inverts it -- right in
+    # content, wrong in appearance. Only the colours were backwards, not the
+    # bits: a set bit already *is* ink, which is why the text comes out solid.
+    import json
+    import pathlib
+
+    from eos import lcd
+    from eosed.panel import LCD_GLASS, LCD_INK
+
+    capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
+               "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
+    frames = [json.loads(line)["bytes"] for line in
+              capture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    bitmap = lcd.decode_display(max(frames, key=len))
+
+    from eosed.panel import LCD_STYLE
+
+    for mode, rows in (("half", lcd.HEIGHT // 2),
+                       ("quadrant", lcd.HEIGHT // 2),
+                       ("braille", lcd.HEIGHT // 4)):
+        ink, glass, _weight = LCD_STYLE[mode]
+        art = render_panel(bitmap=bitmap, mode=mode)
+        styled = [line for line in art.split("\n")
+                  if glass in line and ink in line]
+        assert len(styled) == rows, f"{mode}: {len(styled)} styled rows, want {rows}"
+        # ink must be darker than the glass, or it is not a backlit panel
+        assert int(ink[1:3], 16) < int(glass[1:3], 16), mode
+
+
+def test_braille_gets_a_harder_ink_glass_pairing_than_the_block_renders():
+    # Braille draws a lit pixel as a small dot with glass around it, so a
+    # solid run covers far less of the cell than a filled block does. The
+    # pairing that reads as crisp type in the block modes washes out here, so
+    # this one is pure black on lighter glass -- checked as a relationship
+    # rather than as two literals, which would just restate the constants.
+    from eosed.panel import LCD_STYLE
+
+    b_ink, b_glass, b_weight = LCD_STYLE["braille"]
+    q_ink, q_glass, _ = LCD_STYLE["quadrant"]
+
+    def lum(colour):
+        return sum(int(colour[i:i + 2], 16) for i in (1, 3, 5))
+
+    assert lum(b_ink) <= lum(q_ink), "braille ink must not be lighter"
+    assert lum(b_glass) > lum(q_glass), "braille glass must be lighter"
+    assert "b" in b_weight, "braille should be bold to thicken the dots"
+
+
+def test_the_placeholder_is_not_painted_as_glass():
+    # With no frame there is no screen, and colouring an empty rectangle like
+    # a lit LCD would suggest the device is connected and blank.
+    from eosed.panel import LCD_GLASS
+
+    assert LCD_GLASS not in render_panel()
+
+
+def test_the_panel_shows_its_own_meta_keys():
+    # Reported as "I couldn't find the key hint" for the render switch. The
+    # footer at the bottom of the terminal is the *main app's* legend and this
+    # is a modal, so the panel's own bindings appear nowhere else. A binding
+    # nobody can find is not much better than one that does not exist.
+    from eosed.panel import RENDER_MODES
+
+    art = render_panel()
+    for key in ("ctrl+e", "ctrl+t", "ctrl+r", "ctrl+g"):
+        assert key in art, f"{key} is bound but never shown"
+
+
+def test_the_render_hint_names_the_current_mode_and_the_next_one():
+    # Cycling is only obvious if the hint says where it goes; "ctrl+g render"
+    # alone leaves you pressing it to find out.
+    from eosed.panel import RENDER_MODES
+
+    for index, mode in enumerate(RENDER_MODES):
+        art = render_panel(mode=mode)
+        following = RENDER_MODES[(index + 1) % len(RENDER_MODES)]
+        assert mode in art and following in art
+
+
+def test_every_binding_is_both_reachable_and_advertised():
+    # Pairs with test_every_binding_survives_the_exclusive_key_handler: that
+    # one checks a binding still fires, this one that a user can discover it.
+    art = render_panel()
+    for binding in PanelScreen.BINDINGS:
+        assert binding.key in art, f"{binding.key} is bound but not in the panel"
+
+
+async def test_inc_accepts_plus_as_well_as_equals():
+    # "=" is the positional key but it is Shift+0 on a German layout, while
+    # "+" is a dedicated key beside Enter. DEC's "-" is a real key on both, so
+    # only INC needed the alias -- and without it the pair is asymmetric in a
+    # way that is invisible from an ANSI keyboard.
+    for key in ("=", "+"):
+        recorder = _Recorder()
+        app = await _panel(send=recorder)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("ctrl+t")
+            await pilot.press(key)
+            await pilot.pause()
+            assert recorder.frames, f"{key!r} sent nothing"
+            assert recorder.frames[0][6] == int(Key.INC), f"{key!r} did not send INC"
+
+
+async def test_the_mouse_wheel_turns_the_data_wheel():
+    # The most direct mapping there is: a wheel for a wheel, no key at all.
+    class _Stub:
+        def stop(self):
+            pass
+
+    recorder = _Recorder()
+    app = await _panel(send=recorder)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        screen = app.screen
+        # The handlers are called directly with a stub: constructing a real
+        # MouseScrollUp needs a widget/offset/modifier signature that has
+        # changed across Textual versions, and pinning it here would make this
+        # test about Textual's constructor rather than about the wheel.
+        for handler, expected in ((screen.on_mouse_scroll_up, 1),
+                                  (screen.on_mouse_scroll_down, -1)):
+            recorder.frames.clear()
+            handler(_Stub())
+            await pilot.pause()
+            assert recorder.frames, "scroll sent nothing"
+            assert pp.parse_dial(recorder.frames[0]) == expected
+
+
+def test_the_wheel_has_keys_that_need_no_modifier_on_any_layout():
+    # "[" "]" are AltGr on a German keyboard and "{" "}" worse, which is a bad
+    # fit for the control you turn most. PgUp/PgDn and Home/End are dedicated
+    # keys everywhere.
+    for key in ("pageup", "pagedown", "home", "end"):
+        assert key in WHEEL, f"{key} should turn the wheel"
+    assert WHEEL["pageup"] > 0 > WHEEL["pagedown"]
+    assert abs(WHEEL["home"]) == abs(WHEEL["end"]) == 10
