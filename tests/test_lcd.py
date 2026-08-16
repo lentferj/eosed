@@ -149,3 +149,23 @@ def test_full_min_bytes_is_derived_not_hardcoded():
 def test_non_display_frames_are_ignored_by_the_policy():
     button = [0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x40, 0x5C, 0x00, 0x01, 0xF7]
     assert lcd.classify_update(button) == lcd.RefreshDecision.IDLE
+
+
+def test_only_two_renders_have_the_displays_true_aspect():
+    # The screen is 240x64 -- a wide strip, 3.75:1 -- and terminal cells are
+    # about 1:2, so a mode's aspect falls out of its pixels-per-cell. Quadrant
+    # doubles the height. Worth asserting because it is invisible in code and
+    # unmistakable in a screenshot next to the real panel.
+    assert lcd.RENDER_ASPECT["half"] == lcd.RENDER_ASPECT["braille"] == 3.75
+    assert lcd.RENDER_ASPECT["quadrant"] < 2.0
+
+    bitmap = lcd.decode_display(_full_screen())
+    for mode, render, cell_w, cell_h in (
+            ("half", lcd.to_halfblocks, 1, 2),
+            ("braille", lcd.to_braille, 2, 4),
+            ("quadrant", lcd.to_quadrants, 2, 2)):
+        lines = render(bitmap)
+        cols, rows = len(lines[0]), len(lines)
+        assert cols == lcd.WIDTH // cell_w and rows == lcd.HEIGHT // cell_h
+        # a cell is twice as tall as wide, so visual ratio is cols / (rows*2)
+        assert abs(cols / (rows * 2) - lcd.RENDER_ASPECT[mode]) < 0.01

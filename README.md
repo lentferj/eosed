@@ -14,6 +14,10 @@ documented remote editor/librarian protocol, from the same author as the
 sibling **[k2kremote](https://github.com/lentferj/k2kremote)** (Kurzweil
 K2000/K2000R) and **[mpc2emu](https://github.com/lentferj/mpc2emu)** projects.
 
+It also mirrors and drives the machine's **front panel** (`k`) over a second,
+undocumented protocol reverse engineered here — including the 240×64 LCD,
+live in the terminal. See [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
+
 > **Author:** Jan Lentfer &lt;jan.lentfer@web.de&gt;, with AI support
 > (Anthropic Claude) — see [AI assistance](#ai-assistance--human-authorship).
 > **Legal:** [DISCLAIMER.md](DISCLAIMER.md) · [LICENSE](LICENSE)
@@ -586,40 +590,75 @@ keystroke.</sub></p>
 
 ### Front panel (`k`) — a second protocol, an exclusive mode
 
-`k` opens a control surface laid out like the E4XT's own front panel:
-MASTER and DISK/BROWSE at the left, PRESET above SAMPLE, the six soft keys in
-a row under the display, assignables and the PAGE group centre-right, cursor
-diamond and numeric keypad at the right.
+`k` opens a control surface laid out like the E4XT's own front panel, **with
+the machine's real LCD in it**, live.
+
+<p align="center">
+  <img src="docs/screenshots/front_panel_halfblock.png" alt="eosed's front-panel mode in half-block render: the E4XT's LCD showing the LOAD page with Drive, Folder and Bank, Cancel/Merge/Load along the bottom, the six soft keys aligned beneath the display, and the mode buttons, assignables, PAGE group, cursor diamond and numeric keypad laid out as on the hardware" width="960">
+</p>
+
+<p align="center"><sub><b>Half-block render.</b> A real captured screen — the
+device's LOAD page. Layout follows the hardware: PRESET's MANAGE/EDIT above
+SAMPLE's, assignables and the PAGE group on the lower row, keypad at the
+right, soft keys under the display's own menu boxes.</sub></p>
 
 **This is the *panel* protocol, not the editor protocol** the rest of eosed
 speaks — `F0 18 7F <devID> 7A …`, undocumented by E-mu and reverse engineered
-here (`docs/RESOLUTION_NOTES.md` §26–§30). Keep the distinction in mind: a
-panel press drives the machine's own UI, whereas everything else in this app
-edits parameters directly and does *not* move the front panel.
+here (`docs/RESOLUTION_NOTES.md` §26–§34). A panel press drives the machine's
+own UI; everything else in this app edits parameters directly and does *not*
+move the front panel.
+
+**The LCD is decoded, not mirrored from anyone's tool.** The screen arrives as
+a plain bitstream, seven bits per byte, 240×64 — a decoding this project
+derived from its own captures, since nothing about the EOS display has ever
+been published. Three renders, switchable at runtime with `ctrl+g` or chosen
+at launch with `--panel-render`:
+
+| render | cells | needs | aspect | reads like |
+|---|---|---|---|---|
+| `half` | 1×2 px, 240×32 | 244 cols | **true** | crispest — pixels 1:1 horizontally, strokes stay separate |
+| `quadrant` *(default)* | 2×2 px, 120×32 | 124 cols | 2× too tall | most detail per column, but the screen is visibly stretched |
+| `braille` | 2×4 px, 120×16 | 124 cols | **true** | compact and correctly shaped; 1px strokes merge into dots |
+
+Aspect is worth knowing before choosing. The real display is 240×64 — a wide
+strip, 3.75:1. Terminal cells are about twice as tall as they are wide, so
+`half` (240×32 cells) and `braille` (120×16) both come out at 3.75:1, while
+`quadrant` (120×32) lands at 1.9:1 and stretches the screen vertically by two.
+It stays the default because it packs the most detail into 124 columns, but if
+you have the width, `half` is what the machine actually looks like.
+
+<p align="center">
+  <img src="docs/screenshots/front_panel_braille.png" alt="the same front-panel mode rendered with braille characters: the LCD drawn at 120x16 cells, correctly proportioned but with the font strokes rendered as dot patterns" width="720">
+</p>
+
+<p align="center"><sub><b>Braille render</b> — the same screen at 2×4 pixels
+per cell. Half the height of quadrant for the same width and correctly
+proportioned, at the cost of the device's one-pixel strokes merging into
+neighbouring dots, so it reads more as texture than as type.</sub></p>
+
+**Refresh is measured, not guessed** (§33b). A full screen costs 2212 bytes
+and ~716 ms of MIDI; the delta request costs 86 bytes and ~70 ms. So the pane
+polls the cheap one twice a second, uses whatever full frame comes back,
+escalates only for partials it cannot decode, and gives you `ctrl+r` to force
+a full read. The device never pushes — it answers, so a client must ask.
 
 **Bindings are positional, not mnemonic.** The panel's two button rows run
 left-to-right along the keyboard's two home rows, so `q w e r` is MASTER /
 PRESET MANAGE / PRESET EDIT / AUDITION and `a s d f g h j k l ;` continues
 beneath it. Where the two agree you get both for free: F1–F6 are the
-keyboard's F1–F6, and the cursor diamond is the arrow cluster. The keypad is
-the number row, `,` is `+/−` (left of `.` on both), `-`/`=` are DEC/INC, and
-`[`/`]` turn the data wheel — `{`/`}` move ten detents at once, which is what
-the device itself does when a human spins it fast.
+keyboard's F1–F6 (and are drawn under the display's own soft-menu boxes), and
+the cursor diamond is the arrow cluster. The keypad is the number row, `,` is
+`+/−`, `-`/`=` are DEC/INC, and `[`/`]` turn the data wheel — `{`/`}` move ten
+detents at once, which is what the device itself does when a human spins fast.
 
 **It is an exclusive mode.** While the panel is up it swallows every key,
-mapped or not, so it can reuse keys the main view binds — `s` is SAMPLE
-MANAGE here and the samples pane there. `escape` leaves.
+mapped or not, so it reuses keys the main view binds — `s` is SAMPLE MANAGE
+here and the samples pane there. `escape` leaves.
 
-**Sending is gated twice.** Opening the panel transmits nothing. `ctrl+t`
-arms it, and arming requires write mode to be on already. Until then keys
-only highlight, which is deliberate: with no LCD mirror there is otherwise no
-way to tell a keypress that went nowhere from one that reached the rack.
-
-**There is no LCD.** The display area is drawn but blank. Mirroring the
-screen is what [e-remote](https://emu.tools) does, and rebuilding it from its
-own traffic was ruled out — see [TODO.md](TODO.md). Rendering the bitmap
-purely to *confirm which page the device is on* before firing something is
-still open, and marked TBD in the layout rather than quietly left out.
+**Sending is gated twice.** Opening the panel transmits nothing but the
+session open. `ctrl+t` arms it, and arming requires write mode to be on
+already. Until then keys only highlight — deliberate, because this protocol is
+undocumented and the machine's menus include the one-shot erase utilities.
 
 ### Undo (`z`), undo-all (`Z`), and the change history (`h`)
 
@@ -670,8 +709,9 @@ than among the smaller omissions.
 Also: editing a raw sample's own properties (loop points, root key, sample
 rate — this protocol has no generic parameter access to those; see
 `docs/RESOLUTION_NOTES.md` §10), Link browsing as a persistent pane
-(currently a modal, same as Voice), and anything touching the panel/mirror
-protocol. See [TODO.md](TODO.md).
+(currently a modal, same as Voice), and — on the panel protocol — decoding the
+partial screen updates, and the disk browse/load sequence the panel work
+exists to enable. See [TODO.md](TODO.md).
 
 *NEW-format **dump** is implemented* (`eoscli dump --new-format`,
 `EosBridge.dump_preset_new`) — an earlier version of this list said it was
@@ -705,14 +745,16 @@ on each is very different — keep the distinction sharp:
    *restore* is specified and frame-encodable but has no send path here, so
    dumping is one-way.** That list describes E-mu's protocol, not this
    tool's coverage of it.
-2. **The undocumented panel/remote-control protocol** — `F0 18 7F 00 00
-   … F7`. What a tool like Ray Bellis's
-   [e-remote](https://emu.tools) uses to mirror the
-   device's own LCD and inject front-panel button presses (the same
-   *kind* of thing k2kremote does for the K2000). E-mu never published
-   this one; only fragments are known publicly, and **eosed does not
-   implement it** — see `docs/RESOLUTION_NOTES.md` §3 for what's known
-   and the reverse-engineering plan for the rest.
+2. **The undocumented panel/remote-control protocol** — `F0 18 7F <devID>
+   7A … F7`. The device's own LCD and front-panel keys (the same *kind* of
+   thing k2kremote does for the K2000). E-mu never published it; a third
+   party published the session handshake in 2016
+   ([midimachines](https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/)),
+   and **eosed now implements it** — session open, the full key map, the data
+   wheel, and the 240×64 display, all captured and decoded here. Note the
+   frame header is `<devID> 7A`, not the `00 00` those published fragments
+   record (§28). See `docs/RESOLUTION_NOTES.md` §26–§34 and
+   [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
 
 A subtlety worth internalizing before writing any client: **an edit made
 through the editor protocol does not appear on the device's own front
@@ -1125,9 +1167,12 @@ tests/
 
 ## Known Limitations
 
-- The undocumented panel/mirror protocol (screen mirroring, front-panel
-  button injection) is entirely out of scope for the current codebase —
-  see [Two protocols, one device](#two-protocols-one-device).
+- The undocumented panel protocol is **partly** implemented: session open,
+  the full front-panel key map, the data wheel, and the LCD (full screens
+  only). Its **partial screen updates are not decoded** — a frame too small
+  to be a whole screen is refused rather than painted as one — and nothing
+  yet drives the disk browse/load sequence the work exists for. See
+  [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
 - NEW-format preset **dump** is implemented but not live-verified (see
   [Preset dump formats](#preset-dump-formats)). Preset **restore** is not
   implemented in either format — eosed can read a preset off the device but

@@ -126,6 +126,38 @@ async def select_first_preset(pilot, app):
     await _settle(pilot)
 
 
+def _svg_to_png(name):
+    """Render one exported SVG to PNG, and drop the SVG.
+
+    Rich's SVG export pulls Fira Code from a CDN via @font-face. GitHub
+    renders SVG in a sandbox that blocks external loads, so the font falls
+    back to whatever the browser has and the glyph advance changes -- which is
+    fatal for the panel shots specifically, because their block characters
+    have to tile seamlessly to look like pixels. They render perfectly in a
+    local browser and visibly broken on the repository page.
+
+    PNG carries no font dependency, so what is committed is what is seen.
+    """
+    import re
+    import shutil
+    import subprocess
+
+    chrome = shutil.which("google-chrome") or shutil.which("chromium")
+    svg = OUT / f"{name}.svg"
+    if chrome is None:
+        print(f"  ! {name}: no chrome found, leaving SVG (will misrender on GitHub)")
+        return
+    text = svg.read_text(encoding="utf-8")
+    width = int(float(re.search(r'width="([0-9.]+)"', text).group(1)))
+    height = int(float(re.search(r'height="([0-9.]+)"', text).group(1)))
+    subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-sandbox",
+                    "--hide-scrollbars", f"--window-size={width},{height}",
+                    f"--screenshot={OUT / (name + '.png')}", svg.as_uri()],
+                   check=True, capture_output=True, timeout=120)
+    svg.unlink()
+    print(f"  converted {name}.svg -> {name}.png ({width}x{height})")
+
+
 async def main():
     print(f"capturing to {OUT} at {SIZE[0]}x{SIZE[1]} (4-pane at {WIDE[0]}x{WIDE[1]})")
 
@@ -169,6 +201,42 @@ async def main():
         await _settle(pilot)
         await pilot.press("h")
     await shoot("history", history)
+
+    # The front panel, drawn with a screen this project actually captured
+    # from an E4XT (docs/captures) rather than a mock-up. The device was on
+    # the LOAD page, which is the whole point of the panel work.
+    async def front_panel(pilot, app, *, mode):
+        import json
+        import pathlib
+
+        from eos import lcd
+
+        capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
+                   "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
+        frames = [json.loads(line)["bytes"] for line in
+                  capture.read_text(encoding="utf-8").splitlines() if line.strip()]
+        await select_first_preset(pilot, app)
+        await pilot.press("k")
+        await pilot.pause()
+        app.screen.render_mode = mode
+        app.screen.bitmap = lcd.decode_display(max(frames, key=len))
+        app.screen._refresh("panel open — sending disabled")
+        await _settle(pilot)
+
+    # No quadrant shot. It is the default mode, but it renders the 240x64
+    # screen at 120x32 cells, which on ~1:2 terminal cells comes out 1.9:1
+    # against the display's true 3.75:1 -- stretched vertically by two.
+    # Documenting a mode in words is fine; shipping a knowingly-distorted
+    # picture of the hardware is not.
+    await shoot("front_panel_halfblock",
+                lambda p, a: front_panel(p, a, mode="half"), size=(250, 64))
+    await shoot("front_panel_braille",
+                lambda p, a: front_panel(p, a, mode="braille"), size=(132, 48))
+
+    # Panel shots go to PNG. See _svg_to_png for why -- the block characters
+    # must tile exactly, and a substituted font breaks that on GitHub.
+    for name in ("front_panel_halfblock", "front_panel_braille"):
+        _svg_to_png(name)
 
     print("done — check the key legend at the bottom of each")
 

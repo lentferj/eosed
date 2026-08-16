@@ -223,3 +223,17 @@ SOFT_KEY_CENTRES = tuple((2 * index + 1) / 12 for index in range(6))
 def soft_key_columns(render_width: int) -> List[int]:
     """Column of each soft key's centre, for a render of ``render_width``."""
     return [round(fraction * render_width) for fraction in SOFT_KEY_CENTRES]
+
+
+#: Cells are about twice as tall as they are wide in a terminal, so a render's
+#: *aspect* depends on how many pixels it packs per cell -- and only two of the
+#: three come out at the display's true 240:64 = 3.75:1.
+#:
+#:     half      240x32 cells -> 240:64  = 3.75:1   true
+#:     braille   120x16 cells -> 120:32  = 3.75:1   true
+#:     quadrant  120x32 cells -> 120:64  = 1.9:1    2x too tall
+#:
+#: Quadrant is still the useful default -- it carries the most detail in 124
+#: columns -- but it stretches the screen vertically, which is obvious the
+#: moment it is put beside a photograph of the hardware.
+RENDER_ASPECT = {"half": 3.75, "braille": 3.75, "quadrant": 1.875}
