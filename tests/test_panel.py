@@ -129,10 +129,32 @@ def test_render_panel_marks_the_armed_state_distinctly():
     assert "ARMED" in render_panel(armed=True)
 
 
-def test_render_panel_says_the_lcd_is_deliberately_absent():
-    # The scope decision has to be visible in the UI, not only in TODO --
-    # otherwise a blank rectangle reads as an unfinished feature.
-    assert "not mirrored" in render_panel()
+def test_render_panel_explains_which_half_of_the_lcd_is_missing():
+    # Without a frame the area must say the *live feed* is unconfirmed, not
+    # that the display is unbuilt -- the decoder works (§32) and a placeholder
+    # implying otherwise sends a reader looking for the wrong thing.
+    art = render_panel()
+    assert "decoder works" in art
+    assert "live feed does not yet" in art
+
+
+def test_render_panel_draws_a_real_decoded_screen_when_given_one():
+    import json
+    import pathlib
+
+    from eos import lcd
+
+    capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
+               "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
+    frames = [json.loads(line)["bytes"] for line in
+              capture.read_text(encoding="utf-8").splitlines() if line.strip()]
+    bitmap = lcd.decode_display(max(frames, key=len))
+
+    art = render_panel(bitmap=bitmap)
+    assert "decoder works" not in art
+    # braille, one row per 4 pixel rows
+    assert sum(1 for line in art.split("\n")
+               if any(0x2800 <= ord(ch) <= 0x28FF for ch in line)) == lcd.HEIGHT // 4
 
 
 # --- the screen --------------------------------------------------------------

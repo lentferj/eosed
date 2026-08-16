@@ -2300,12 +2300,32 @@ Frame shape, unchanged from §26 and consistent across all 40 press frames:
 
     F0 18 7F 7A 05 40 <keycode> 00 <01=down|00=up> F7
 
-Note this is the `7A 05` byte order, not `05 7A` — the device→host direction,
-which §28a could not settle from a Midi Through capture because that port
-carries both ways on one wire. Captured here on the device's own output port
-with only the open message ever sent in the other direction, so **direction is
-now unambiguous**: device→host is `7A <devID>`, host→device is `<devID> 7A`.
-That resolves the question §26 and §28 both left open.
+Note this is the `7A 05` byte order, not `05 7A`. Captured on the device's own
+output port with only the open message ever sent the other way, so for
+**buttons and the dial** the reading is solid: device→host is `7A <devID>`,
+host→device is `<devID> 7A`, and both forms of `40h` have now been seen
+(browser clicks in §26 carried `05 7A`, physical presses here carry `7A 05`).
+
+**Corrected 2026-08-15 — this originally claimed direction was settled for the
+whole protocol, and it is not.** The claim was drawn from a capture that
+contains no `50h` display frames whatsoever. Every display frame this project
+has ever recorded came from a Midi Through capture, where both directions
+share one wire, and every one carries `05 7A` — the *host* marker. Read
+literally that says the host sent the screen, which cannot be right.
+
+So one of these is true and we do not yet know which:
+
+* the byte pair is not a direction marker at all, and means something else
+  that merely correlates with direction for `40h`/`43h`; or
+* `50h` genuinely travels with the other pattern, for a reason not yet
+  understood; or
+* something in the Midi Through path reordered or re-originated those frames.
+
+**The deciding experiment is cheap and has never been run:** listen on the
+device's own output port (56:2 here, *not* the send port) while requesting a
+screen, and see whether a `50h` arrives at all and with which byte order. One
+capture settles it. Until then, do not build a display decoder that assumes
+the answer.
 
 One duplicated UP frame at t+92.01 (identical timestamp, identical bytes).
 Not explained; not obviously harmful; noted so a later session that sees
@@ -2402,3 +2422,134 @@ assumes, which is the narrow use the display frame (§26) is still wanted for.
 
 Capture: `docs/captures/panel_keymap_e4xt_fw470_2026-08-15.jsonl`. No display
 frames were requested, so there is nothing to scrub.
+
+---
+
+## §31 — A text LCD readout without e-remote: feasible, and what it actually needs (planned, 2026-08-15)
+
+The question: can eosed show the E4XT's screen as *text*, the way k2kremote
+shows the K2000's, using only this project's own reverse engineering?
+
+**Yes in principle, and the dependency is already zero** — but it is a
+different and larger job than k2kremote's, for one reason that is worth being
+precise about.
+
+### Why this is not the same job as k2kremote's
+
+k2kremote reads the K2000's screen as **characters**: that protocol carries
+text, so rendering it as text is transcription. EOS carries the screen as a
+**bitmap** — 240×64 monochrome, 7→8 packed, row-major at 30 bytes per row
+(§26). There is no character data anywhere in the frame. A text readout
+therefore requires recognising glyphs from pixels.
+
+That sounds worse than it is. The device has one fixed ROM font, so this is
+not OCR in the hard sense: every glyph is a fixed bitmap at a fixed cell size,
+so recognition is an exact dictionary lookup on a cell's bit pattern, not a
+classifier. Build the dictionary once and it is deterministic forever.
+
+### What we already have, all of it ours
+
+* Opening a session — `F0 18 7F <devID> 7A 10 F7`, captured (§28) and
+  implemented in `eos/panel.py`. No browser needed.
+* The screen's encoding — packing, dimensions and row order (§26).
+* A renderer that reconstructs the bitmap (`probes/render_lcd.py`).
+* The ability to *drive* the panel, so a known string can be put on screen
+  deliberately (§30 key map) — which is exactly what a font table needs.
+
+### What is missing, in order
+
+1. **Confirm which opcode requests a screen, and from where it arrives.**
+   `51h` and `52h` both precede a `50h` (§28, §26), and `60h`/`61h` are in the
+   same conversation, but all of that was observed on Midi Through with the
+   host and device sharing a wire. This also blocks the direction question
+   §30 now flags as unresolved. One capture on the device's *output* port
+   while we send a request settles both.
+2. **A font table.** Drive the panel to a screen whose text is known exactly —
+   a preset name field we set ourselves — capture the bitmap, and cut it into
+   character cells. The cell grid falls out of the geometry: 240 px wide with
+   a typical 6 px advance is 40 columns, 64 px tall with an 8 px line is 8
+   rows, which matches the four-to-five text lines EOS screens actually show
+   with room for the inverse-video bars. Confirm rather than assume.
+3. **A cell→character dictionary**, built by rendering known strings and
+   recording each cell's bit pattern. Unknown patterns render as `?` and are
+   a signal to capture more, never a guess.
+4. **Inverse video.** EOS marks the selection by inverting a run of cells, so
+   a cell and its inverse are the same glyph in different states. Detect it
+   as a property of the cell, not as two separate glyphs, or the dictionary
+   doubles for no benefit.
+
+### Why this does not reopen the scope decision
+
+The 2026-08-14 decision was **no screen mirror**, because rebuilding
+e-remote's graphical panel from its own traffic is poor form. A text readout
+derived from our own decoding is a different artefact: it is the k2kremote
+idiom, it is what a TUI can actually use, and — the deciding point — it is
+built from a font table this project derives by driving the machine itself.
+Nothing in it is taken from anyone else's tool.
+
+It is also the thing that makes the disk-load feature safe rather than blind:
+"confirm the machine is on the page this sequence assumes" needs perhaps two
+lines of text, not a picture.
+
+**Do not start at step 2.** The font work is the fun part and the useless one
+if step 1 comes back saying we cannot request a screen on demand.
+
+---
+
+## §32 — The display encoding was wrong in §26, and the right one reads cleanly (2026-08-15)
+
+§26 decoded the `50h` payload as **MIDI 7→8 byte packing** (one MSB byte
+carrying the high bits of the next seven) and reported the result as settled
+because the arithmetic landed exactly:
+
+    2195 septets × 7/8  ->  1920 bytes  ==  240 × 64 / 8
+
+**That was a coincidence, and it is the reason the error survived a day.**
+The rendered picture sheared progressively across the screen — text lines
+drifting a row every twenty-odd columns — and that was misread as a *layout*
+problem (row-major vs column pages, stride 29/30/31/32, interlaced halves)
+because the size arithmetic seemed to rule out a *packing* problem.
+
+The actual encoding is simpler: **a plain bitstream, seven bits per byte,
+most-significant bit first.**
+
+    2195 septets × 7 = 15365 bits, for 15360 pixels, 5 bits of tail padding
+
+No packing, no MSB byte, no groups. Decoded that way the screen comes out
+square, and the capture from 2026-08-14 reads:
+
+    ┌────────────────────────────────────────────┐
+    │ Drive : D1 ZuluscsiCDROM                   │
+    │ Folder: F000 Default Folder                │
+    │ Bank  : B000 <bank name>       [inverse]   │
+    └────────────────────────────────────────────┘
+      [Cancel]          [Merge]          [Load]
+
+with **LOAD** set vertically down the left edge. That is the disk-load page —
+the exact screen this whole line of work exists to reach.
+
+**The lesson, which is the transferable part:** a decoding that produces the
+*right size* is not thereby the right decoding. Size is one constraint and a
+weak one; geometry is the strong one. `tests/test_lcd.py` now asserts on
+geometry instead — the dialog's own horizontal rules must come out as long
+unbroken runs, which a sheared decode cannot satisfy and a wrongly-sized one
+never gets the chance to.
+
+### Rendering it in a terminal, cheaply
+
+No kitty graphics protocol, sixel or image escape needed:
+
+* **half-blocks** (`▀▄█`, two vertical pixels per cell) → 240×32 characters,
+  horizontal pixels 1:1, and the device's 1-pixel font strokes stay separate.
+  The legible choice, at the cost of needing a wide terminal.
+* **braille** (U+2800, 2×4 pixels per cell) → 120×16 characters, correct
+  aspect and compact, but the thin strokes merge into neighbouring dots and
+  it reads as texture more than type.
+
+Both are in `eos/lcd.py`. Half-blocks is the one to default to.
+
+### What this does *not* settle
+
+Direction (§30's correction) is still open: every `50h` we hold came from a
+Midi Through capture. Requesting a screen on demand is still unconfirmed, and
+remains the next hardware step before any of this becomes a live pane.

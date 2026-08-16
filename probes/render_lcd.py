@@ -29,6 +29,13 @@ W, H = 240, 64
 
 
 def unpack_7to8(septets):
+    """DEPRECATED -- kept only so the §26 mistake stays legible.
+
+    This is MIDI 7->8 byte packing, which is NOT how the E4XT sends its
+    screen. It produces exactly 1920 bytes from 2195 septets, which is
+    240x64/8 and looks like confirmation; the picture it yields shears
+    progressively. See §32 and use eos.lcd.decode_display instead.
+    """
     out = bytearray()
     i = 0
     while i + 1 < len(septets):

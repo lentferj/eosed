@@ -41,12 +41,21 @@ contain one-shot erase functions, and a stray keystroke in a TUI is a much
 cheaper accident than a stray keystroke on a rack unit you are standing in
 front of.
 
-**No LCD.** The screen area is reserved and deliberately blank: mirroring the
-display is what e-remote does, and rebuilding it from its own traffic was
-ruled out on taste (TODO, 2026-08-14). Rendering the 240x64 bitmap for the
-narrow purpose of *confirming which page the device is on* is still open --
-marked TBD in the layout rather than silently omitted, so the decision stays
-visible to whoever opens this file next.
+**The LCD.** The screen area renders a real decoded display when it has one,
+as braille (2x4 pixels per cell, so 240x64 becomes 120x16 characters and no
+terminal graphics protocol is involved). The decoding is this project's own
+(§32) -- nothing about the EOS screen was ever published by anyone.
+
+That is a change of position from 2026-08-14, when this area was blank on
+purpose. The objection then was to rebuilding e-remote's graphical panel from
+its own traffic; what is drawn here comes from a bitstream this project
+decoded itself, and is what makes "confirm the device is on the page this
+sequence assumes" possible before firing a load.
+
+**There is still no live feed.** Requesting a screen on demand has never been
+confirmed against hardware (§30, §31), so the pane shows a decoded frame only
+when one is handed to it. The placeholder says which half is missing rather
+than implying the whole feature is unbuilt.
 """
 
 from __future__ import annotations
@@ -59,6 +68,7 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eos import lcd as lcd_mod
 from eos import panel as panel_proto
 from eos.panel import Key
 
@@ -114,7 +124,7 @@ WHEEL: Dict[str, int] = {
 }
 
 
-PANEL_WIDTH = 86
+PANEL_WIDTH = 124
 
 
 class _Cell:
@@ -181,13 +191,16 @@ def _caption(text: str) -> str:
 
 
 def render_panel(active: Optional[int] = None, *, armed: bool = False,
-                 status: str = "") -> str:
+                 status: str = "", bitmap=None) -> str:
     """The panel as Rich markup. Pure -- no widgets, so it is testable.
 
-    ``active`` is the key code to highlight (the one just pressed), which is
-    the only feedback this screen can give while the LCD is deliberately not
-    mirrored: without it, a keypress that went nowhere and one that reached
-    the device look identical.
+    ``active`` is the key code to highlight (the one just pressed). It matters
+    most when no ``bitmap`` is available: without it, a keypress that went
+    nowhere and one that reached the device look identical.
+
+    ``bitmap`` is a decoded 64x240 screen from :func:`eos.lcd.decode_display`,
+    drawn as braille in the display area. Omitted, the area explains that the
+    live feed is unconfirmed rather than pretending the screen is unbuilt.
 
     Laid out to match the hardware photograph -- display across the top with
     the wheel to its right, soft keys in a row beneath it, mode buttons at the
@@ -211,16 +224,28 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,
                + "─" * (PANEL_WIDTH - 13) + "╮[/dim]")
 
     # --- display + wheel -----------------------------------------------------
-    lcd_w = 50
+    # The LCD is rendered as braille (2x4 pixels per cell), which turns the
+    # device's 240x64 screen into 120x16 characters -- no kitty graphics
+    # protocol, no sixel, nothing but a font with U+2800..U+28FF. See §32.
+    inner = lcd_mod.WIDTH // 2                      # 120 braille columns
     state = ("[b red] ARMED — keys reach the device [/b red]" if armed
              else "[dim] disarmed (ctrl+t to arm) [/dim]")
-    line("  [dim]┌" + "─" * lcd_w + "┐[/dim]" + " " * 4 + "[dim]╭───────╮[/dim]")
-    line("  [dim]│[/dim] LCD not mirrored — scope decision, TBD"
-         + " " * 11 + "[dim]│[/dim]" + " " * 4 + "[dim]│[/dim]  [b]⊙[/b]  [dim]│[/dim]  wheel")
-    line("  [dim]└" + "─" * lcd_w + "┘[/dim]" + " " * 4 + "[dim]╰───────╯[/dim]"
-         + "  [dim]([ ]) ([{ }] ×10)[/dim]")
+    line("  [dim]┌" + "─" * inner + "┐[/dim]")
+    if bitmap is None:
+        # Not a scope decision any more -- the decoder works (§32). What is
+        # missing is the live feed: requesting a screen on demand has never
+        # been confirmed against hardware, so there is nothing to show yet.
+        for text in (" no screen received — the decoder works (§32), the live"
+                     " feed does not yet",
+                     " requesting a screen on demand is still unconfirmed"
+                     " against hardware"):
+            line("  [dim]│[/dim][dim]" + text.ljust(inner) + "[/dim][dim]│[/dim]")
+    else:
+        for braille in lcd_mod.to_braille(bitmap):
+            line("  [dim]│[/dim]" + braille.ljust(inner) + "[dim]│[/dim]")
+    line("  [dim]└" + "─" * inner + "┘[/dim]")
     line()
-    line("  " + state)
+    line("  " + state + "     [dim]wheel ([ ]) ([{ }] ×10)[/dim]")
     line()
 
     # --- soft keys -----------------------------------------------------------
@@ -305,7 +330,8 @@ class PanelScreen(ModalScreen):
         Binding("ctrl+t", "toggle_arm", "Arm/disarm sending"),
     ]
 
-    def __init__(self, *, allow_write: bool, device_id: int, send=None):
+    def __init__(self, *, allow_write: bool, device_id: int, send=None,
+                 bitmap=None):
         super().__init__()
         self.allow_write = allow_write
         self.device_id = device_id
@@ -313,7 +339,9 @@ class PanelScreen(ModalScreen):
         self.armed = False
         self.last_key: Optional[int] = None
         self.last_status = ""
+        self.bitmap = None
         self.sent_frames: List[List[int]] = []   # exposed for tests
+        self.bitmap = bitmap
 
     def compose(self) -> ComposeResult:
         yield Static(render_panel(), id="panel")
@@ -325,7 +353,8 @@ class PanelScreen(ModalScreen):
         if status:
             self.last_status = status
         self.query_one("#panel", Static).update(
-            render_panel(self.last_key, armed=self.armed, status=self.last_status))
+            render_panel(self.last_key, armed=self.armed, status=self.last_status,
+                         bitmap=self.bitmap))
 
     def action_close(self) -> None:
         self.dismiss(None)
