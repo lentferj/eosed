@@ -104,3 +104,48 @@ def test_renders_are_not_uniform():
     for render in (lcd.to_braille, lcd.to_halfblocks, lcd.to_ascii):
         text = "\n".join(render(bitmap))
         assert len(set(text) - {"\n"}) > 1, f"{render.__name__} produced flat output"
+
+
+# --- refresh policy (§33b) ---------------------------------------------------
+
+def _fake_50h(payload_len):
+    return [0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x50] + [0] * payload_len + [0xF7]
+
+
+def test_empty_update_means_do_not_repaint():
+    # 86 bytes is what a quiet screen returns, measured repeatedly (§33a).
+    # Treating it as a change would repaint constantly and cost a full 51h
+    # each time -- 716ms of wire for nothing.
+    assert lcd.classify_update(_fake_50h(79)) == lcd.RefreshDecision.IDLE
+    assert lcd.classify_update(None) == lcd.RefreshDecision.IDLE
+
+
+def test_a_full_frame_from_the_delta_request_is_used_directly():
+    # The measured common case: when the screen really changed, 52h returned
+    # a full decodable frame. Escalating to 51h here would double the cost of
+    # every change for no gain.
+    full = max(_frames(), key=len)
+    assert lcd.classify_update(full) == lcd.RefreshDecision.USE
+
+
+def test_a_partial_frame_escalates_rather_than_rendering_a_fragment():
+    # The 112-byte case from §26: something changed, but the region encoding
+    # is unknown. Buying a full screen is correct; painting the fragment as if
+    # it were the display is not.
+    partials = [f for f in _frames()
+                if len(f) > 6 and f[5] == 0x50 and 100 < len(f) < 500]
+    assert partials, "capture should contain a mid-sized partial"
+    for frame in partials:
+        assert lcd.classify_update(frame) == lcd.RefreshDecision.ESCALATE
+
+
+def test_full_min_bytes_is_derived_not_hardcoded():
+    # A real full screen must clear the threshold, and the threshold must sit
+    # above the empty-update size -- otherwise the three cases collapse.
+    assert lcd.FULL_MIN_BYTES <= len(max(_frames(), key=len))
+    assert lcd.EMPTY_UPDATE_MAX < lcd.FULL_MIN_BYTES
+
+
+def test_non_display_frames_are_ignored_by_the_policy():
+    button = [0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x40, 0x5C, 0x00, 0x01, 0xF7]
+    assert lcd.classify_update(button) == lcd.RefreshDecision.IDLE

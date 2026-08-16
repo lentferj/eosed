@@ -2553,3 +2553,210 @@ Both are in `eos/lcd.py`. Half-blocks is the one to default to.
 Direction (§30's correction) is still open: every `50h` we hold came from a
 Midi Through capture. Requesting a screen on demand is still unconfirmed, and
 remains the next hardware step before any of this becomes a live pane.
+
+---
+
+## §33 — Screens can be requested on demand, and the byte pair is NOT a direction marker (2026-08-15, live)
+
+The experiment §30-corrected and §31 both said had never been run. Captured on
+the device's **own output port** (`56:2`), with this project's own sends going
+the other way on `56:3` and nothing else on the wire -- so unlike every
+previous display capture there is no Midi Through ambiguity about who sent
+what.
+
+Sent the session open (§28), then one candidate opcode at a time:
+
+| sent | device replied |
+|---|---|
+| `51h` | **2212-byte `50h` — a full screen** |
+| `52h` | 2212-byte `50h` — a full screen |
+| `60h` | `61h 77 7E` — a short reply, payload differs from the `7F 7E` seen in §28 |
+| `61h` | nothing |
+
+**`51h` requests a screen.** Repeatable, immediate, no preconditions beyond an
+open session.
+
+**`52h` is the delta request — see §33a.** This section originally said the
+two were indistinguishable, which was true of the experiment and not of the
+device: the two requests were sent back to back with nothing changing in
+between, so a full response and a "nothing new" response would look the same.
+Prompted to re-run it with a real screen change in the middle, they separate
+immediately.
+
+`61h` produced nothing when sent, consistent with it being a device->host
+reply rather than a request. `60h` appears to *ask* for whatever `61h` carries;
+its two payload bytes changed between §28 and now, so it is state of some kind
+-- cursor position and selected-field index are the obvious guesses and
+neither is tested.
+
+### The byte pair is opcode-correlated, not directional
+
+The display frame arrived on the device's own output port carrying `05 7A` —
+the pattern §30 originally called "host->device". It cannot be: nothing but
+this project was transmitting, and we did not send a 2212-byte screen.
+
+So the correction in §30 was right to withdraw the claim, and this settles
+what is actually true:
+
+    7A 05   handshake reply (7Fh), button echo (40h), data dial (43h)
+    05 7A   display data (50h), the 61h reply
+
+**Both sets contain device->host traffic.** The pair varies with the *message*,
+not with the direction of travel. §26's original confusion is fully explained
+by this, and any parser must accept either ordering per opcode rather than
+inferring direction from it -- which `eos.panel.parse_button` already does,
+for the weaker reason that it had seen both.
+
+### The whole loop, demonstrated
+
+Open session -> send `40h` PAGE_EXIT (down, up) -> send `51h` -> decode the
+`50h` reply. The screen changed, confirming that eosed can **drive the panel
+and read the result back**, entirely through this project's own captures and
+with no third-party tool in the loop at any point.
+
+That is the last structural unknown for the disk-load feature. What remains is
+sequencing, not protocol: walk to the disk pages by key, request a screen to
+confirm the page, then fire. The state-confirmation step §31 wanted is now
+buildable.
+
+### Still open
+
+* Whether `51h` and `52h` differ, and what `61h`'s two payload bytes mean.
+* The short `50h` frames (86 and 112 bytes) from §26 -- presumably partial or
+  region updates, still not decodable, and `eos.lcd.is_partial` refuses them
+  rather than rendering a fragment as a whole screen.
+
+
+### §33a — `51h` is full, `52h` is delta, and nothing is ever pushed (2026-08-15)
+
+Re-run of §33's request test with a screen change deliberately placed between
+the requests, because the first run could not have told a full response from
+an empty delta:
+
+    51h on a quiet screen              -> 2212 bytes (full)
+    52h on a quiet screen              -> 2212 bytes
+    52h again, still quiet             ->   86 bytes
+    [CURSOR DOWN pressed]              -> no unsolicited frame at all
+    52h right after the change         ->   86 bytes
+    52h again                          ->   86 bytes
+    51h after the change               -> 2212 bytes (full)
+
+**`51h` always returns a full screen** -- three for three, regardless of what
+came before it. That is the one to build on: a client that wants to know what
+is on the display asks with `51h` and decodes the answer, with no dependence
+on device-side state it cannot see.
+
+**`52h` is an update request.** It falls to 86 bytes once there is nothing new
+to send, which identifies the 86- and 112-byte frames §26 saw as partial
+updates rather than mysteries. Their region encoding is still unknown, and
+`eos.lcd.is_partial` continues to refuse them rather than render a fragment as
+a whole screen.
+
+**The device never pushes.** Pressing a key produced *no* unsolicited `50h`.
+§26's capture shows display frames following button presses, but there is a
+`52h` immediately before every one of them -- e-remote was polling, and the
+frames were replies. Any client must ask; the screen is not sent to it. That
+also means a live pane needs a poll loop with a chosen interval, and the cost
+of a full `51h` (2212 bytes at MIDI speed, ~0.7 s in §28's capture) is what
+sets how fast that can reasonably run.
+
+Worth recording how this was found: the first experiment was run, reported,
+and *believed*, and it was the reader asking "would two different requests
+really give the same reply -- did you change menus in between?" that exposed
+it. The result was not wrong so much as uninformative, which is harder to
+notice than a wrong one, because the data looked clean.
+
+### §33b — What the refresh strategy should be, measured (2026-08-15)
+
+Round-trip cost, request to complete frame, measured twice each:
+
+    51h full     2212 bytes    716 ms
+    52h delta      86 bytes     70 ms
+
+716 ms is most of a second of MIDI wire time, on the same link that carries
+keypresses -- so continuously polling for full screens is out. It would also
+delay every button the user pressed behind an in-flight screen transfer.
+
+**`52h` is a usable change detector**, which is what makes a cheap poll
+possible. Provoking a real change and asking:
+
+    after MASTER (page switch)   52h -> 2212 bytes,  screen ink 2863 -> 2631
+    after PAGE NEXT              52h ->   86 bytes,  ink unchanged
+    after CURSOR DOWN            52h ->   86 bytes,  ink unchanged
+
+86 bytes means nothing changed. And when something did change, `52h` returned
+a **full, decodable frame** rather than an undecodable fragment -- so in the
+common case the cheap request also delivers the answer, and no follow-up full
+request is needed at all.
+
+(PAGE NEXT and CURSOR DOWN did not alter this particular page, which is why
+they read as no-change. That is the device being honest, not the detector
+failing: the ink total confirms the screen really was identical.)
+
+**The design that follows:**
+
+1. **Poll `52h`**, not `51h`. At 70 ms a poll, twice a second is ~14% of the
+   link and feels immediate.
+2. **86 bytes -> do nothing.** No decode, no repaint, no cost.
+3. **A frame large enough to decode -> use it directly.** This is the common
+   case for real changes and costs one request, not two.
+4. **Anything in between (the 112-byte case from §26) -> escalate to `51h`.**
+   Partial-region frames are still undecodable, so buy a full screen rather
+   than render a fragment.
+5. **Pause polling while sending keys**, so a burst of presses is not queued
+   behind a screen transfer.
+6. **Keep a manual force-refresh**, because every automatic scheme eventually
+   disagrees with reality and the user needs a way to say "just ask again".
+
+This answers all three options together: full at the start *and* on demand,
+delta as the poll, and a refresh key -- not as alternatives but as the roles
+each request is actually suited to.
+
+The cost of being wrong here is asymmetric and worth stating: polling too
+hard makes the panel sluggish in a way that looks like the protocol being
+slow, while polling too gently just means the screen lags a beat behind.
+
+### §33c — Why the partial frames are still undecoded, honestly (2026-08-15)
+
+Earlier sections said the region encoding of the short `50h` frames was
+"unknown", which implied it had been examined and resisted. It had not been
+examined. Corrected here, with what looking actually found.
+
+**The sub-header is a rectangle, and it is the same in every frame.** Read as
+14-bit LSB-first pairs, `01 01 00 00 00 00 70 01 40 00` is:
+
+    [129] [x=0] [y=0] [w=240] [h=64]
+
+240 and 64 are exactly the screen dimensions, which is unlikely to be
+coincidence. But the 2212-, 112- and 86-byte frames all carry **identical**
+sub-headers, so whatever distinguishes a partial from a full screen is not
+there.
+
+**The short payloads are not raw bitmaps.** 69 septets is 483 bits against the
+15360 a screen needs, so they are encoded or compressed. Both are dominated by
+runs of `7F`, and the 112-byte frame visibly repeats a
+`58 44 56 11 15 44 25 3?` group three times -- the shape of run-length coding,
+or of repeated identical scanlines.
+
+**What blocked going further was provoking one.** A delta can only be read
+against known ground truth: capture a full screen, change something small,
+capture the delta, capture the full screen again, and diff. Six keys were
+tried (cursor left/right, INC, DEC, page prev/next) and **every one changed
+exactly zero pixels**, returning an 86-byte reply each time. The device was
+sitting on a page where none of them do anything.
+
+That failure is worth keeping for two reasons. It is a clean six-for-six
+validation that **86 bytes means no change** -- confirmed against pixel-level
+diffs of the full screens either side, not inferred from size alone. And it
+shows the real obstacle is not the encoding but reaching a screen where a
+*small* change is possible: everything that did change (a page switch) came
+back as a full 2212-byte frame instead.
+
+**Next attempt should navigate to an edit page first** -- somewhere with a
+value field and a cursor -- and change one character. A blinking cursor, if
+EOS has one, would produce a small delta continuously and hand over as many
+samples as anyone could want.
+
+Until then `eos.lcd.is_partial` refuses these frames and `classify_update`
+escalates them to a full `51h`, which is correct behaviour under uncertainty
+and costs one extra request in a case that appears to be rare.

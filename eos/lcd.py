@@ -140,3 +140,46 @@ def to_halfblocks(bitmap: Bitmap) -> List[str]:
 def to_ascii(bitmap: Bitmap) -> List[str]:
     """One character per pixel. For tests and diffs, not for a UI."""
     return ["".join("#" if bit else "." for bit in row) for row in bitmap]
+
+
+# --- refresh policy (§33b) ---------------------------------------------------
+
+#: A `52h` reply this small means "nothing changed" -- measured repeatedly on
+#: a quiet screen (§33a). Anything larger carries something.
+EMPTY_UPDATE_MAX = 100
+
+#: Below this a `50h` frame cannot be a whole screen, so it is a partial whose
+#: region encoding we do not know. Derived, not guessed: a full screen needs
+#: WIDTH*HEIGHT bits at 7 bits per byte, plus header and sub-header.
+FULL_MIN_BYTES = (WIDTH * HEIGHT + 6) // 7 + _HEADER + _SUBHEADER
+
+
+class RefreshDecision:
+    """What to do with a `52h` reply. Values are the three real outcomes."""
+
+    IDLE = "idle"          # nothing changed; do not repaint
+    USE = "use"            # decodable full screen arrived; show it
+    ESCALATE = "escalate"  # something changed but is not decodable; ask 51h
+
+
+def classify_update(frame: Optional[Sequence[int]]) -> str:
+    """Decide from a `52h` reply alone, without decoding it.
+
+    The point of polling with `52h` rather than `51h` is that it costs 70ms
+    against 716ms (§33b). That saving only survives if the decision to repaint
+    can be made from the reply's *shape*, before paying to decode it -- so
+    this looks at length and nothing else.
+
+    A real change usually arrives as a full frame, which is why USE is the
+    common case and a second request is normally unnecessary. ESCALATE covers
+    the partial-region frames (§26 saw 112 bytes) that we still cannot decode.
+    """
+    if not frame:
+        return RefreshDecision.IDLE
+    if len(frame) < 7 or frame[5] != 0x50:
+        return RefreshDecision.IDLE
+    if len(frame) <= EMPTY_UPDATE_MAX:
+        return RefreshDecision.IDLE
+    if len(frame) >= FULL_MIN_BYTES:
+        return RefreshDecision.USE
+    return RefreshDecision.ESCALATE

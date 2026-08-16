@@ -316,3 +316,27 @@ async def test_arming_with_no_device_says_so_rather_than_claiming_reach():
         assert "no device connected" in app.screen.last_status
         await pilot.press("q")
         await pilot.pause()          # must not raise with send=None
+
+
+# --- screen request (§33) ----------------------------------------------------
+
+def test_request_screen_is_the_confirmed_opcode():
+    # 51h, verified live against an E4XT: with a session open it returns a
+    # full 2212-byte 50h frame immediately (§33).
+    assert pp.request_screen(0x05) == [0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x51, 0xF7]
+
+
+def test_query_state_is_the_opcode_that_provoked_a_reply():
+    assert pp.query_state(0x05) == [0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x60, 0xF7]
+
+
+def test_the_byte_pair_is_not_treated_as_a_direction_marker():
+    # §33: a display frame arrives from the device carrying 05 7A, the same
+    # pattern a host-sent button uses. Anything that inferred direction from
+    # those two bytes would mis-attribute half the conversation, so the
+    # parsers must accept both orderings.
+    device_display = [0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x50] + [0] * 10 + [0xF7]
+    device_button = [0xF0, 0x18, 0x7F, 0x7A, 0x05, 0x40, 0x5C, 0x00, 0x01, 0xF7]
+    assert pp.parse_button(device_button) == (0x5C, True)
+    assert pp.parse_button(device_display) is None      # not a button, but not rejected for its bytes
+    assert pp.parse_button([0xF0, 0x18, 0x7F, 0x05, 0x7A, 0x40, 0x5C, 0x00, 0x01, 0xF7]) == (0x5C, True)

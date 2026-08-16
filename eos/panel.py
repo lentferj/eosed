@@ -54,9 +54,11 @@ class PanelCommand(enum.IntEnum):
     OPEN = 0x10             # host->device, session open (§28)
     BUTTON = 0x40           # 40 <key> 00 <01=down|00=up>  (§29, §30)
     DIAL = 0x43             # 43 01 <lo> <hi>, signed 14-bit delta (§30)
-    DISPLAY = 0x50          # device->host, 240x64 bitmap (§26)
-    DISPLAY_REQUEST = 0x51  # seen on session open, before a 50
-    DISPLAY_REFRESH = 0x52  # seen after a button press, before a 50
+    DISPLAY = 0x50          # device->host, 240x64 bitmap (§26, §32)
+    DISPLAY_REQUEST = 0x51  # host->device, "send me the screen" -- confirmed §33
+    DISPLAY_UPDATE = 0x52   # host->device, delta request; 86 bytes = nothing new (§33a)
+    SCREEN_QUERY = 0x60     # host->device, provokes a 61h reply (§33)
+    SCREEN_STATE = 0x61     # device->host, two payload bytes, meaning unknown
 
 
 class Key(enum.IntEnum):
@@ -156,6 +158,35 @@ def button(device_id: int, key: int, *, down: bool) -> List[int]:
 def press(device_id: int, key: int) -> List[List[int]]:
     """The two frames a single keypress consists of, in order."""
     return [button(device_id, key, down=True), button(device_id, key, down=False)]
+
+
+def request_screen(device_id: int) -> List[int]:
+    """`51h` -- ask the device to send its current screen.
+
+    Confirmed live (§33, §33a): with a session open this returns a full
+    2212-byte `50h` frame immediately, every time, regardless of what came
+    before it. `52h` is the *delta* request and drops to 86 bytes when there
+    is nothing new -- useful for polling cheaply, useless if you want to know
+    what is actually on screen, so this function asks for the full one.
+
+    Note the device never pushes a screen: pressing a key produces no
+    unsolicited frame (§33a). A client polls or it sees nothing.
+
+    Decode the reply with :func:`eos.lcd.decode_display`.
+    """
+    return _frame(device_id, PanelCommand.DISPLAY_REQUEST, [])
+
+
+def query_state(device_id: int) -> List[int]:
+    """`60h` -- provokes a short `61h <a> <b>` reply of unknown meaning.
+
+    The two payload bytes differ between captures (§28 saw `7F 7E`, §33 saw
+    `77 7E`), so they carry *something* that changes with device state --
+    cursor position and selected-field index are the obvious guesses and
+    neither has been tested. Exposed because it is cheap, harmless and the
+    next person to look at this needs a way to poke it.
+    """
+    return _frame(device_id, PanelCommand.SCREEN_QUERY, [])
 
 
 def dial(device_id: int, delta: int) -> List[int]:
