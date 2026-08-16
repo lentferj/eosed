@@ -71,6 +71,7 @@ from eos import bridge as bridge_mod
 from eos import messages as m
 from eos import params as p
 from eosed.demo import DemoBridge
+from eosed.panel import PanelScreen
 
 # The preset page size is not a fixed constant: it's recomputed from how many
 # rows the presets pane can actually show, so a taller terminal displays more
@@ -829,6 +830,7 @@ class EosedApp(App):
         Binding("x", "clear_sample_usage_cache", "Clear usage cache"),
         Binding("e", "toggle_view", "Extended view"),
         Binding("escape", "back_to_preset", "Back to preset"),
+        Binding("k", "front_panel", "Front panel"),
         Binding("m", "master_menu", "Master"),
         Binding("w", "toggle_write_mode", "Write mode"),
         Binding("z", "undo", "Undo"),
@@ -2695,6 +2697,30 @@ class EosedApp(App):
                               f"renamed {kind} {number} to {name!r}")
 
     # -- master (destructive) menu ---------------------------------------
+    def action_front_panel(self) -> None:
+        """`k` -- the E4XT's own front panel as an exclusive keyboard mode.
+
+        Speaks the *panel* protocol (`F0 18 7F ...`), not the editor protocol
+        the rest of this app uses -- see CLAUDE.md on keeping the two apart.
+        Opening it transmits nothing; sending needs write mode plus a separate
+        arm inside the screen.
+
+        Under `--demo` there is no bridge at all, so the screen runs with no
+        send path: the layout and bindings are explorable, and nothing can
+        reach hardware that isn't there.
+        """
+        send = None
+        device_id = m.DEFAULT_DEVICE_ID
+        if self.bridge is not None and not self.demo:
+            device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
+            out = getattr(self.bridge, "midi_out", None)
+            if out is not None:
+                # write=True: a panel press is fire-and-forget with no reply to
+                # pace against, the same category as a parameter edit.
+                send = lambda frame: out.send_message(list(frame), write=True)  # noqa: E731
+        self.push_screen(PanelScreen(allow_write=self.allow_write,
+                                     device_id=device_id, send=send))
+
     def action_master_menu(self) -> None:
         self.push_screen(MasterScreen(self.current_preset), self._on_master_result)
 

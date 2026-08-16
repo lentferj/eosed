@@ -362,7 +362,7 @@ touches local state).
 | **Inspect** | `v` Voices · `l` Links · `u` Find usage · `i` Integrity · `h` History |
 | **Cache** | `c` Cache structure · `C` Cache everything · `x` Clear usage cache |
 | **Edit** | `Enter` Edit value · `+` Value +1 · `-` Value -1 · `o` Rename · `z` Undo · `Z` Undo all · `w` Write mode |
-| **Other** | `e` Extended view · `m` Master · `q` Quit |
+| **Other** | `e` Extended view · `m` Master · `k` Front panel · `q` Quit |
 
 `PageUp`/`PageDown` page the Preset/Sample bank; inside the Parameters
 pane they scroll normally. Scrolling near the bottom of a bank loads more
@@ -583,6 +583,43 @@ keystroke.</sub></p>
   persistent, glanceable reminder that's easy to miss in the status line
   alone. No write path has been exercised against real hardware as
   thoroughly as the read paths yet — see [TODO.md](TODO.md).
+
+### Front panel (`k`) — a second protocol, an exclusive mode
+
+`k` opens a control surface laid out like the E4XT's own front panel:
+MASTER and DISK/BROWSE at the left, PRESET above SAMPLE, the six soft keys in
+a row under the display, assignables and the PAGE group centre-right, cursor
+diamond and numeric keypad at the right.
+
+**This is the *panel* protocol, not the editor protocol** the rest of eosed
+speaks — `F0 18 7F <devID> 7A …`, undocumented by E-mu and reverse engineered
+here (`docs/RESOLUTION_NOTES.md` §26–§30). Keep the distinction in mind: a
+panel press drives the machine's own UI, whereas everything else in this app
+edits parameters directly and does *not* move the front panel.
+
+**Bindings are positional, not mnemonic.** The panel's two button rows run
+left-to-right along the keyboard's two home rows, so `q w e r` is MASTER /
+PRESET MANAGE / PRESET EDIT / AUDITION and `a s d f g h j k l ;` continues
+beneath it. Where the two agree you get both for free: F1–F6 are the
+keyboard's F1–F6, and the cursor diamond is the arrow cluster. The keypad is
+the number row, `,` is `+/−` (left of `.` on both), `-`/`=` are DEC/INC, and
+`[`/`]` turn the data wheel — `{`/`}` move ten detents at once, which is what
+the device itself does when a human spins it fast.
+
+**It is an exclusive mode.** While the panel is up it swallows every key,
+mapped or not, so it can reuse keys the main view binds — `s` is SAMPLE
+MANAGE here and the samples pane there. `escape` leaves.
+
+**Sending is gated twice.** Opening the panel transmits nothing. `ctrl+t`
+arms it, and arming requires write mode to be on already. Until then keys
+only highlight, which is deliberate: with no LCD mirror there is otherwise no
+way to tell a keypress that went nowhere from one that reached the rack.
+
+**There is no LCD.** The display area is drawn but blank. Mirroring the
+screen is what [e-remote](https://emu.tools) does, and rebuilding it from its
+own traffic was ruled out — see [TODO.md](TODO.md). Rendering the bitmap
+purely to *confirm which page the device is on* before firing something is
+still open, and marked TBD in the layout rather than quietly left out.
 
 ### Undo (`z`), undo-all (`Z`), and the change history (`h`)
 
