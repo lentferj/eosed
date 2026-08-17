@@ -2120,7 +2120,36 @@ class EosedApp(App):
         if result["sample_stopped_early"]:
             note += (f"; sample names stopped at {result['sample_stopped_at']} "
                      f"after {result['gap']} consecutive unnamed samples")
+        note += self._zero_voice_note(result)
         return note
+
+    @staticmethod
+    def _zero_voice_note(result: dict) -> str:
+        """How many scanned presets came back with no voices at all.
+
+        The voice walk is best-effort by design: `_voice_sample_info` raising
+        for any reason is swallowed and the preset is recorded as empty (same
+        skip-it convention as `catalog_presets`). That is fine right up until
+        somebody reads "0 voices" as a fact about a preset rather than as
+        "the walk did not get an answer" -- and because the failure mode is
+        silence, nothing announces when that starts happening.
+
+        So count it. If it is always zero this costs one clause; if it is ever
+        non-trivial it is visible before it misleads anyone. Deliberately NOT
+        a change to the error handling, which needs hardware to test properly.
+
+        Gated on depth alone, never on the count being non-zero. A message
+        that appears only when there is something to report cannot distinguish
+        "checked, none" from "never checked" -- and a guard that is the
+        negation of the case its own message describes is exactly the bug the
+        sibling mpc2emu project found in its own programs-only diagnostic,
+        where the right message could never fire.
+        """
+        if result.get("depth") not in ("structure", "full"):
+            return ""          # voices were not walked; there is nothing to count
+        overviews = result.get("overviews") or {}
+        zero = sum(1 for entry in overviews.values() if entry[0] == 0)
+        return f"; {zero} of {len(overviews)} scanned preset(s) reported 0 voices"
 
     def _promote_sweep_result(self, result: dict) -> None:
         # A fresh sweep's findings are authoritative on their own (complete,

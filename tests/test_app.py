@@ -2491,3 +2491,46 @@ async def test_edit_dialog_arrow_keys_step_the_value():
         await pilot.press("enter")
         assert await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
         assert await _wait_for(pilot, lambda: app.bridge.get_parameter(0) == -24)
+
+
+def test_zero_voice_note_counts_presets_the_walk_found_empty():
+    """The voice walk swallows errors and records the preset as empty, so a
+    silent scan and a scan that found nothing look identical. The count is
+    what separates them."""
+    app = EosedApp.__new__(EosedApp)
+    result = {
+        "depth": "structure",
+        "stopped_early": False,
+        "stopped_at": 3,
+        "gap": None,
+        "sample_stopped_early": False,
+        "sample_stopped_at": 0,
+        # entry[0] is the voice count; the rest of the tuple is irrelevant here
+        "overviews": {0: (2, {}, [], None, []),
+                      1: (0, {}, [], None, []),
+                      2: (0, {}, [], None, [])},
+    }
+    assert app._zero_voice_note(result) == "; 2 of 3 scanned preset(s) reported 0 voices"
+    assert app._zero_voice_note(result) in app._sweep_note(result)
+
+
+def test_zero_voice_note_reports_zero_rather_than_going_quiet():
+    """Reported even when the count is 0. A clause that appears only when
+    there is something to report cannot distinguish "checked, none" from
+    "never checked" -- which is the whole failure this guards against."""
+    app = EosedApp.__new__(EosedApp)
+    result = {"depth": "full", "stopped_early": False, "stopped_at": 1,
+              "gap": None, "sample_stopped_early": False, "sample_stopped_at": 0,
+              "overviews": {0: (4, {}, [], None, [])}}
+    assert app._zero_voice_note(result) == "; 0 of 1 scanned preset(s) reported 0 voices"
+
+
+def test_zero_voice_note_silent_when_voices_were_never_walked():
+    """A "names" sweep does not walk voices, so it has nothing to count and
+    must not imply it checked."""
+    app = EosedApp.__new__(EosedApp)
+    result = {"depth": "names", "stopped_early": False, "stopped_at": 9,
+              "gap": None, "sample_stopped_early": False, "sample_stopped_at": 0,
+              "overviews": {}}
+    assert app._zero_voice_note(result) == ""
+    assert "0 voices" not in app._sweep_note(result)
