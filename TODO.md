@@ -338,6 +338,64 @@ anyone scripts against a real E4XT again:
    then, treat any unattended/rapid live automation against a real E4XT as a
    crash risk, not just a cosmetic-desync risk.
 
+## E4XT left unresponsive to SysEx and Program Change (OPEN, 2026-08-17)
+
+**Status:** device needs a look at its front panel; nothing lost, nothing
+written to disk.
+
+After a long unattended panel-driving session the E4XT reached a state where
+it **sounds notes normally and on pitch**, but ignores Program Change and
+neither answers nor acts on SysEx. Ruled out by test: bus contention (a
+sibling session stopped all traffic on the shared interface and it made no
+difference) and stale port bindings (ports resolve by full name, which fails
+loudly). Most likely a **modal dialog** left open on the front panel — see
+RESOLUTION_NOTES §34 for the full account.
+
+**Blocked on:** Jan looking at the front panel (and, if it is a modal,
+cancelling it). Do **not** send blind keypresses to clear it — the Utils
+menus carry Erase RAM Bank/Presets/Samples with no second confirmation.
+
+Two things to fix here regardless of how the device is recovered:
+
+1. **`send_program_change` can silently not take effect.** The existing
+   entry above covers `PRESET_SELECT` not being "select for playback"; this
+   is the next layer — the Program Change itself was ignored, and nothing in
+   the API said so. A caller measuring anything per-preset gets a clean,
+   completely wrong answer. Consider a verification helper that reads the
+   selection back (or at minimum a documented "confirm the preset changed
+   before trusting per-preset measurements").
+2. **Panel driving needs a display-alive precondition.** The screen is
+   fetched over the same SysEx path that can go quiet, so it is possible to
+   keep sending keypresses into pages nobody can see. Any scripted panel
+   driver should refuse to send a key once a screen request has failed.
+
+## Rate-compensation on playback — ANSWERED (resolved, 2026-08-17)
+
+Does EOS honour a sample's stored rate when it plays it? The sibling
+mpc2emu project's E4B writer depends on the answer.
+
+**Resolved: `[58-59]` is authoritative for playback pitch; `[54-57]` drives
+the displayed rate and duration.** Settled with a mirror pair of banks whose
+two fields contradict each other — see RESOLUTION_NOTES §35. Both directions
+landed within half a cent of prediction. The text below records why the
+earlier routes could not answer it and is kept for that reason.
+
+The disk route (load one of the machine's own banks and compare a low-rate
+sample against a 44.1 kHz one, each at its own root key) was attempted and
+**cannot answer the question even when run perfectly**: in machine-written
+material the stored rate at `[54-57]` and the pitch offset at `[58-59]`
+agree, so the device's own files cannot separate which field it reads.
+
+**Blocked on:** a bank whose two fields *disagree*, loaded from media the
+device can read — i.e. mpc2emu's `PITCHCHK.E4B` written to the Zulu SD.
+That is a physical swap, and it is the only instrument that can answer this
+rather than merely the most convenient one.
+
+Vehicle for when it resumes, already surveyed: bank B02 on D0 (6.0 MB) mixes
+~31524/31969/32103/32144 Hz with ~44001/44053/44100 Hz. P000 V0 plays sample
+1 (31524 Hz) at root MIDI 50; P011 V0 is single-voice, single-zone, playing
+sample 44 (44100 Hz) at root MIDI 60.
+
 ## Name-catalog pipelining — the largest remaining speed win (OPEN, needs a live probe)
 
 Every catalog scan is strictly serial: send one name request, block for the

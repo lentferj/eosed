@@ -2800,3 +2800,239 @@ nothing.
 device's own UI. Typing a preset number there moves the *machine*, not
 eosed's preset browser, and on a page with no numeric field it does nothing
 -- both exactly as the hardware behaves.
+
+## §34 — Remote disk browse and load, live; and a pitch experiment that had to be thrown away (2026-08-17, E4XT Ultra)
+
+§25 concluded that "EOS has no disk surface at all". That is still true of the
+**editor** protocol and should stay on the record as such. It is not true of
+the device: driven over the **panel** protocol, with the display decoded per
+§32, the whole disk subsystem is readable and drivable from the desk. This is
+the thing the project was started for — choose a disk, browse it, load from
+it, without walking to the rack.
+
+### What the disk pages actually offer
+
+`DISK_BROWSE` (`5Dh`) toggles between the DISK page and the browse page. On
+the DISK page the soft keys are:
+
+| key | function |
+|---|---|
+| F1 | `Utils▲` |
+| F2 | `Browse▲` — submenu: Drives / Folders / Banks / Presets / Samples / More▲ |
+| F3 | `View` — toggles icon grid ↔ list |
+| F4 | `Load...` |
+| F5 | `Save...` (greyed on read-only media) |
+| F6 | `Info...` |
+
+The rig showed D0 (a writable FAT hard drive), D1/D3/D4/D5/D7 (CD-ROM images),
+D8 (a real Quantum Fireball) and D9 (floppy).
+
+`Info...` on a **bank** gives slot number, type and total size. `Info...` on a
+**sample** gives index, type and channel, length in samples, duration, `Srate`,
+loop points and size.
+
+### A bank's sample rates are readable without loading it
+
+Browse -> Samples is scoped to **the bank under the cursor**, not the whole
+drive — numeric entry clamps at the bank's last sample, which is also how you
+discover its sample count. Combined with the sample `Info` popup, that means
+a bank's entire rate profile can be surveyed straight off the disk before
+spending the minutes a Load costs. Two 100 MB-class banks were surveyed and
+skipped this way in the time one of them would have taken to load.
+
+Automating it is worth the small effort: open Info, grab, dismiss, step, and
+stack only the changing rectangle of the screen into one image. Twenty popups
+read in one glance rather than twenty screenshots.
+
+Two traps found the hard way, both of which produce *plausible wrong output*
+rather than an error:
+
+- **Dialog parity.** A popup left open by a previous run inverts every
+  subsequent open/dismiss: each "open" dismisses, the cursor never moves
+  because the modal eats it, and you get N identical shots of the page
+  underneath. Probe for the dialog before starting rather than assuming a
+  clean screen.
+- **Detecting the dialog on the wrong row.** Sampling one row inside the
+  popup border finds its white interior and reports "closed" for an open
+  dialog. Look for the border's long unbroken black run.
+
+### Load *does* confirm — except when there is nothing to destroy
+
+An earlier note in this session claimed `Load...` fires immediately with no
+confirmation. **That was wrong**, and it was wrong in the unsafe direction, so
+it is corrected here rather than quietly amended. Load raises:
+
+```
+?  Destroys current RAM bank... continue?
+   Cancel (F1)        Merge (F4)        Load (F6)
+```
+
+The first observed load skipped the dialog because RAM was **empty** — there
+was nothing to destroy. With a bank resident, the dialog always appears.
+`Merge` is a genuine third option: it adds to the RAM bank rather than
+replacing it.
+
+### An editor-protocol parameter write does not reach the sounding preset
+
+The spec says a remote edit goes to a buffer the front panel does not reflect
+until the preset is touched. Demonstrated rather than quoted: setting
+`E4_PRESET_VOLUME` to -18 dB read back as -18 dB and did not move the audio by
+a single sample. The consequence for any live experiment is sharp — a layered
+voice **cannot** be muted from here to isolate another one.
+
+### Two small live facts
+
+- `MASTER_AUDITION_KEY` (id 271) is in the spec's parameter table; this E4XT
+  never answers a read of it. Both `eoscli get 271` and a bridge read time out.
+- The device's `MIDIGLO_BASIC_CHANNEL` is **4** (MIDI channel 5) on this rig.
+  An earlier "the device makes no sound" scan tried channels 1, 2, 3, 4 and 16
+  and was wrong for two independent reasons at once: RAM was empty *and* the
+  channel was never tried.
+
+### The pitch experiment, and why it was thrown away
+
+The goal was to establish whether EOS honours a sample's stored rate on
+playback — a question the sibling mpc2emu project's E4B writer rests on. Bank
+B02 on D0 is the right vehicle: 6.0 MB, with samples at ~31524/31969/32103/
+32144 Hz alongside ~44001/44053/44100 Hz. P000 V0 plays sample 1 (31524 Hz) at
+root MIDI 50; P011 V0 is a single-voice, single-zone preset playing sample 44
+(44100 Hz) at root MIDI 60. Uncompensated, the low-rate sample would sound 581
+cents out — unmistakable.
+
+The measurements came back 0.6 cents apart, which reads as a clean pass.
+
+**It was an artefact.** The two spectra shared harmonic amplitude ratios to
+three decimal places, which two different instruments do not do. Playing the
+*same* note on both presets produced recordings identical to the last digit:
+**Program Change never changed the preset**. One preset had been measured at
+two keys, which tracks the interval exactly and says nothing whatever about
+rate compensation.
+
+The lesson is cheap to state and was nearly expensive: **verify that the
+preset actually changed before trusting any measurement that depends on it.**
+An A/B where A and B are secretly the same thing does not fail loudly; it
+returns a beautiful number.
+
+Note also the limit that survives even a perfect run of this experiment: in
+machine-written material the stored rate at `[54-57]` and the pitch offset at
+`[58-59]` **agree**, so the device's own files cannot separate which of the two
+it reads. Only a file where they disagree can.
+
+### Device left in a wedged state — for the record
+
+By the end the E4XT would sound notes normally and on pitch, while ignoring
+Program Change and neither answering nor acting on SysEx. Device Inquiry timed
+out with the MIDI interface otherwise completely silent, so bus contention was
+ruled out by test, as was a stale port binding (ports here resolve by full
+name, which fails loudly rather than silently, and the same binding had worked
+for hours).
+
+The theory at the time was a **modal dialog** left open on the front panel:
+the display was unreadable by then — the screen is fetched over the same SysEx
+path that had gone quiet — and numeric jumps were being sent to pages inferred
+rather than verified. EOS modals block preset changes, so one cause covered all
+three symptoms.
+
+**That theory is contradicted by the only direct observation of the machine.**
+Jan looked at it the following morning before powering it down: it was sitting
+on Preset Manage or Sample Manage, an ordinary page, with nothing strange on
+screen and no dialog. A modal would have been visible.
+
+So the cause is **unknown and no longer recoverable** — the power cycle took
+the evidence with it. What the symptoms actually describe is a device whose
+voice engine kept running while its MIDI/SysEx handling stopped: notes were
+still parsed and sounded, while Program Change and SysEx were neither answered
+nor acted upon. That is a partial firmware wedge rather than a busy machine,
+and it has a family resemblance to the fatal "Gen Trap" fault recorded in
+TODO.md under unattended automation — same conditions (hours of unattended
+driving, sustained SysEx traffic with 2212-byte screen replies polled
+continuously), milder outcome.
+
+Recorded as unexplained rather than closed. If it recurs, the thing to capture
+*before* power-cycling is the front panel's own state and whether the device
+still answers a Device Inquiry after a MIDI reset — neither was available this
+time.
+
+No blind keypresses were sent to clear it, and none should be. The Utils menus
+carry Erase RAM Bank/Presets/Samples with no second confirmation, and
+dismissing an unknown modal blind is precisely how one of those gets
+confirmed. Nothing on disk was written — no Save, no Erase, no Delete — and
+the loaded bank came off read-only media.
+
+**Operational rule this earns:** once the display stops answering, panel
+driving stops too. The panel protocol is only safe while you can see what you
+are pressing.
+
+## §35 — Which field EOS actually reads for playback pitch: `[58-59]`, settled by a mirror pair (2026-08-17, live)
+
+The question §34 could not answer, and neither could PITCHCHK as built: a
+sample header carries BOTH a stored rate at `[54-57]` and a pitch offset at
+`[58-59]`, and in every machine-written file — and in a correctly written one
+— the two AGREE. Agreement is exactly what makes a file useless for
+attribution. To find out which field the machine obeys, the two have to
+contradict each other.
+
+### The instrument
+
+Two banks built by editing six bytes of a known-good file (mpc2emu's
+PITCHCHK.E4B), so the PCM is byte-identical throughout — a C4 tone whose
+samples were laid down at 27500 Hz. Only the metadata differs:
+
+| bank | `[54-57]` rate | `[58-59]` offset | what each field claims |
+|---|---|---|---|
+| PITCH_A | 27500 | 0 | rate says compensate, offset says don't |
+| PITCH_B | 44100 | -523 | rate says don't, offset says compensate |
+
+Mirror images, so exactly one must come out 817.5 cents sharp
+(44100/27500 = 1.6036). Which one names the field. Being a within-file
+equality test, the capture chain's own tuning drops out.
+
+### Result
+
+Chain calibrated first against CD3-PITCHCAL (three sine tones whose correct
+answer is known by construction): **-0.8, -0.8, -0.6 cents** at 440/220/110 Hz.
+Pure sines also validate the *estimator* — harmonic-rich material had been
+making autocorrelation lock an octave low.
+
+| played | expected if rate authoritative | expected if offset authoritative | measured |
+|---|---|---|---|
+| PITCH_A P001 @ MIDI 72 | 523.25 Hz | 839.1 Hz | **838.84 Hz (+817.1 cents)** |
+| PITCH_B P001 @ MIDI 72 | 839.1 Hz | 523.25 Hz | **523.25 Hz (-0.0 cents)** |
+
+Both 44100 Hz controls read -0.9 and -0.7 cents, matching the calibration.
+
+**`[58-59]` is authoritative for playback pitch.** Both banks followed the
+offset and ignored the stored rate, in opposite directions, to within half a
+cent of prediction.
+
+### `[54-57]` is not ignored — it drives the DISPLAY
+
+Same PCM, same frame count, different rate field, read off Sample Manage:
+
+- PITCH_A S002: `2.00secs, left, 27500Hz`
+- PITCH_B S002: `1.24secs, left, 44100Hz`
+
+55001 frames / 27500 = 2.00 s; / 44100 = 1.247 s. So the machine reads both
+fields and uses them for different things: `[54-57]` for the reported rate and
+duration, `[58-59]` for what you actually hear. "Informational" was the right
+word for pitch purposes and the wrong word for the field generally.
+
+### Two traps this run walked into, both worth keeping
+
+**Program Change is page-dependent.** It is honoured on the main preset page
+and IGNORED on Preset Manage / Sample Manage. Two measurements taken while it
+was being ignored came back identical to each other — the §34 failure exactly,
+reproduced within a day of writing it up. The fix that holds regardless: step
+presets with the panel's own INC key and verify on the LCD, since selection
+and proof-of-selection then come from the same place.
+
+**A voice's zone is not its root key.** PITCHCHK's two presets are both rooted
+at MIDI 60 but their zones are C3-C3 and **C4-C4** — so the second preset is
+silent at MIDI 60 and only sounds at MIDI 72. That silence read as "the preset
+makes no sound", which nearly became a finding about rejected metadata. It was
+a key range. Read `E4_GEN_KEY_LOW`/`KEY_HIGH`, not just `E4_GEN_ORIG_KEY`,
+before concluding anything from silence.
+
+Incidentally the zone split is what makes the pair self-verifying: the control
+only answers at 60 and the test only at 72, so sound at both proves the preset
+changed without needing the display at all.
