@@ -3375,3 +3375,75 @@ the present error looking arbitrary. The fix waits on a sustain-LEVEL sweep.
 The two sustain/peak figures were recorded only as a sanity check that the
 right quantity was being measured. They turned out to be the numbers that
 stopped a confident wrong fix.
+
+## §38 — Stereo, single-cycle and filter-envelope depth, measured (2026-08-18, live)
+
+Three A/B pairs, each with its predicted direction written down before any
+capture, on adjacent keys of one bank.
+
+### Stereo — confirmed
+
+    ST MONO   L/R correlation = +1.0000
+    ST WIDE   L/R correlation = -0.1954
+
+Identical channels against independent ones. E4B stereo had been reverse
+engineered from a corpus of 473 files and 20,383 samples and **never heard**.
+Closed.
+
+### Single-cycle oscillators — confirmed, after a null the apparatus invented
+
+Level as a fraction of peak, per second, over a **10 second** hold:
+
+    SC OFF  0.000 0.000 0.877 0.869 0.861 0.874 0.001 0.000 0.000 0.000
+    SC ON   0.000 0.000 0.833 0.836 0.838 0.838 0.836 0.836 0.834 0.836
+
+`SC OFF` ends with the sample at ~6 s; `SC ON` sustains to the end of the
+capture, pitch steady at 110.1 Hz across six sample points — no warble.
+
+**The first attempt used a 4 s hold and reported both at sustain = 0.78, i.e.
+indistinguishable.** That would have been filed as "no difference". It was an
+artefact: the source does not run out until ~6 s, so a 4 s window cannot
+separate "sustains indefinitely" from "has not finished yet", and nothing in
+the capture flags the window as too short. **For a sustain test the hold must
+exceed the source length.**
+
+This pair is also the only one not protected by a ratio, so the capture clock
+mattered: 109.8/110.1 Hz against a nominal 110.0 Hz is the rig validating
+itself to 0.2%.
+
+### Filter-envelope depth — and a ruler that clamped
+
+Centroid excursion, three runs each:
+
+    FE OLD (depth 0.776)   213  212  211    mean 212   spread 2 Hz
+    FE NEW (depth 0.663)   246  246  247    mean 246   spread 1 Hz
+
+34 Hz against a 1-2 Hz noise floor, so the pair is distinguishable and the
+"indistinguishable is itself the result" branch does not apply. The shallower
+preset showed the LARGER excursion, which reads as the correction being
+backwards.
+
+**It is not. The metric was clamped.** The trajectories peak at 707.5 and
+709.5 Hz — 2 Hz apart across two different envelope depths, which the parameter
+cannot do. With the ceiling pinned, excursion inverts with depth, because a
+deeper envelope raises the resting floor while the peak cannot move.
+
+Measured on the same captures, floor taken from the settled sustain phase:
+
+| preset | depth | peak | floor |
+|---|---|---|---|
+| `FE OLD` | 0.776 | 707.5 Hz (spread 1.2) | **617.1 Hz** (spread 1.9) |
+| `FE NEW` | 0.663 | 709.5 Hz (spread 0.6) | **554.3 Hz** (spread 2.5) |
+
+Peaks differ by 2 Hz, floors by 62.8 Hz, and **the floors order exactly as
+depth predicts** — the deeper envelope rests higher. The correction is correct;
+the excursion metric could not see it.
+
+**The floor is the usable ruler**: 63 Hz of movement per 0.113 of depth against
+~2 Hz of noise, roughly 30:1, and unclamped.
+
+The general form, which has now bitten twice in one session: *a ruler that
+saturates against its source is measuring the source.* Excursion was measured
+because excursion was what the metric produced, not because it was the right
+quantity — and the tell was sitting in the data as two peaks agreeing to 1 Hz,
+recorded and walked past as incidental.
