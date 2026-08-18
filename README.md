@@ -43,13 +43,13 @@ are for.
 
 **Because here is what it has actually cost:**
 
-- **A real E4XT Ultra on the bench, bought for the purpose.** Half of what
-  this tool knows had to be measured rather than read. The editor protocol was
-  transcribed from E-mu's own SysEx specification, but the **front-panel
-  protocol is undocumented** — the
-  frame layout, the key map, the data dial and the 240×64 display encoding were
-  all reverse engineered from captures taken on this machine. The tool exists
-  because the sampler is on the bench, not the other way round.
+- **A real E4XT Ultra on the bench.** Half of what this tool knows had to be
+  measured rather than read. The editor protocol was transcribed from E-mu's
+  own SysEx specification, but the **front-panel protocol is undocumented** —
+  the frame layout, the key map, the data dial and the 240×64 display encoding
+  were all reverse engineered from captures taken on this machine. The tool
+  exists because the sampler was already here and in use, not the other way
+  round.
 - **Hours that are hard to count**, because protocol work is slow: measure, be
   wrong, measure again. Several single lines in this README are an evening at
   the bench, and the wrong turns are written down in
@@ -1221,7 +1221,7 @@ eosed/
   demo.py        DemoBridge: canned in-memory device for --demo, no MIDI ever opened
 docs/
   RESOLUTION_NOTES.md   how open items were/are being resolved (RE procedures, live-hardware notes)
-  screenshots/          the SVGs embedded in this README (--demo, headless)
+  screenshots/          the PNGs embedded in this README (--demo, headless)
 tests/
   synthetic only -- fake MIDI ports / fake device replies, no hardware required
 ```
