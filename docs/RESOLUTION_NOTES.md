@@ -2614,10 +2614,22 @@ Prompted to re-run it with a real screen change in the middle, they separate
 immediately.
 
 `61h` produced nothing when sent, consistent with it being a device->host
-reply rather than a request. `60h` appears to *ask* for whatever `61h` carries;
-its two payload bytes changed between §28 and now, so it is state of some kind
--- cursor position and selected-field index are the obvious guesses and
-neither is tested.
+reply rather than a request. `60h` appears to *ask* for whatever `61h` carries.
+
+**Measured 2026-08-18 — the two payload bytes track the SELECTED MODE, and the
+cursor-position guess was wrong.** Walking the mode buttons and querying `60h`
+after each:
+
+    mode            byte6  bits      bit cleared
+    Preset Manage    0x3E  0111110       0
+    Sample Manage    0x3D  0111101       1
+    Preset Edit      0x7B  1111011       2
+    Master           0x6F  1101111       4
+
+**Active low: each mode clears its own bit in byte 6.** Reproducible — Sample
+Manage returned `3d 7e` on both visits, Preset Manage `3e 7f` on both. Bit 3 is
+presumably Sample Edit, not exercised separately. What the bits ultimately
+drive is not established here; that they index the mode selection is.
 
 ### The byte pair is opcode-correlated, not directional
 
@@ -2677,8 +2689,33 @@ is on the display asks with `51h` and decodes the answer, with no dependence
 on device-side state it cannot see.
 
 **`52h` is an update request.** It falls to 86 bytes once there is nothing new
-to send, which identifies the 86- and 112-byte frames §26 saw as partial
-updates rather than mysteries. Their region encoding is still unknown, and
+to send.
+
+> **CORRECTED 2026-08-18.** The line above reading `52h right after the change
+> -> 86 bytes` is unsound: the "change" was a CURSOR DOWN that was never checked,
+> and re-running it today with the screen hashed before and after shows
+> `CURSOR_RIGHT` on that kind of page alters **zero pixels**. The screen almost
+> certainly never moved, so 86 bytes was the correct "nothing new" answer to a
+> question nobody had changed the answer to.
+>
+> Re-measured with the change verified — a page toggle altering 3206 pixels:
+>
+>     52h, first call after a 51h        -> 2212 (full)
+>     52h again, nothing changed         ->   86
+>     52h after a VERIFIED 3206 px change-> 2212 (full)
+>
+> **So `52h` returns a FULL screen whenever anything has changed, and 86 bytes
+> when nothing has.** It is a conditional full transfer, not a delta, and it
+> keeps its own "what have I sent" state independent of `51h` — the first `52h`
+> after a `51h` returns full.
+>
+> Consequence: **the 86-byte frame is a no-change reply, not a partial update.**
+> The inference below, that 86 and 112 identify partial region updates, does not
+> follow for 86. The 112-byte frame has not been reproduced in any of these
+> tests and remains unexplained. `eos.lcd.is_partial` still refuses both, which
+> is right either way.
+
+Their region encoding is still unknown, and
 `eos.lcd.is_partial` continues to refuse them rather than render a fragment as
 a whole screen.
 

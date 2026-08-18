@@ -1243,7 +1243,9 @@ tests/
 
 - The panel protocol is **partly** implemented: session open,
   the full front-panel key map, the data wheel, and the LCD (full screens
-  only). Its **partial screen updates are not decoded** — a frame too small
+  only). Its **short `50h` frames are not decoded** — but note the 86-byte
+    frame is a *no-change reply*, not a partial update (RESOLUTION_NOTES §33a,
+    corrected), and the 112-byte one has not been reproduced since. A frame too small
   to be a whole screen is refused rather than painted as one — and nothing
   yet drives the disk browse/load sequence the work exists for. See
   [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
