@@ -3310,3 +3310,68 @@ from "clamped". The lowpass family wanting three members, with `0x00` -> 4-Pole
 and `0x02` -> 6-Pole leaving 2-Pole and `0x01` both unaccounted, makes `0x01`
 the natural candidate — but that is an inference and this experiment cannot
 confirm it. It needs a byte known to be 2-Pole by construction.
+
+## §37 — The EOS envelope byte is a RATE, and the decay is linear in dB (2026-08-18, live)
+
+The sibling mpc2emu project's E4B writer converts envelope times to a byte and
+had no hardware evidence for which quantity the byte represents. A purpose-built
+bank settles it: four presets sharing one decay byte, differing only in sustain
+level, so that
+
+- **DURATION** predicts LO and HI reach sustain in the SAME time;
+- **RATE** predicts LO takes LONGER, having further to fall.
+
+Two controls first, and both had to pass before the comparison meant anything:
+
+| preset | decay | sustain | measured (two runs) |
+|---|---|---|---|
+| `SPAN LO`  | 2.0 s | 20% | 0.540, 0.540 s |
+| `SPAN HI`  | 2.0 s | 80% | 0.140, 0.130 s |
+| `SPAN CTL` | 2.0 s | 20% (duplicate of LO) | 0.550, 0.560 s |
+| `SPAN REF` | 4.0 s | 20% (different byte) | 1.070, 1.050 s |
+
+- **Method control** — `CTL` must equal `LO`: 15 ms apart. Pass.
+- **Measurement control** — `REF` must differ from `LO`: 1.96x. Pass. This is
+  the one that matters: without it a null is indistinguishable from an
+  apparatus that cannot observe a change at all.
+
+**Result: LO/HI = 4.00x. The byte is a RATE.**
+
+### The law falls out, and only because no ratio was predicted
+
+The sustain level is a dB law, so the experiment was deliberately designed as
+"equal or not equal" rather than against a predicted number — a linear guess
+would have been a figure invented from an assumption, and a measurement
+disagreeing with it would have read as a finding.
+
+    LO: sustain/peak 0.177 -> linear span 0.823, dB span 15.0 dB
+    HI: sustain/peak 0.655 -> linear span 0.345, dB span  3.7 dB
+
+    linear span ratio  LO/HI = 2.38     <- what a linear guess gives
+    dB     span ratio  LO/HI = 4.09
+    measured time      LO/HI = 4.00
+
+**The decay is linear in dB**: time taken is the dB distance divided by a
+constant rate. A "roughly 4x" prediction from linear percentages would have
+been right for the wrong reason and nobody would have looked again.
+
+Fitted rates: byte 72 gives 27.9/27.2/26.8 dB/s across LO/HI/CTL — consistent —
+and byte 84 gives 14.2 dB/s. So **+12 on the byte halves the rate**, one data
+point but the first anyone has on that axis.
+
+The machine's own envelope pages label the column `rate` (§36). Label and
+behaviour agree; a disagreement would have been more interesting, and there
+isn't one.
+
+### What this does NOT license
+
+The obvious repair to the writer is a span-aware conversion, and it must wait.
+Computing the span needs the achieved sustain level, and the sibling project's
+model predicts 0.208 and 0.821 where the machine gives **0.177 and 0.655** — a
+span ratio of 8.0x against the measured 4.00x. A conversion built on that would
+be wrong by a factor of two **and would look principled**, which is worse than
+the present error looking arbitrary. The fix waits on a sustain-LEVEL sweep.
+
+The two sustain/peak figures were recorded only as a sanity check that the
+right quantity was being measured. They turned out to be the numbers that
+stopped a confident wrong fix.
