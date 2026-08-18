@@ -3447,3 +3447,90 @@ saturates against its source is measuring the source.* Excursion was measured
 because excursion was what the metric produced, not because it was the right
 quantity — and the tell was sitting in the data as two peaks agreeing to 1 Hz,
 recorded and walked past as incidental.
+
+## §39 — The sustain-level law, and a rate confirmed on a second dataset (2026-08-18, live)
+
+§37 established that the envelope byte is a rate. Writing the converter needs
+the other axis too: what the sustain LEVEL byte actually achieves. A bank of 18
+presets sweeps the **raw byte, 64-127**, deliberately not the sibling project's
+model value — that model is the thing in question, and putting it in the
+measurement loop would fit a law to its own assumption.
+
+Controls are byte 127 at both ends, where full sustain must put the plateau AT
+the peak:
+
+    CTL-A 127  sustain/peak 0.9437
+    CTL-B 127  sustain/peak 0.9351    agree to 0.009, both near 1.0    PASS
+
+### Two ends of the range are not usable, and the reasons are measurements
+
+- **Bytes 64-72 sit at the noise floor.** Plateaus of 16, 31 and 63 counts,
+  against a silent capture measuring 8-9. Those are ratios of noise to signal.
+- **Bytes 120-127 saturate against the ceiling**, because a plateau cannot
+  exceed the attack peak it is divided by. This is the same clamping that
+  inverted the filter-envelope excursion in §38, arriving in a different
+  experiment within the hour.
+
+Fitted over bytes 80-116 only — above the floor, below the ceiling, 10 points:
+
+    dB below peak = 0.547 x byte - 66.14      R^2 = 0.980
+
+That is **0.547 dB per byte, one doubling every 11.0 bytes.** Residuals run
+-1.6 to +1.2 dB, so two significant figures is as much as it will carry.
+
+### The exclusions validate themselves against a second measurement
+
+The captures also carry decay TIMES, and the rate byte is 72 throughout — the
+byte §37 measured at 27.9 dB/s. So each preset's decay should reproduce
+`span / 27.9` using its own measured span. Across the 11 usable points:
+
+    mean measured/predicted = 0.951   sd 0.048   -> implied 26.5 dB/s
+
+**Two experiments, two banks, two different sources, one rate byte, 5% apart.**
+The rate law of §37 is confirmed on independent data.
+
+And the excluded points fail here in exactly the direction their exclusion
+predicted, having been chosen from the LEVEL data before any timing analysis
+existed:
+
+    bytes 64, 68, 72   ratio 0.607, 0.682, 0.753   floor: runs SHORT
+    byte 120           ratio 1.624                 ceiling: runs LONG
+
+The floor cases must run short — the envelope decays into noise, so the plateau
+reads too high, the span too small and the predicted time too long — and the
+trend is monotonic, climbing out at byte 76 exactly where contamination should
+stop mattering. **A boundary justified by two independent kinds of evidence
+rather than fitted to make the answer tidy.**
+
+### The 5% is unexplained, and a wrong explanation is recorded as wrong
+
+The gap between 26.5 and 27.9 dB/s was first attributed here to the decay-time
+estimator firing early: it crosses a threshold 5% of the linear distance above
+the plateau, which necessarily fires before the plateau is reached.
+
+**That mechanism does not fit the data.** For a 30 dB span the threshold sits
+21.9 dB below the peak, predicting a ratio of 0.730 where 0.853 was measured;
+it predicts three to five times more bias than observed, and far more
+span-dependence than the residuals carry (span-vs-ratio correlation -0.45 over
+11 points).
+
+So the direction was right and the magnitude wrong. **The 5% is unexplained,
+not explained** — which is a stronger reason not to quote 26.5 as a competing
+figure than the one originally offered. Two independent measurements agreeing
+to 5% is the result; attributing the remainder is not possible from these
+captures and does not change anything downstream.
+
+### What is still open: the anchor
+
+`sustain/peak` divides by the attack peak, which is **source-dependent**. The
+two banks disagree at nominally the same setting — byte 107 measured 0.177 in
+§37's bank, byte 108 measures 0.4565 here, and bytes one apart cannot differ by
+2.6x. Crest factor accounts for 1.377 of the 2.579 discrepancy; **1.87x, or
+5.4 dB, is unaccounted for by either project.**
+
+So the *shape* of the level law is solid and the *absolute anchoring* is not:
+a relative law measured within one bank, needing a per-source offset before it
+can calibrate anything. `env_seconds_to_rate(seconds, span_db)` stays unwritten
+until that resolves — sixteen points and an R^2 of 0.980 make it tempting, and
+a confidently wrong number replacing a confidently wrong number would be worse
+than the present error looking arbitrary.
