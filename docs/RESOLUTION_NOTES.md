@@ -3036,3 +3036,90 @@ before concluding anything from silence.
 Incidentally the zone split is what makes the pair self-verifying: the control
 only answers at 60 and the test only at 72, so sound at both proves the preset
 changed without needing the display at all.
+
+## §36 — The filter-type table confirmed, the E4B byte that feeds it is a grouped code, and a walk that pressed Load (2026-08-18, live)
+
+Section B11 of `HW_CHECKLIST.md` is closed, the route to the page that closes
+it is not the one the manual implies, and the program written to map that
+route pressed something it should not have. All three are worth recording.
+
+### B11: `id == list position` is now OBSERVED, 16 of 16
+
+`eos/params.py`'s `FILTER_TYPE_NAMES` carried the caveat "still an assumption,
+not a hardware-confirmed fact: id == list position". Confirmed against the
+machine's own display, using the sibling project's 98-preset anchor bank:
+
+| byte | runtime | our table (manual prose) | machine display | |
+|---|---|---|---|---|
+| 0x00 | 1 | 4-Pole Lowpass | `4 Pole Low-pass` | exact |
+| 0x02 | 2 | 6-Pole Lowpass | `6 Pole Low-pass` | exact |
+| 0x08 | 3 | 2nd Order Highpass | `2nd Order High-pass` | exact |
+| 0x09 | 4 | 4th Order Highpass | `4th Order High-pass` | exact |
+| 0x10 | 5 | 2nd Order Bandpass | `2nd Order Band-pass` | exact |
+| 0x11 | 6 | 4th Order Bandpass | `4th Order Band-pass` | exact |
+| 0x12 | 7 | Contrary Bandpass | `Contrary Band-pass` | exact |
+| 0x20 | 8 | Swept EQ, 1-octave | `Swept EQ 1 octave` | exact |
+| 0x21 | 9 | Swept EQ, 2->1-octave | `Swept EQ 2->1 oct` | **abbrev** |
+| 0x22 | 10 | Swept EQ, 3->1-octave | `Swept EQ 3->1 oct` | **abbrev** |
+| 0x40 | 11 | Phaser 1 | `Phaser 1` | exact |
+| 0x41 | 12 | Phaser 2 | `Phaser 2` | exact |
+| 0x42 | 13 | Bat Phaser | `Bat-Phaser` | exact |
+| 0x48 | 14 | Flanger Lite | `Flanger Lite` | exact |
+| 0x50 | 15 | Vocal Ah-Ay-Ee | `Vocal Ah-Ay-Ee` | exact |
+| 0x51 | 16 | Vocal Oo-Ah | `Vocal Oo-Ah` | exact |
+
+14 exact, 2 abbreviated, **0 disagreements**, reproduced independently by the
+sibling project's own joiner after three bugs were fixed in it.
+
+**A literal string comparison would have reported 16 mismatches on a table
+that is entirely correct.** The machine hyphenates where the manual does not
+(`Low-pass`, `High-pass`, `Band-pass`, `Bat-Phaser`), drops the comma in
+`Swept EQ, 1-octave`, and truncates the two long Swept EQ names at about 17
+characters. This was predicted before any capture, from the manual disagreeing
+with *itself*: its prose says `2EQ Morph + Expression` while its two screen
+illustrations show `+ Exp` and `+Exp`.
+
+Runtime 17-20 (the morphing filters) are not reachable from bytes 0x00-0x5F and
+remain unconfirmed. Runtime 0 stays ambiguous: `2-Pole Lowpass` is both the
+table's id 0 and the documented rendering of a *rejected* byte, so `0x01`
+reading back 0 cannot be told from a rejection.
+
+### The E4B `vpar[58]` byte is a grouped code, not a filter index
+
+Reading `E4_VOICE_FTYPE` (id 82) for all 98 presets and joining to the bank's
+expectation table: **80 of 98 bytes map to runtime 0.** The 18 that do not
+group by high nibble — `0x0x` lowpass, `0x08`/`0x09` highpass, `0x1x`
+bandpass, `0x2x` swept EQ, `0x4x` phaser/flanger, `0x5x` vocal.
+
+So the on-disk byte selects a *family* in the high nibble and a member in the
+low nibble. Any writer treating it as a sequential filter number emits either a
+valid-looking byte selecting a filter from an unrelated family, or an invalid
+one that silently becomes 2-Pole Lowpass. Reported to the sibling project; its
+writer turned out to emit only valid codes, so this is a coverage gap there
+(seven reachable filters it can never produce) rather than a live defect.
+
+### The route to the Filter page, and three panel behaviours
+
+The EOS 4.0 manual says to select the voice(s) then "press the Amp/Filt
+function key (F3)" and "use the Previous and Next Page buttons to locate the
+Filter screen". Both true, and both underspecified:
+
+```
+PRESET_EDIT              -> Voices-Main      (F3 here is "[ Global", NOT Amp/Filt)
+EditVce (F6)             -> Amplifier        (Amp/Filt already selected; F3 never needed)
+PAGE_PREV x4             -> rewinds to the clamp
+PAGE_NEXT x2             -> Filter
+```
+
+- **`EditVce` returns to the group's LAST-VIEWED page**, so "two pages forward
+  from the landing page" is correct exactly once and drifts thereafter. The
+  first sixteen captures all landed on `Filter Envelope`.
+- **Paging CLAMPS at both ends rather than wrapping**, which is what makes the
+  rewind reliable — `PAGE_PREV` past the start is a no-op.
+- **`PRESET_MANAGE` TOGGLES between two pages** rather than being a
+  destination. Measured: `b1e70b -> 2419a7 -> b1e70b -> 2419a7 -> b1e70b`.
+- **Paging does nothing outside an editor.** Zero page changes in 118 edges
+  across three navigation-only walks. This was first blamed on empty RAM; a
+  walk of a fully loaded machine reproduced it exactly. The real cause was the
+  instrument: a navigation-only program cannot enter an editor, because entry
+  is a soft key, and paging only applies inside.
