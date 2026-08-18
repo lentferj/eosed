@@ -3123,3 +3123,64 @@ PAGE_NEXT x2             -> Filter
   walk of a fully loaded machine reproduced it exactly. The real cause was the
   instrument: a navigation-only program cannot enter an editor, because entry
   is a soft key, and paging only applies inside.
+
+### A walk pressed Load, and why the whitelist did not stop it
+
+An exhaustive walk with a labelled soft-key whitelist reached the DISK subtree
+it was designed to exclude, opened the "Destroys current RAM bank... continue?"
+dialog, and confirmed a load. Nothing on media was written; RAM was empty and
+gained one preset and 1.59 MB of samples.
+
+**Root cause: the queue stored a KEY NAME after validating a LABEL.** The
+press was justified by a page the walk had since left, and soft-key meaning is
+page dependent — F4 is Load on the disk pages and Place on Sample Manage. The
+hazard the whitelist existed to prevent was reintroduced by the queue that
+carried its decisions. Compounding it, the modal back-out pressed `PAGE_EXIT`,
+which does **not** dismiss that dialog (`Cancel` on F1 does), so the walk went
+on pressing into a modal that swallows keys.
+
+The replacement is not a better check. `probes`-style traversal was split into
+two programs, and the recon pass has **no soft-key constant in it at all** —
+the capability is absent rather than guarded, so no rule has to be obeyed
+correctly for it to be safe. It re-derives what is pressable from the screen in
+front of it, so no intention outlives the screen that produced it, and it
+aborts rather than guessing a modal dismissal.
+
+Key codes make the boundary worth stating precisely: no movement or mode key
+shares a code with a soft key, but `CURSOR_UP` (0x6E) is one bit from F3, F5
+and F6, and `PAGE_NEXT`/`PAGE_PREV` are one bit from F5/F4. There is no
+checksum in `40 <key> 00 <01|00>`, so a corrupted byte cannot be rejected. No
+guard was added for this: a read-back detects an event it cannot prevent. What
+bounds it is that recon never visits the disk subtree, so a bit flip reaches
+`Name`/`New`/`Copy`/`Place` rather than `Load`/`Save`/`Erase`.
+
+### Three controls in one session that measured the wrong thing
+
+1. A walk control returning via `PRESET_MANAGE` **passed by coincidence** — it
+   compared a page reached by a key that toggles, so it tested press parity,
+   not machine state. Its replacement then "failed" on the same parity.
+2. A band-sensitivity control reported all bands clean; the perturbation had
+   never landed, because RAM was empty and there was no neighbouring preset to
+   select. A null from an apparatus that moved nothing.
+3. A page-identity check reported "8 distinct, good" across sixteen captures
+   **all on the wrong page** — its crop included a per-voice field, so its
+   distinctness came from the preset rather than the page.
+
+The images caught all three. None of the checks did.
+
+The generalisation worth keeping: **assert sameness where sameness is
+expected, rather than difference where difference is uninformative.**
+Difference has many causes; sameness has few. The corrected check requires the
+page title to be IDENTICAL across all sixteen captures and lets the name band
+carry the measurement.
+
+### Incidental
+
+The `Amp Envelope` and `Filter Envelope` pages label their columns
+`seg | rate | level%`. The machine's own word for that field is **rate**. That
+is its claim, not a measurement of behaviour, and it bears on the sibling
+project's open question of whether the stored envelope byte is a rate or a
+duration — a label and a behaviour are different claims.
+
+`Sample Edit` carries four unenumerated submenus (`Tools1^`..`Tools4^`), a
+plausible home for parameters no converter models. Not entered.
