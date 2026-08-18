@@ -8,7 +8,7 @@ SPDX-FileCopyrightText: Copyright (C) 2026  eosed contributors
 ## AI Assistance & Human Authorship
 
 In the interest of transparency: eosed was created by its **human
-author, Jan Lentfer (<jan.lentfer@web.de>)**, working together with
+author, Jan Lentfer**, working together with
 Anthropic's **Claude**, an AI coding assistant, and closely follows the
 pattern established by the author's sibling **k2kremote** and **mpc2emu**
 projects.

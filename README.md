@@ -12,15 +12,76 @@ E6400, …) driven over MIDI System Exclusive — a command-line explorer
 (`eoscli`) plus a full Textual TUI **editor** (`eosed`) for the
 documented remote editor/librarian protocol, from the same author as the
 sibling **[k2kremote](https://github.com/lentferj/k2kremote)** (Kurzweil
-K2000/K2000R) and **[mpc2emu](https://github.com/lentferj/mpc2emu)** projects.
+K2000/K2000R), **[s3ked](https://github.com/lentferj/s3ked)** (Akai
+S1000/S3000 family), **[mpc2emu](https://github.com/lentferj/mpc2emu)**
+(sample-format conversion) and
+**[VinSamLib](https://github.com/lentferj/VinSamLib)** (librarian and bank
+builder for E4B, EIII/ESI and KRZ content) projects.
 
 It also mirrors and drives the machine's **front panel** (`k`) over a second,
 undocumented protocol reverse engineered here — including the 240×64 LCD,
 live in the terminal. See [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
 
-> **Author:** Jan Lentfer &lt;jan.lentfer@web.de&gt;, with AI support
+> **Author:** Jan Lentfer, with AI support
 > (Anthropic Claude) — see [AI assistance](#ai-assistance--human-authorship).
 > **Legal:** [DISCLAIMER.md](DISCLAIMER.md) · [LICENSE](LICENSE)
+
+---
+
+## Support this project
+
+eosed is free software and always will be. Nothing is behind a paywall, no
+feature is withheld, and none of what follows changes that.
+
+But if it has been useful — if it let you browse a disk and load a bank from
+where you are sitting instead of walking to the rack, put the E4XT's 240×64
+LCD on your screen instead of leaning over it, or told you what a parameter
+actually does without hunting through the front panel — then you might
+consider supporting the work. **Best of all, if it means the sampler is
+switched on and in use more often than it was**: that is what these projects
+are for.
+
+**Because here is what it has actually cost:**
+
+- **A real E4XT Ultra on the bench, bought for the purpose.** Half of what
+  this tool knows had to be measured rather than read. The editor protocol was
+  transcribed from E-mu's own SysEx specification, but the **front-panel
+  protocol is undocumented** — the
+  frame layout, the key map, the data dial and the 240×64 display encoding were
+  all reverse engineered from captures taken on this machine. The tool exists
+  because the sampler is on the bench, not the other way round.
+- **Hours that are hard to count**, because protocol work is slow: measure, be
+  wrong, measure again. Several single lines in this README are an evening at
+  the bench, and the wrong turns are written down in
+  [`docs/RESOLUTION_NOTES.md`](docs/RESOLUTION_NOTES.md) alongside the findings.
+- **A MIDI interface, a SCSI emulator and media**, plus **AI assistance, which
+  is a paid service** used heavily throughout and not cheap at this volume.
+
+**This is support, not a donation — and the distinction is legal, not a turn of
+phrase.** The author is based in Germany, where payments like these are not
+`Spenden` in the tax sense: they are **taxable income** for the recipient and
+are **not tax-deductible** for the giver, and **no donation receipt can be
+issued**. A German reader who assumed deductibility would be the one actually
+harmed by vaguer wording, so it is said plainly rather than dressed up. (That
+is how it is handled here, not tax advice.)
+
+If eosed has saved you the work, or made working with your vintage hardware
+more fun, you can support it through
+**[GitHub Sponsors](https://github.com/sponsors/lentferj)** — or the *Sponsor*
+button at the top of the repository. Payment is handled entirely by GitHub and
+Stripe, so bank and tax details are never handed to the person paying.
+
+**Support is not expected, and it is not the only currency.**
+
+- **Bug reports**, especially with the screen or the SysEx that produced them.
+- **Confirmations from hardware that is not on this bench.** Everything here
+  was verified on **one E4XT Ultra running firmware 4.70**. Whether an E4, an
+  E6400, an e64 or an older EOS release behaves the same is genuinely unknown —
+  many notes in `docs/RESOLUTION_NOTES.md` say "on this unit" for exactly that
+  reason. A "works here too", or a "no, mine does X", is worth a great deal.
+- **Corrections to the RE notes.** Wrong turns are recorded next to the
+  findings; if one is wrong in a way that is still costing someone time, saying
+  so improves the record.
 
 ---
 
@@ -184,7 +245,7 @@ is the safest way to explore the tool before pointing it at real
 hardware; every screenshot in this README was captured this way.
 
 <p align="center">
-  <img src="docs/screenshots/compact_view.svg" alt="eosed compact view: a preset selected, its GLOBAL parameters shown, status line and two-row key legend at the bottom" width="720">
+  <img src="docs/screenshots/compact_view.png" alt="eosed compact view: a preset selected, its GLOBAL parameters shown, status line and two-row key legend at the bottom" width="720">
 </p>
 
 <p align="center"><sub>The default 2-pane compact view: Preset (left) and
@@ -375,7 +436,7 @@ bottom of the screen, which is generated from the same binding table this
 list is — so the two cannot disagree.
 
 <p align="center">
-  <img src="docs/screenshots/extended_view_voice.svg" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with V2 of a three-voice preset selected" width="900">
+  <img src="docs/screenshots/extended_view_voice.png" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with V2 of a three-voice preset selected" width="900">
 </p>
 
 <p align="center"><sub>Extended view: Preset · Voice · Parameters · Samples.
@@ -546,7 +607,7 @@ estimate in the status line, and `escape` cancels either at any point.
 Editing, renaming, and the Master menu:
 
 <p align="center">
-  <img src="docs/screenshots/edit_value.svg" alt="eosed's parameter edit dialog: current value, device-reported min/max/default, and unit" width="900">
+  <img src="docs/screenshots/edit_value.png" alt="eosed's parameter edit dialog: current value, device-reported min/max/default, and unit" width="900">
 </p>
 
 <p align="center"><sub>Editing a parameter: the dialog shows the
@@ -572,7 +633,7 @@ new one.</sub></p>
   is one edit as far as `z` and the history are concerned.
 
 <p align="center">
-  <img src="docs/screenshots/master_menu.svg" alt="eosed's Master menu: a two-step arm-then-fire confirmation for destructive operations, with Delete preset armed" width="900">
+  <img src="docs/screenshots/master_menu.png" alt="eosed's Master menu: a two-step arm-then-fire confirmation for destructive operations, with Delete preset armed" width="900">
 </p>
 
 <p align="center"><sub>The Master menu requires two keypresses (arm, then
@@ -663,7 +724,7 @@ undocumented and the machine's menus include the one-shot erase utilities.
 ### Undo (`z`), undo-all (`Z`), and the change history (`h`)
 
 <p align="center">
-  <img src="docs/screenshots/history.svg" alt="eosed's change history overlay, listing each edit with its scope, parameter, old and new value" width="900">
+  <img src="docs/screenshots/history.png" alt="eosed's change history overlay, listing each edit with its scope, parameter, old and new value" width="900">
 </p>
 
 <p align="center"><sub>The change history (<code>h</code>): every edit with

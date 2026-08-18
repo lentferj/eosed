@@ -233,9 +233,15 @@ async def main():
     await shoot("front_panel_braille",
                 lambda p, a: front_panel(p, a, mode="braille"), size=(132, 48))
 
-    # Panel shots go to PNG. See _svg_to_png for why -- the block characters
-    # must tile exactly, and a substituted font breaks that on GitHub.
-    for name in ("front_panel_halfblock", "front_panel_braille"):
+    # EVERY shot goes to PNG. See _svg_to_png for why. This was originally
+    # only the panel pair, on the grounds that their block characters have to
+    # tile seamlessly -- but the font substitution that breaks the tiling also
+    # changes the glyph advance in the table shots, and those are columns of
+    # aligned text. Misrendering is less obvious there and no less wrong, so
+    # the exception has been removed rather than defended.
+    for name in ("compact_view", "extended_view_voice", "edit_value",
+                 "master_menu", "history",
+                 "front_panel_halfblock", "front_panel_braille"):
         _svg_to_png(name)
 
     print("done — check the key legend at the bottom of each")
