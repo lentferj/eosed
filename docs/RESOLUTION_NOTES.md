@@ -3184,3 +3184,60 @@ duration — a label and a behaviour are different claims.
 
 `Sample Edit` carries four unenumerated submenus (`Tools1^`..`Tools4^`), a
 plausible home for parameters no converter models. Not entered.
+
+### Second SysEx hang, and the card-pull procedure it earned (2026-08-18)
+
+The device stopped answering **both** protocols again — `eoscli memory` and
+`catalog` timing out, `51h` returning no screen — discovered while confirming
+the session was idle. Second occurrence; §34 records the first, cause
+unestablished both times, **power cycle the known fix both times.**
+
+What is known this time and was not last time:
+
+- **No script of this project was running**, no RtMidi client was subscribed
+  to the ports, and a passive listen showed the bus silent. So it is not
+  contention and not something mid-request.
+- The last operation before it was a 16-preset display sweep that **completed
+  normally and reported its own control clean**.
+- Played notes produced no audio, but that is **not** offered as evidence the
+  machine was dead: Program Change is page-dependent, the page was unknown, and
+  the output level had been turned down by hand earlier. A datum that supports
+  the alarming reading is still worthless if it has an innocent explanation
+  that was not ruled out.
+
+Still unexplained. If it happens a third time, the thing to capture *before*
+power-cycling is **what the front panel shows and whether it responds to its
+own buttons** — that separates "MIDI subsystem wedged" from "machine hung",
+and neither occurrence has that datum.
+
+**Procedure adopted: power the E4XT down before pulling the ZuluSCSI card.**
+Right on a live SCSI bus regardless, and doubly so when the device is in an
+unknown state. The reasoning generalises past this machine: *nobody can assert
+the bus is idle, only that they personally are not driving it.* An idle-check
+is a statement about the checker, not about the world — the same gap as a
+transport control standing in for a measurement control.
+
+On 2026-08-18 the card was pulled with the machine powered on, before this was
+written. Recorded as a hot pull rather than assumed harmless, so that a later
+fault is not mistaken for a first occurrence of something new.
+
+**One candidate, stated so the next occurrence can eliminate it.** The EOS
+manual's default SCSI table assigns **id 6 to the Emulator itself**. On
+2026-08-18 an ISO (`CD6-ENVSPAN.iso`) was mounted on id 6 from 09:14 until
+12:42 — an image sitting at the host's own bus address, across the second
+hang. ZuluSCSI reported no conflict and mounted it happily, because *its*
+numbering is unique on the SD card; the collision is one layer down, on the
+real bus.
+
+This is **not** a claim of cause. The hangs are MIDI and this is SCSI, and the
+first occurrence (2026-08-17) predates that file existing, so it cannot be the
+whole story. It is recorded because it is the only candidate anyone has
+produced, and because it is cheap to falsify: **the file is now removed, so a
+third hang eliminates it, and no further hangs make it suggestive.** Note which
+happened rather than filing the next one as "the same unexplained thing".
+
+Worth noting how it was found, too: the host's drive list read
+`D0 D1 D2 D3 D4 D5 D7 D8` — no D6 — while the ZuluSCSI log showed a clean
+`Opening /CD6-ENVSPAN.iso for id:6`. A lower layer reporting success was
+briefly used to dismiss a higher layer's observation. The host's view was the
+one that mattered, because the host is the thing that has to see the bus.
