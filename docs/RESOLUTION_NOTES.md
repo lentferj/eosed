@@ -97,6 +97,19 @@ readback — the intro explicitly frames the goal as a *replacement* GUI ("a
 large, colorful, graphical interface, superior to the standard E4 front panel
 display"), not a mirror of the existing one.
 
+> **CORRECTION (2026-08-18).** This section, and several later ones, call the
+> panel protocol "undocumented". That was true of what this project could find,
+> and false as a statement about the world: E-mu documented it in 1996, in
+> "Remote Control of the Emulator-IV Series via MIDI/SMDI" (the *Peptalk*
+> document). It surfaced only after the RE here was complete. The independence
+> of that work is unaffected — and its opcodes agree with E-mu's, including
+> button `40h`, full display `50h` and display request `51h`, which is the
+> strongest confirmation the panel work has had. Later uses of "undocumented"
+> below are left as written: they record what was known at the time, and this
+> note covers them.
+>
+> The word to have used was "no documentation found", not "none exists".
+
 A **second, undocumented** SysEx dialect exists for that: `F0 18 7F 00 00
 <cmd> … F7` (note: device id fixed at `00`/`7F`, not the `21h`-family frame).
 Fragments published by third parties who reverse-engineered it from MIDI

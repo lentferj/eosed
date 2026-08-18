@@ -18,9 +18,9 @@ S1000/S3000 family), **[mpc2emu](https://github.com/lentferj/mpc2emu)**
 **[VinSamLib](https://github.com/lentferj/VinSamLib)** (librarian and bank
 builder for E4B, EIII/ESI and KRZ content) projects.
 
-It also mirrors and drives the machine's **front panel** (`k`) over a second,
-undocumented protocol reverse engineered here — including the 240×64 LCD,
-live in the terminal. See [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
+It also mirrors and drives the machine's **front panel** (`k`) over a second
+protocol reverse engineered here from the machine's own traffic — including
+the 240×64 LCD, live in the terminal. See [Front panel](#front-panel-k--a-second-protocol-an-exclusive-mode).
 
 > **Author:** Jan Lentfer, with AI support
 > (Anthropic Claude) — see [AI assistance](#ai-assistance--human-authorship).
@@ -45,7 +45,8 @@ are for.
 
 - **A real E4XT Ultra on the bench.** Half of what this tool knows had to be
   measured rather than read. The editor protocol was transcribed from E-mu's
-  own SysEx specification, but the **front-panel protocol is undocumented** —
+  own SysEx specification, but the **front-panel protocol had to be worked out
+  from the machine's own traffic** —
   the frame layout, the key map, the data dial and the 240×64 display encoding
   were all reverse engineered from captures taken on this machine. The tool
   exists because the sampler was already here and in use, not the other way
@@ -664,8 +665,10 @@ SAMPLE's, assignables and the PAGE group on the lower row, keypad at the
 right, soft keys under the display's own menu boxes.</sub></p>
 
 **This is the *panel* protocol, not the editor protocol** the rest of eosed
-speaks — `F0 18 7F <devID> 7A …`, undocumented by E-mu and reverse engineered
-here (`docs/RESOLUTION_NOTES.md` §26–§34). A panel press drives the machine's
+speaks — `F0 18 7F <devID> 7A …`, reverse engineered here from the machine's
+own traffic (`docs/RESOLUTION_NOTES.md` §26–§34). E-mu did document it, in the
+1996 "Peptalk" remote-control document, which this project did not have at the
+time; the opcodes derived here agree with it. A panel press drives the machine's
 own UI; everything else in this app edits parameters directly and does *not*
 move the front panel.
 
@@ -719,7 +722,8 @@ here and the samples pane there. `escape` leaves.
 **Sending is gated twice.** Opening the panel transmits nothing but the
 session open. `ctrl+t` arms it, and arming requires write mode to be on
 already. Until then keys only highlight — deliberate, because this protocol is
-undocumented and the machine's menus include the one-shot erase utilities.
+was reverse engineered rather than read from a specification, and the
+machine's menus include the one-shot erase utilities.
 
 ### Undo (`z`), undo-all (`Z`), and the change history (`h`)
 
@@ -806,10 +810,12 @@ on each is very different — keep the distinction sharp:
    *restore* is specified and frame-encodable but has no send path here, so
    dumping is one-way.** That list describes E-mu's protocol, not this
    tool's coverage of it.
-2. **The undocumented panel/remote-control protocol** — `F0 18 7F <devID>
+2. **The panel/remote-control protocol** — `F0 18 7F <devID>
    7A … F7`. The device's own LCD and front-panel keys (the same *kind* of
-   thing k2kremote does for the K2000). E-mu never published it; a third
-   party published the session handshake in 2016
+   thing k2kremote does for the K2000). E-mu documented it in 1996
+   ("Peptalk"), but that document was not available to this project while the
+   work was done, so it was reverse engineered from the machine's own traffic;
+   a third party published the session handshake in 2016
    ([midimachines](https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/)),
    and **eosed now implements it** — session open, the full key map, the data
    wheel, and the 240×64 display, all captured and decoded here. Note the
@@ -1235,7 +1241,7 @@ tests/
 
 ## Known Limitations
 
-- The undocumented panel protocol is **partly** implemented: session open,
+- The panel protocol is **partly** implemented: session open,
   the full front-panel key map, the data wheel, and the LCD (full screens
   only). Its **partial screen updates are not decoded** — a frame too small
   to be a whole screen is refused rather than painted as one — and nothing

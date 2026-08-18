@@ -54,7 +54,16 @@ eos/messages.py, eos/params.py
 probes/panel_capture.py, docs/captures/, RESOLUTION_NOTES §3/§26-§28
   (panel/remote protocol -- F0 18 7F ... , NOT the editor protocol above)
 
-  E-mu never documented this protocol. The session-open handshake and the
+  E-mu DID document this protocol, in "Remote Control of the Emulator-IV
+  Series via MIDI/SMDI" (the Peptalk document, 1996) -- a document this
+  project did not have and could not find while the work was done, and which
+  came to light only afterwards. The RE recorded here was therefore genuinely
+  independent, and its opcodes agree with E-mu's: button 40h, full display
+  50h, display request 51h. An earlier version of this file asserted that no
+  such documentation existed. It should have said no documentation had been
+  found -- absence of evidence stated as evidence of absence.
+
+  The session-open handshake and the
   fact that a key press emits a down/up pair were published in 2016, before
   this project existed, by an independent third party who observed the
   traffic between Ray Bellis's e-remote and an E4 Ultra:
