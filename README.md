@@ -1283,11 +1283,13 @@ The panel/remote protocol work (`probes/`, `docs/captures/`) carries its own
 attribution there too: its session handshake was **published in 2016 by an
 independent third party**
 ([midimachines](https://midimachines.wordpress.com/2016/04/30/arduino-midi-and-sampler-ultra-series/)),
-re-derived here against firmware 4.70 and found to be framed differently. Ray
-Bellis's [e-remote](https://emu.tools) was used as a traffic source for a
-single capture of the *device's* handshake — none of that tool was
-decompiled or copied, and eosed deliberately does not reimplement it. The
-display-frame decoding is original to this project.
+re-derived here against firmware 4.70 and found to be framed differently.
+**That page's opcodes are the only external input to this protocol's RE.** Ray
+Bellis's [e-remote](https://emu.tools) was **not** used — not as a traffic
+source, not as a reference, and no part of it was read, decompiled or copied.
+Every key code, the down/up pairing and the frame layout came from this
+project's own captures of the device echoing physical presses on its own front
+panel. The display-frame decoding is original to this project.
 
 Note one attribution worth reading before reusing this code: a handful of
 display-conversion functions in `eos/params.py` (`fil_freq`,

@@ -572,8 +572,10 @@ look easier.
 
 **Harness is built and waiting: `probes/panel_capture.py`.** Passive — it
 never transmits, since §3's rule forbids writing code against unverified
-bytes and a prober that sends is already breaking it. It listens while a
-browser running Ray Bellis's e-remote (<https://emu.tools>) drives the device,
+bytes and a prober that sends is already breaking it. It listens while a human
+drives the device from its own front panel (this originally read "while a
+browser running Ray Bellis's e-remote drives the device" — that was the plan
+and it was not taken; see RESOLUTION_NOTES §3),
 timestamps every frame, separates panel from editor traffic (and from
 Proteus/Morpheus, §4), supports typed markers so a capture records *what the
 operator did*, and diffs consecutive same-length frames to expose which byte
@@ -583,6 +585,10 @@ Analysis is unit-tested synthetically (`tests/test_panel_capture.py`), because
 a probe that mis-parses does not crash — it quietly wastes the session.
 
 ### Scope decision, 2026-08-14: **no screen mirror.** Not negotiable on taste
+
+**SUPERSEDED 2026-08-16 — the mirror was built (`k`).** Kept for the record.
+It was built from this project's own captures of the device echoing physical
+presses; e-remote's traffic was never captured, then or later.
 
 The first capture succeeded (§26) and the temptation it creates is to keep
 going straight: decode the bitmap fully, mirror the LCD, inject keypresses.

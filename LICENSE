@@ -68,13 +68,25 @@ probes/panel_capture.py, docs/captures/, RESOLUTION_NOTES §3/§26-§28
   <devID> 7Ah, not the 00 00 that page records). The opcodes were right; the
   frame layout in the published fragments does not match this firmware.
 
-  Ray Bellis's e-remote (https://emu.tools) was used as a traffic source for
-  exactly one capture, to observe the device's own handshake. No part of that
-  tool was decompiled, disassembled, or copied, and this project deliberately
-  does NOT reimplement it: mirroring the LCD and injecting keypresses is what
-  e-remote does, and eosed's scope decision (TODO, 2026-08-14) rules it out.
-  eosed reads the disk contents off-device and uses this protocol only to
-  drive a load.
+  That published page is the ONLY external input to this protocol's RE, and
+  what was taken from it is the opcodes above -- nothing else. Ray Bellis's
+  e-remote (https://emu.tools) was NOT used: not as a traffic source, not as
+  a reference, and no part of it was decompiled, disassembled, read or copied.
+  An earlier draft of this file said e-remote had been used for one handshake
+  capture. That was wrong -- it described a method proposed before hardware
+  access and deliberately not taken -- and it is corrected here.
+
+  Every key code, the down/up pairing, the data dial's signed encoding and
+  the frame layout were derived from this project's own captures of the
+  device echoing PHYSICAL PRESSES on its own front panel, one control at a
+  time, with the operator naming each press. Those captures are in
+  docs/captures/ and contain device-to-host frames only -- no host-to-device
+  traffic of any kind, from e-remote or anything else.
+
+  eosed does now mirror the LCD and send keypresses (front-panel mode, `k`),
+  which an earlier scope decision had ruled out. That decision was reversed
+  on 2026-08-16 and the implementation is built entirely on the captures
+  described above.
 
   The display-frame decoding in §26 -- 240x64 monochrome, standard MIDI 7->8
   packing, row-major at 30 bytes per row -- is not published on that page or

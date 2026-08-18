@@ -21,17 +21,23 @@ That is not caution for its own sake. §3's rule is that no code may be written
 against a byte sequence for this protocol that is not backed by a capture
 recorded in `docs/RESOLUTION_NOTES.md`, and a prober that transmits is already
 breaking it -- the only sequences we could send are the four published
-fragments, none of which this project has verified. So this listens, and the
-device is driven by something that already knows how: a browser running Ray
-Bellis's e-remote (<https://emu.tools>) against the same E4XT. We sniff the
-conversation between them. Nothing here talks to the sampler.
+fragments, none of which this project has verified. So this listens while the
+device is driven FROM ITS OWN FRONT PANEL, by hand, one control at a time with
+the operator naming each press. Nothing here talks to the sampler.
 
-SCOPE (2026-08-14): this serves a **disk load trigger, not a screen mirror.**
-Mirroring the LCD and injecting keypresses would be Ray Bellis's e-remote
-rebuilt from its own traffic — allowed, since the protocol facts are E-mu's
-and we read the wire rather than his code, but not what this project is for.
-The browse half comes from the disk *image* (parsed off-device); this protocol
-is only for selecting a bank and firing the load. See TODO and §26.
+An earlier version of this docstring said the device would be driven by a
+browser running Ray Bellis's e-remote and that we would sniff the conversation.
+That was the plan before hardware access and it was deliberately not taken:
+e-remote was never run, and every capture in docs/captures/ contains
+device-to-host frames only.
+
+SCOPE (2026-08-14, SUPERSEDED 2026-08-16): this originally served a disk load
+trigger and explicitly not a screen mirror, on the reasoning that a mirror
+would be Ray Bellis's e-remote rebuilt from its own traffic. eosed does now
+mirror the LCD and send keypresses (front-panel mode, `k`). The reasoning was
+superseded rather than ignored: nothing was ever rebuilt from e-remote's
+traffic, because none was ever captured — the mirror is built on this file's
+own captures of the device echoing physical front-panel presses.
 
 Consequence for how you use this: the key-code table is the critical path, and
 capturing it needs **no e-remote at all** — the device echoes its own

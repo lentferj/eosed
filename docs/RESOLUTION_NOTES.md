@@ -127,6 +127,10 @@ consecutive captures. This is the same method that produced
 `../mpc2emu/docs/k2000r_midi_comms.md` for the K2000R. **Do not** decompile or
 copy Ray Bellis's client-side code; observe the wire traffic only.
 
+**NOT WHAT HAPPENED (corrected 2026-08-18).** This method was proposed before hardware access and deliberately NOT taken. e-remote was never run, sniffed or consulted. The only external input was the published page's opcodes; everything else came from this project's own captures of the device echoing physical front-panel presses (docs/captures/, device-to-host frames only). The "exercise one control at a time and diff" half of the plan
+was kept; the "let e-remote drive it" half was replaced by a human pressing the
+buttons and naming each one.
+
 ## §4 — Related but distinct E-mu protocols (do not conflate)
 
 Checked against local `edisyn` (Java patch editors, GPL-licensed, used here
@@ -1890,7 +1894,9 @@ the wrong start.
 against byte sequences this project has not captured, and the only panel
 sequences available are third-party fragments we have never verified, so a
 prober that sent them would be breaking the rule it exists to serve. Instead
-it sniffs while Ray Bellis's e-remote (<https://emu.tools>) drives the device:
+it listens while a human drives the device from its own front panel (an earlier
+draft of this paragraph said it sniffs e-remote; that was the plan, not what was
+done — see §3's correction):
 timestamps frames, classifies panel vs editor vs other-E-mu (§4), takes typed
 markers so the log records what the operator did, and diffs consecutive
 same-length frames so the offsets that move stand out. `--analyse FILE`
@@ -2032,6 +2038,12 @@ still the fastest way to finish the pixel layout.
 
 ### Next — reordered by the 2026-08-14 scope decision (see TODO)
 
+**SUPERSEDED 2026-08-16: the mirror was built (front-panel mode, `k`).** The
+reasoning below stood at the time and is kept for the record. What changed it
+is that the mirror was built from this project's own captures of the device
+echoing physical presses — not from e-remote's traffic, which was never
+captured. The original text follows.
+
 The project will **not** build a screen mirror: that is Ray Bellis's e-remote
 rebuilt from its own traffic, and while the protocol facts are E-mu's and §3
 has always confined us to the wire rather than his code, cloning his tool is
@@ -2118,6 +2130,10 @@ direct evidence that this document's bytes do not describe this firmware.
    handshake once, on the wire, to learn a fact about E-mu's protocol. After
    that the browser is never needed again — everything else can be captured
    from the front panel, since echo works once the session is open.
+
+**NEITHER OPTION WAS USED (§28).** The open message was constructed from the
+published `10h` opcode with the header re-derived against this firmware, and it
+worked first time. e-remote was never run.
 3. **Probing opcodes blind** — rejected. Not worth it for a convenience
    feature on hardware this hard to replace.
 
