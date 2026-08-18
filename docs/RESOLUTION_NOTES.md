@@ -3241,3 +3241,72 @@ Worth noting how it was found, too: the host's drive list read
 `Opening /CD6-ENVSPAN.iso for id:6`. A lower layer reporting success was
 briefly used to dismiss a higher layer's observation. The host's view was the
 one that mattered, because the host is the thing that has to see the bus.
+
+### The morphing filters, and a file byte that crashes the machine (2026-08-18)
+
+A second anchor bank swept `vpar[58]` = `0x60`-`0xFF` (162 presets), to reach
+the four morphing filters that `0x00`-`0x5F` could not.
+
+    file byte  runtime  display
+    0x60         17     "Dual EQ Morph"       exact
+    0x61         18     "2EQ+Lowpass Morp"    TRUNCATED
+    0x62         19     "2EQMorph+Exprssn"    TRUNCATED
+    0x68         20     "Peak/Shelf Morph"    exact
+    0x63          0     "2 Pole Low-pass"     (a rejected byte, as control)
+    0x7F         21     ""                    NO NAME -- see below
+
+So **runtime 17-20 are confirmed against the display**, and with §36's sixteen
+that is 20 of the 21 documented types observed rather than inferred. The
+family pattern holds: `0x60`/`0x68` are family boundaries exactly as `0x40`,
+`0x48`, `0x50` were.
+
+**155 of 162 bytes read runtime 0.** The deliberate control — capturing the
+display for a byte *known* to be rejected — confirms rejected bytes render as
+`2 Pole Low-pass`. That control was nearly skipped as uninformative and is the
+only reason the next paragraph is interpretable.
+
+#### `0x7F` produces an out-of-range filter type and a FATAL Gen Trap
+
+**Invalid bytes are NOT uniformly clamped.** Most map to runtime 0 and render
+harmlessly. `0x7F` does not: it passes through as **runtime 21**, one past the
+end of the 21 implemented types (ids 0-20). The machine has no name for it,
+renders an **empty** field, and shortly after took a fatal firmware fault:
+
+```
+FATAL ERROR: Gen Trap error
+PC:107FFA50  Eaddr:107FFA50  SR:007F
+A0:00000008  A1:00000000  A2:0006A4CE
+D0:00000018  D1:00000001  D2:0000007F
+```
+
+**`D2` holds `0x7F`** — the byte itself is in the register dump. `D0` is
+`0x18` (24). Recovered by power cycle; the machine came back clean, RAM empty,
+firmware 4.70 as before.
+
+**This is a hazard for anything that writes or forwards E4B voice parameters:
+a file carrying `0x7F` in `vpar[58]` can crash an E4XT.** The sibling
+mpc2emu writer never emits it, so nothing shipped is affected, but a corrupt or
+third-party file could. A reader guard is cheap; the crash is not.
+
+This is the **second** Gen Trap this project has recorded — TODO.md carries one
+from unattended amp-envelope automation that was never root-caused. That one
+has no trigger and no dump. **This one has both.**
+
+#### Truncation is at 16 characters and removes spaces
+
+`2EQ Morph + Expression` renders as `2EQMorph+Exprssn`. The machine does not
+merely cut the string — it drops the spaces the manual's prose has, then
+truncates. So a joiner comparing prose to display **must strip separators
+before comparing, not merely test for a prefix**: `2EQ Morph + Expression`
+does not have `2EQMorph+Exprssn` as a prefix under any whitespace-preserving
+comparison. Predicted from the manual disagreeing with itself (`+ Exp` in one
+illustration, `+Exp` in another); the machine is harsher than either.
+
+#### What remains open
+
+Byte `0x01` reads runtime 0 and renders `2 Pole Low-pass`, which is also what
+a *rejected* byte renders. The display cannot separate "legitimately 2-Pole"
+from "clamped". The lowpass family wanting three members, with `0x00` -> 4-Pole
+and `0x02` -> 6-Pole leaving 2-Pole and `0x01` both unaccounted, makes `0x01`
+the natural candidate — but that is an inference and this experiment cannot
+confirm it. It needs a byte known to be 2-Pole by construction.
