@@ -1144,6 +1144,13 @@ discrepancies before trusting it beyond a convenience UI label.
 page-wrap ambiguity in the source and its count matches the manual's own
 stated total exactly — see `FILTER_TYPE_NAMES` in `eos/params.py`.
 
+**Hardware-confirmed, 20 of the 21** (RESOLUTION_NOTES §36): each id was set on
+the machine and the name it displays read back off the Filter page — 14 exact
+matches, 2 where the display truncates the manual's wording, and no
+disagreements. Only runtime 0 (`2-Pole Lowpass`) is unconfirmed, because it is
+also what the machine shows for a rejected byte and the two cannot be told
+apart from the display.
+
 #### MASTER (ids 183–222, 267–271) and addressing (223–227)
 
 Global-to-the-device settings, independent of any preset: master

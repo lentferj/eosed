@@ -2039,10 +2039,11 @@ still the fastest way to finish the pixel layout.
 ### Next — reordered by the 2026-08-14 scope decision (see TODO)
 
 **SUPERSEDED 2026-08-16: the mirror was built (front-panel mode, `k`).** The
-reasoning below stood at the time and is kept for the record. What changed it
-is that the mirror was built from this project's own captures of the device
-echoing physical presses — not from e-remote's traffic, which was never
-captured. The original text follows.
+reasoning below stood at the time and is kept for the record. Two things
+changed it. First, the mirror was built from this project's own captures of the
+device echoing physical presses — not from e-remote's traffic, which was never
+captured. Second, and the actual driver: The reason it was reversed is not that the objection stopped mattering. eosed exists to support mpc2emu, and the measurements mpc2emu needs -- stepping a parameter across its range, then reading back both what the machine SAYS it is and what comes out of the audio outputs -- cannot be automated without driving the panel and reading the screen. The mirror is measurement apparatus first; that it also happens to be useful at the desk is a by-product. The original text
+follows.
 
 The project will **not** build a screen mirror: that is Ray Bellis's e-remote
 rebuilt from its own traffic, and while the protocol facts are E-mu's and §3

@@ -92,8 +92,8 @@ by CI's *first* run, on a test that had been passing vacuously); and
 The largest open items are unchanged, in rough order of value: root-causing
 the §15 device crash (the only thing that can take the machine down, and what
 blocks a faster default `SEND_GAP`), the §17 pipelining probe (minutes off
-every bank sweep), and the panel/mirror protocol (not started, needs
-capture). All three need hardware.
+every bank sweep), and the panel/mirror protocol (**since done — see the
+Panel/remote protocol section below**). The first two still need hardware.
 
 **Next time there is hardware**, the two cheapest new items are
 `HW_CHECKLIST` **E8** and **E9** — run `i` against a bank with a deliberately
@@ -332,6 +332,12 @@ anyone scripts against a real E4XT again:
    messages (note on/off) with no inter-message gap, on top of an
    already-long burst of SysEx traffic. Not yet root-caused or reliably
    reproduced — see RESOLUTION_NOTES §15 for exactly what was sent.
+   **A SECOND Gen Trap has since been recorded, and that one has both a
+   trigger and a register dump (§36): an E4B carrying `0x7F` in a voice's
+   filter-type byte selects a filter one past the end of the implemented set,
+   renders as an empty name, and takes the firmware out. Different
+   circumstances, so it does not close this item — but it is the first
+   reproducible instance of this fault on the machine.**
    **Blocked on:** a careful, isolated repro (not a repeat of the full
    traffic pattern) to identify the actual trigger, then either a fix or at
    minimum a documented "don't do this" in `EosBridge`'s docstring. Until
@@ -535,7 +541,18 @@ in the direction that matters: no `CLAUDE.md`, no `config.toml`, no
   interoperability artefact, or regenerate the equivalent from a
   self-authored preset and drop the question entirely.
 
-## Panel/remote protocol — RE not started; **remote disk load is the reason**
+## Panel/remote protocol — **DONE (2026-08-16/17)**; remote disk load was the reason
+
+**Status: the protocol is reverse engineered, the mirror is built, and the use
+case below is met.** Front-panel mode (`k`) mirrors the 240×64 LCD live and
+sends every key; the machine's own disk pages are reachable through it, so
+choosing a drive, browsing banks, checking one and loading it all happen from
+the desk. Done repeatedly against the E4XT Ultra on 2026-08-17/18 — see
+RESOLUTION_NOTES §26-§34. The RE is this project's own, from captures of the
+device echoing physical presses (§3's correction).
+
+The original entry follows, kept because it records why the work was worth
+doing and what was checked before starting.
 
 **The use case, stated first because it is what makes this worth doing:**
 choose a disk, browse what is on it, and load a bank — from the desk, without
@@ -590,6 +607,11 @@ a probe that mis-parses does not crash — it quietly wastes the session.
 It was built from this project's own captures of the device echoing physical
 presses; e-remote's traffic was never captured, then or later.
 
+The reason it was reversed is not that the objection stopped mattering. eosed exists to support mpc2emu, and the measurements mpc2emu needs -- stepping a parameter across its range, then reading back both what the machine SAYS it is and what comes out of the audio outputs -- cannot be automated without driving the panel and reading the screen. The mirror is measurement apparatus first; that it also happens to be useful at the desk is a by-product. Everything measured on 2026-08-17/18 — the filter-type table,
+the envelope rate and sustain laws, the stereo and single-cycle confirmations —
+was obtained by scripts driving the panel and reading the mirrored screen. None
+of it was reachable any other way.
+
 The first capture succeeded (§26) and the temptation it creates is to keep
 going straight: decode the bitmap fully, mirror the LCD, inject keypresses.
 **That is Ray Bellis's e-remote, rebuilt from its own traffic.** Permitted —
@@ -640,7 +662,8 @@ Still needs live hardware for every part of it.
 
 ## Editor TUI (Phase 2 of the plan) — built, read paths verified live
 
-**This branch (`extended_view`) reworked the TUI from a 2-pane (Preset |
+**This work (originally the `extended_view` branch, long since merged and the
+branch deleted) reworked the TUI from a 2-pane (Preset |
 Parameters) to a 4-pane layout: Preset | Voice | Parameters | Samples**,
 with a `v` key to toggle between that and the original compact 2-pane view
 (default: compact; remembered across restarts against real hardware, see

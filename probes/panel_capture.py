@@ -39,6 +39,8 @@ superseded rather than ignored: nothing was ever rebuilt from e-remote's
 traffic, because none was ever captured — the mirror is built on this file's
 own captures of the device echoing physical front-panel presses.
 
+The reason it was reversed is not that the objection stopped mattering. eosed exists to support mpc2emu, and the measurements mpc2emu needs -- stepping a parameter across its range, then reading back both what the machine SAYS it is and what comes out of the audio outputs -- cannot be automated without driving the panel and reading the screen. The mirror is measurement apparatus first; that it also happens to be useful at the desk is a by-product.
+
 Consequence for how you use this: the key-code table is the critical path, and
 capturing it needs **no e-remote at all** — the device echoes its own
 front-panel presses (§3), so a human at the machine is the traffic source.
