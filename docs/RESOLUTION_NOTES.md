@@ -3601,3 +3601,47 @@ can calibrate anything. `env_seconds_to_rate(seconds, span_db)` stays unwritten
 until that resolves — sixteen points and an R^2 of 0.980 make it tempting, and
 a confidently wrong number replacing a confidently wrong number would be worse
 than the present error looking arbitrary.
+
+---
+
+## §40 — A panel sub-command that takes the front panel away (2026-08-18, live)
+
+**Recorded as a hazard, without the bytes.** One sub-command of the panel
+protocol diverts the front panel to the remote: while it is in effect the
+E4XT stops acting on its own buttons entirely. A counterpart message hands
+control back.
+
+Measured on the machine, in two single runs with an operator watching the
+front panel:
+
+    session open alone      -> key echo arrives, panel still live
+    + the sub-command       -> key echo still arrives, panel dead
+    + the counterpart       -> panel live again
+
+The second run is the one that matters and it is why this is written down.
+The panel gives **no indication whatsoever** that it has been diverted — no
+message, no changed screen, no LED. Someone standing at the sampler sees a
+machine that has stopped responding. Every probe in this project had been
+sending the divert message on its way *out*, believing it to be the restore,
+and left the panel locked out until the counterpart was sent by hand.
+
+**Rules that follow, and are in force:**
+
+- eosed never sends it. It is not reachable from the TUI or `eoscli`.
+- It is never key-bound, and never sent speculatively — same standing as the
+  Erase utilities (§21).
+- Any code that ever does send it must send the counterpart on **every** exit
+  path, including on exception. A `finally` is the minimum, and a `finally`
+  that sends the wrong one of the pair is worse than none, which is exactly
+  the mistake made here.
+
+**Why the bytes are not in this file.** The sub-command was identified from a
+document held privately by the third party who wrote it, shared with this
+project for testing and not for publication. Publishing the opcode would
+publish their unreleased work. It is recorded locally, outside version
+control, and will be documented here if and when they publish.
+
+The hazard itself is stated in the README rather than kept quiet, because the
+people most likely to trip it are not eosed's users: anyone sweeping a
+sub-command range while writing their own client will find it eventually, and
+the failure presents as dead hardware rather than as a message they sent.

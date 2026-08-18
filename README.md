@@ -169,6 +169,17 @@ in the TUI, only reachable through a modal arm-then-fire screen, but a
 scripting mistake with `eoscli` directly could still fire one. **Make
 current backups before pointing this at anything you care about.**
 
+**A panel sub-command exists that diverts the front panel to the remote.**
+While it is in effect the machine stops responding to its own buttons
+entirely, with nothing on screen to say why, until the counterpart message
+hands control back. eosed never sends it, and it is not reachable from the
+TUI or `eoscli` at all. It is called out here because the people most likely
+to trip it are not eosed's users but anyone writing their own client for this
+protocol: sweeping a sub-command range on a machine someone is standing at
+will find it eventually, and the failure looks like dead hardware rather than
+a message you sent. The specific bytes are withheld pending publication by
+the third party who documented them.
+
 ---
 
 ## AI assistance & human authorship
