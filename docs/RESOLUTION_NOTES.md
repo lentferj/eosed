@@ -3645,3 +3645,103 @@ The hazard itself is stated in the README rather than kept quiet, because the
 people most likely to trip it are not eosed's users: anyone sweeping a
 sub-command range while writing their own client will find it eventually, and
 the failure presents as dead hardware rather than as a message they sent.
+
+---
+
+## §41 — A guard that passed thirty silent captures (2026-08-21, live)
+
+**Ninety reference captures for mpc2emu, and the interesting result is a
+failure in the measuring apparatus, not in the device.**
+
+The task: one note per preset across a ten-preset bass bank already resident in
+RAM, three takes each, at MIDI 69, then 57, then 81. Rig constants (MIDI port,
+basic channel 5, capture ports, the persistent JACK client) come from
+mpc2emu's `tests/re_banks/hw_measure.py`, which documents this bench.
+
+### The guard that was built, and worked
+
+The known hazard here is §34's: **a Program Change the E4XT ignores leaves
+whatever was already selected**, and it is ignored anywhere but the main preset
+page. Ten identical recordings filed under ten preset numbers look exactly like
+data, which is how the 2026-08-17 pitch experiment produced a result off two
+recordings of the same preset.
+
+So selection was never assumed. Before every take the LCD was read back over the
+panel protocol and hashed, with two conditions checked afterwards rather than
+trusted:
+
+    hash CONSTANT across a preset's three takes  -> selection did not move
+    ten hashes DISTINCT                          -> ten different presets
+
+Both held on every pass. A pre-flight also confirmed PC was landing before any
+audio was recorded: three presets gave three distinct screens, and returning to
+the first reproduced its hash exactly.
+
+### The guard that did not exist
+
+The MIDI 81 pass reported:
+
+    no clipping; peaks -70.3 .. -65.2 dBFS
+    RESULT: usable
+
+for thirty captures in which **nothing sounded at all**. The level check asked
+whether the audio was too loud. It never asked whether there was any, and
+silence does not clip.
+
+Two independent confirmations, once the peaks looked suspicious:
+
+    audio   note window sits +0.3 dB (median) above the same file's OWN
+            pre-roll; the MIDI 69 set lifts +60 dB
+    device  asked over the editor protocol rather than inferred: all ten
+            presets are a single voice spanning A-1..G4 (MIDI 21..79)
+
+Note 81 is two semitones above the top of the mapped range on every preset. The
+device was behaving correctly and the selection guard was correct throughout:
+the right preset was selected, and it properly sent nothing.
+
+**What actually caught it was luck.** The A440 set existed to compare against,
+and 50 dB is hard to miss. A standalone run at 81 would have shipped thirty
+silent files marked `usable`, and any spectrum computed from them would have
+been of the room.
+
+### The fix
+
+Each take now measures its lift over **its own pre-roll silence**, and anything
+under 6 dB voids the run:
+
+    real note here   +48 .. +64 dB
+    dropped note      +0.0 .. +1.0 dB
+
+This needs no absolute reference and no assumption about level or gain, which is
+what makes it portable to any capture on this bench. The two already-delivered
+manifests were backfilled with the field so the recipient could verify the
+claim instead of taking it on trust.
+
+### The general shape, worth keeping
+
+Every measurement failure this project and its siblings have hit this week is
+the same one: **a check that validates the measurement's internal consistency
+while never testing whether it points at the specimen.**
+
+    §34   two recordings, 0.6 cents apart, of the same preset
+    §36   a walk whose whitelist validated a label but queued a key name
+    §33a  a delta claim resting on a keypress that changed zero pixels
+    §41   a level guard that confirmed the silence was not clipping
+
+The countermeasure is not a better threshold. It is that every guard must be
+able to answer *"what would this look like if the thing under test were absent
+entirely?"* — and a peak meter answers that question with a comfortable number.
+
+### The other half: the material, not the machine
+
+Note 81 is unmapped on the AKAI conversion too (keygroups span 24..79), so
+nothing sounds there on either machine and there was no comparison to lose. That
+also rules out the one reading that would have mattered — a conversion that
+widened the range would have sounded where the E4XT is silent, and looked like
+the E4XT missing top end. The leg was re-run at 79, the top mapped key, and
+labelled +10 semitones rather than described as an octave.
+
+Any absolute reading at 79 measures the edge of the sample's span; the paired
+difference stays clean because both machines transpose at the same key, but a
+per-preset oddity appearing only there should be blamed on the boundary before
+the conversion.
