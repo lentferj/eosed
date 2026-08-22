@@ -402,6 +402,55 @@ Vehicle for when it resumes, already surveyed: bank B02 on D0 (6.0 MB) mixes
 1 (31524 Hz) at root MIDI 50; P011 V0 is single-voice, single-zone, playing
 sample 44 (44100 Hz) at root MIDI 60.
 
+## Envelope sustain: the anchor is unmeasured, and the disc to settle it is built (OPEN, 2026-08-18)
+
+**Status: the SHAPE of the sustain-level law is solid; its ABSOLUTE anchoring is
+not.** §39 fitted `dB below peak = 0.547 x byte - 66.14` (R^2 0.980) over bytes
+80-116, and §37's rate law was confirmed on a second dataset. Neither result is
+in question here.
+
+What is unresolved is the metric they are expressed in. `sustain/peak` divides by
+the attack peak, which is **source-dependent** — and two banks disagree at
+nominally the same setting:
+
+    ENVSPAN  byte 107  ->  sustain/peak 0.177
+    SUSLEVEL byte 108  ->  sustain/peak 0.4565
+
+Bytes one apart cannot differ by 2.58x. Crest factor accounts for 1.377 of it;
+**1.87x, or 5.4 dB, is unaccounted for by either this project or mpc2emu.** So
+what exists is a relative law measured within one bank, needing a per-source
+offset before it can calibrate anything — which is why
+`env_seconds_to_rate(seconds, span_db)` stays unwritten.
+
+**Blocked on: nothing. The experiment is built, on the card, and has never been
+run.** `CD2-SUSANCHOR.iso`, id 2 — 12 presets on keys 36-47, one key each, the
+same five level bytes (84/92/100/108/116) rendered on BOTH sources in one bank,
+one pass, one capture path, so everything but the source is held constant and
+the difference between the two curves IS the source term. Interleaved SIN/HRM
+rather than blocked, so capture-path drift cannot land entirely in the quantity
+being measured. Controls are byte 127 on the sine at both ends: they must agree
+and each must read near 1.0.
+
+Subtract HRM-SIN in dB per byte and read the answer off the shape:
+
+    constant offset  ->  the slope is source-independent; only the anchor moves,
+                         and a per-source offset closes it
+    growing offset   ->  sustain/peak is not measuring the parameter at all
+    ZERO offset      ->  the ENVSPAN/SUSLEVEL gap is NOT the source, and two
+                         banks of near-identical presets differ by 5.4 dB for a
+                         reason nobody currently has a candidate for
+
+It mounted correctly on 2026-08-18 (boot log: `Opening /CD2-SUSANCHOR.iso for
+id:2`) and was simply never measured — the session moved on to §36-§39. It was
+briefly suspected of failing to mount because a stray `CD2-*.csv` looked like it
+was stealing the id; the boot log shows the ISO won that race and the CSV was
+the casualty. The CSV now lives in `expected/`, which is not scanned, so the
+question cannot arise again.
+
+Related and separately open: the filter envelope's rate -> time is uncalibrated
+altogether (§41), and `CD4-NOISE.iso` was placed on the card on 2026-08-22 to
+settle it. Both want the same rig, so they are worth doing in one session.
+
 ## Name-catalog pipelining — the largest remaining speed win (OPEN, needs a live probe)
 
 Every catalog scan is strictly serial: send one name request, block for the
