@@ -4147,6 +4147,45 @@ Base corner with amount 0 was 222.7 / 234.4 / 234.4 Hz across the three levels �
 independent of envelope level, as it must be if the cord is the only path from
 envelope to filter. That is an internal check the design provides for free.
 
+### WITHDRAWN 2026-08-22, same day: the compression was n=3
+
+**A 12-level grid (132 captures) does not reproduce the monotonic drift below,
+and the exponent comes out at a pure product.**
+
+    log-log fit across 12 levels:   k ~ level^0.974      (1.000 = pure product)
+
+    k/level x 1e4, levels 8 -> 100:
+      6.03  5.71  6.12  5.68  5.37  5.01  4.69  4.81  5.29  6.19  6.22  5.89
+
+That is **not monotonic**. It dips near level 58 and rises at both ends, total
+spread 1.33x. The three levels sampled below (25, 50, 100) happened to land on a
+descending stretch of what is scatter, and I read a trend off three points and
+called it compression.
+
+Fitted through the origin over the well-conditioned region (shifts <= 3 octaves,
+n=106):
+
+    octaves = 5.14e-4 x level x amount      median residual 0.074 oct (7.4%)
+
+Over all in-band points (n=117) it is 5.45e-4 with a median residual of 5.0%.
+
+**The remaining scatter tracks fit quality, not level.** Per-level R^2 falls from
+0.999 in the middle of the range to 0.94 at levels 83-100, exactly where the
+corner approaches the top of the measurable band and the curve bends — so the
+apparent rise in k at the high end is most likely the band edge, not the machine.
+
+**What stands:** it is a product, so the sibling project's conversion structure
+is right and the sustain does cancel. **What does not:** the level-dependent
+constant, the 37% figure, and the claim that a converter must model compression
+below the clamp. A single constant is defensible, with ~5-8% residual.
+
+Also checked, and it is not the apparatus in the way suspected: no capture in
+the set clips. The wide-open reference — the loudest capture, and the denominator
+every corner is measured against — peaks at **-12.75 dBFS with zero samples at
+full scale**, and crest factor holds 3.9-4.5 across all levels with no downward
+trend. A level-dependent overload would have shown as falling crest at the loud
+end and does not.
+
 ### Where it stops being a product
 
     k / level     5.95      4.89      4.34   x 1e-4      (levels 25, 50, 100)
