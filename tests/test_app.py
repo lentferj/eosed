@@ -1993,14 +1993,23 @@ async def test_a_pane_missing_while_running_still_raises():
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await app.workers.wait_for_complete()
+        # ORDER MATTERS, and it is why this went flaky on windows-latest 3.11
+        # again on 2026-08-22: the timer was stopped AFTER waiting for workers,
+        # so a resize firing *during* that wait armed a fresh page-load worker
+        # which then hit the removed #presets and took the app down with it --
+        # is_running went False and the precondition below failed. Stop the
+        # timer first so nothing can be armed while we drain, then drain.
         if app._resize_timer is not None:
             app._resize_timer.stop()
             app._resize_timer = None
+        await app.workers.wait_for_complete()
         await pilot.pause()
+        await app.workers.wait_for_complete()   # anything the pause started
 
-        app.query_one("#presets").remove()
-        await pilot.pause()
+        # `remove()` returns an awaitable; awaiting it settles the removal
+        # without a general pause, which is what previously gave an unrelated
+        # worker a window to run against a half-removed tree.
+        await app.query_one("#presets").remove()
 
         assert app.is_running, "precondition: still running, so the guard is inactive"
         with pytest.raises(NoMatches):
