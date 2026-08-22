@@ -4062,3 +4062,42 @@ This is the fourth and the cheapest: **the instrument was fine, the specimen was
 fine, and the axis was mislabelled.** A wrong x-value is not detectable by any
 amount of care about y — the machine faithfully reported what byte 107 does,
 twice, and the number was filed under 108.
+
+### Corroborated independently, and the low end checked rather than trusted
+
+mpc2emu refitted the same quantity on their own hardware — different session,
+different bank, narrowband analysis against the test tone's own frequency rather
+than broadband RMS — and expressed it per percent rather than per byte:
+
+    §39 (superseded)    0.547  dB/byte
+    here               0.754  dB/byte    R^2 0.9999
+    mpc2emu            0.795  dB/byte    (1.010 dB/% x 127/100), R^2 0.996
+
+In the working range the two agree closely: at byte 107 they predict -13.65 dB
+against -13.78 / -13.84 measured here on two different banks. Slopes 5.5% apart,
+**both ~45% away from §39**. Two projects, different methods, different
+observables, landing together and jointly disagreeing with the old value — which
+is a stronger claim than either refit could make alone. A single refit replaces
+one number with another; two independent ones say the *quantity* is real.
+
+**Their caveat about the bottom of the range is correct, and quantifiable from
+this run's own captures.** Sustain level against the silent pre-roll of the same
+file:
+
+    SUS 064   6.3 counts   floor 1.79   SNR 10.9 dB
+    SUS 072  12.5 counts   floor 1.79   SNR 16.9 dB
+    SUS 080  25.1 counts   floor 1.79   SNR 22.9 dB
+    SUS 088  50.6 counts   floor 1.79   SNR 29.0 dB
+
+At byte 64 the floor is close enough to inflate the reading, so those points are
+the weakest in the set. **Refitting without them barely moves the answer:**
+
+    bytes  64-122   0.7539 dB/byte   R^2 0.99985
+    bytes  80-122   0.7550 dB/byte   R^2 0.99966
+    bytes  88-122   0.7556 dB/byte   R^2 0.99944
+
+0.2% across the three, and all three predict byte 107 identically. So the
+published fit is not being driven by its noisiest points — checked rather than
+asserted. The caveat still applies to *extrapolation* below byte 80, where the
+two projects' fits diverge to 1.88 dB apart at byte 64 and neither has good
+evidence.
