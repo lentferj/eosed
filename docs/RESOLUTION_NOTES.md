@@ -4214,3 +4214,62 @@ E4B amount as `amount x 50`. Since the E4XT is a product in the same sense the
 AKAI is, that structure is sound and only the constant is in question — the
 one-line fix rather than the redesign. The compression above ~3 octaves applies
 to both machines' models and is the part most likely to be missing from either.
+
+---
+
+## §47 — Banks merge, and a page that ignores Program Change survives a handover (2026-08-22/23, live)
+
+Two findings from staging a four-bank comparison for the sibling project, one
+about the device and one about how a correct machine can still be unusable.
+
+### `Merge` exists, appends in load order, and renumbers nothing
+
+Pressing `Load...` on a bank while RAM is occupied raises a confirmation not seen
+when RAM is empty:
+
+    "Destroys current RAM bank... continue?"     Cancel (F1) | Merge (F4) | Load (F6)
+
+**`Merge` adds the bank to what is already resident instead of replacing it.**
+Four banks were merged this way and all four stayed available at once:
+
+    bank 1  -> presets  0-9    (10)
+    bank 2  -> presets 10-21   (12)
+    bank 3  -> presets 22-27   ( 6)
+    bank 4  -> presets 28-33   ( 6)
+
+Each bank starts where the previous ended, in load order. **Nothing was
+renumbered and nothing was overwritten**, verified by reading all 34 preset names
+back off the device after the last merge rather than inferring from bank sizes.
+Sample memory tracked it: 128.0 MB free before, 120.7 MB after.
+
+That matters for measurement work: an A/B between banks becomes a Program
+Change rather than a two-minute reload, so a comparison can be driven from one
+capture path without a load between the two things being compared.
+
+### The page trap survives a handover, and that is the new part
+
+§34 and §36 already record that the E4XT honours Program Change only on its own
+main preset page. What tonight added is what happens when a *different operator*
+inherits the machine.
+
+The four merges left the device on the disk browser's BANK page. The banks were
+resident, the machine was healthy, notes sounded, and Bank Select CCs were
+received and had an effect — but **every Program Change was silently dropped**,
+so three unrelated presets (a synth bass, a pad, an electric bass) measured
+byte-identical. Nothing on screen said why, because nothing was wrong.
+
+    on the browser page              back on the preset page
+      PC   0   f598e64e1c              PC   0   04195783fc
+      PC  22   f598e64e1c              PC  22   da5b543563
+      PC  28   f598e64e1c              PC  28   1b2b242623
+      1 distinct screen                3 distinct
+
+**The guard is three seconds and belongs in the handover, not only in the run.**
+Send a Program Change, read the screen back, confirm the selection moved. This
+project has had that check since §41 and applies it to every capture it takes —
+and it was still not applied when declaring the machine ready for someone else,
+which cost the sibling project a measurement round and a debugging round.
+
+A machine can be correct, loaded, and answering, and still be incapable of the
+measurement about to be taken on it. "Ready" is a claim about the *page*, not
+only about the contents of RAM.
