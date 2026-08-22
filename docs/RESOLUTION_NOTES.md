@@ -3866,6 +3866,26 @@ seconds, so a dip at 5.6 s could not be mapped to a stage. That is now measured.
     byte  72   measured 3.74 s   fit 3.74 s
     byte  88   measured 9.14 s   fit 9.27 s
 
+### THE TRAVERSE DISTANCE IS PART OF THE RESULT — do not quote the law without it
+
+**These times are for ONE FULL SEGMENT TRAVERSAL to target 100.** The prefactor
+scales with how far the segment travels; the slope does not. For
+`t = A x e^(K x b)`, a segment covering distance `d` of the full span takes
+`(d/full) x A x e^(K x b)` — so `0.08184` per byte is distance-independent
+evidence and `-3.9893` is not.
+
+Quoted without that, the constant reads as a disagreement with any measurement
+taken over a shorter traverse. mpc2emu's own `ENV_RATE_A` runs 0.52x this one
+across the whole range (0.51 / 0.53 / 0.56 at bytes 24 / 56 / 88) because theirs
+was fitted on **Decay-1**, a segment travelling peak->sustain rather than a full
+span. Near-constant ratio, slope untouched: that is the signature of a distance
+difference, not of a conflict, and neither number needs changing.
+
+The start value here was not independently established — what is measured is the
+transition to target 100, observed as a full-range corner excursion (floor ~470
+Hz to plateau ~11.6 kHz). Anyone fitting a shorter stage should expect a smaller
+prefactor by roughly the distance ratio.
+
 ### The design sidesteps the ordering question rather than waiting on it
 
 Set **all six segments to the same target (100) and the same rate R**. The
