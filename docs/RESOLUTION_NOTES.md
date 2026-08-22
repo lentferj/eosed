@@ -818,7 +818,7 @@ a buffer the LCD doesn't consult until the preset is touched physically).
 
 **First checked: is there any SysEx command in the documented protocol
 for "redraw the screen"?** Exhaustively — every command byte in
-`eos.messages.Command` (58 defined values across the full 0x00–0x7F
+`eos.messages.Command` (57 defined values across the full 0x00–0x7F
 range), the raw specification text itself (searched for "screen",
 "panel", "LCD", "display", "refresh", "redraw" — the only hit is the
 spec's own stated design goal, that the remote editor is meant to

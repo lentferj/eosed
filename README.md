@@ -1080,7 +1080,7 @@ multisample voice, addressed together with `SAMPLE_ZONE_SELECT`.
 |---|---|---|
 | `E4_VOICE_VOLENV_DEPTH` | 0..16 | −96 dB to −48 dB, steps of 3 |
 | `E4_VOICE_SUBMIX` | −1..3 (−1..7 w/ Octopus card) | voice / main / sub1-7 |
-| Envelope: `VENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level 0..100 % | 6-stage: Atk1 → Dcy1 → Rls1 → Atk2 → Dcy2 → Rls2 |
+| Envelope: `VENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level 0..100 % | 6-stage, traversed in **id order**: Atk1 → Atk2 → Dcy1 → Dcy2 → Rls1 → Rls2. `SEG3`'s level is the **sustain** |
 
 #### VOICE — filter + envelope (ids 82–104)
 
@@ -1090,7 +1090,23 @@ multisample voice, addressed together with `SAMPLE_ZONE_SELECT`.
 | `E4_VOICE_FMORPH` | 0..255 | Fc/Morph |
 | `E4_VOICE_FKEY_XFORM` | 0..127 | meaning varies by filter type |
 | `E4_VOICE_FILT_GEN_PARM1`–`_8` | 0..255 | filter-type-dependent overlay — see `docs/RESOLUTION_NOTES.md` §2 before trusting an unfamiliar type |
-| Envelope: `FENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level 0..100 % | same 6-stage shape as the amp envelope |
+| Envelope: `FENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level −100..100 % | same 6-stage shape and order as the amp envelope; traversal measured live, see below |
+
+**Envelope stage order and level range, both corrected 2026-08-22.** The six
+segments are traversed in id order — `SEG0`..`SEG3` while a note is held, holding
+at `SEG3`'s target until note-off, then `SEG4`/`SEG5` on release — so **`SEG3`'s
+target level is the sustain**. This table previously named them
+Atk1/Dcy1/Rls1/Atk2/Dcy2/Rls2, an interleaved mapping that put "Atk2" where the
+sustain lives. Measured directly on the **filter** envelope
+(`docs/RESOLUTION_NOTES.md` §44) by giving each segment a distinct duration and
+confirmed by inverting every level; the **amp** envelope's `SEG3`-is-sustain is
+corroborated independently by §45's 16-preset sweep. The **aux** envelope is
+assumed to match and has not been tested.
+
+The filter and aux envelope levels are **−100..100**, not 0..100 — they modulate
+bipolarly. The amp envelope really is 0..100, since it is a volume. That is a
+transcription error in the spec's own table, confirmed against the device
+(§18); the ranges here now match `eos/params.py`.
 
 #### VOICE — LFOs and the auxiliary envelope (ids 105–128)
 
@@ -1106,7 +1122,7 @@ as amp/filter) through two lag processors.
 | `E4_VOICE_LFO_VAR` / `LFO2_VAR` | 0..100 % | |
 | `E4_VOICE_LFO_SYNC` / `LFO2_SYNC` | 0/1 | key-sync / free-run |
 | `E4_VOICE_LFO2_OP0_PARM` / `OP1_PARM` | 0..10 | Lag0/Lag1 |
-| Aux envelope: `AENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level 0..100 % | LFO2-driven, same 6-stage shape |
+| Aux envelope: `AENV_SEG0`–`SEG5` `_RATE`/`_TGTLVL` | rate 0..127, level −100..100 % | LFO2-driven, same 6-stage shape |
 
 #### VOICE — modulation matrix ("cords") (ids 129–182)
 
