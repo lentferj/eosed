@@ -3775,3 +3775,76 @@ Any absolute reading at 79 measures the edge of the sample's span; the paired
 difference stays clean because both machines transpose at the same key, but a
 per-preset oddity appearing only there should be blamed on the boundary before
 the conversion.
+
+---
+
+## §42 — `sustain/peak` is NOT source-dependent, and that makes §39's gap worse (2026-08-22, live)
+
+§39 closed with the sustain-level law's *shape* solid and its *absolute
+anchoring* unexplained: ENVSPAN's byte 107 measured `sustain/peak` 0.177 while
+SUSLEVEL's byte 108 measured 0.4565, and bytes one apart cannot differ by 2.58x.
+Crest factor was offered as accounting for 1.377 of it, leaving 1.87x / 5.4 dB
+with no candidate. The leading suspect was the metric itself: `sustain/peak`
+divides by the attack peak, which is source-dependent.
+
+**It is not.** The suspect is eliminated.
+
+### The design: everything but the source held constant
+
+One bank, twelve presets, one key each (36-47), one pass, one capture path. The
+same five level bytes (84/92/100/108/116) rendered on **two sources**: a pure
+220 Hz sine (crest 1.414) and an 11-harmonic tone (crest 1.948). Laid out
+**interleaved** SIN/HRM rather than blocked -- with a blocked layout, any drift
+in the capture path across the run lands entirely in the quantity being
+measured. Three takes of each of the twelve.
+
+Windows were taken from the data, not assumed: an exploratory 10 s capture put
+the attack peak at 0.55 s and a flat plateau from 2.0 s to 6.4 s holding to
++-0.3 counts, so sustain is the median over 3.0-6.0 s.
+
+### Controls, and a threshold derived rather than picked
+
+Byte 127 on the sine at both ends of the run -- full sustain must put the
+plateau at the peak:
+
+    CTL-A (preset 0)   ratio 1.0002
+    CTL-B (preset 11)  ratio 0.9999     differ by 0.03%
+
+Take-to-take spread within a preset is **2.14% median, 4.02% worst**, measured in
+this same run. That is the bar any difference has to clear, and it is derived
+from the takes rather than hard-coded -- a fixed threshold here would have been
+meaningless, since the quantity's own repeatability is what sets the floor.
+
+### The result
+
+    byte    SIN ratio   HRM ratio    HRM - SIN
+     84      0.02712     0.02751       +0.13 dB
+     92      0.05538     0.05463       -0.12 dB
+    100      0.11097     0.11017       -0.06 dB
+    108      0.22429     0.22195       -0.09 dB
+    116      0.44167     0.44651       +0.09 dB
+
+**Mean offset -0.01 dB. Spread 0.25 dB. Trend across bytes 84->116: -0.01 dB.**
+
+Not a constant offset, not a growing one: **zero**, to well inside the run's own
+repeatability. The two sources' attack peaks differ by a factor of ~2.1 (2628 vs
+1247 counts, 6.5 dB) and their ratios agree to a quarter of a dB. That is a
+positive demonstration of source-independence, not merely a failure to find one.
+
+### What this costs, and it is more than it looks
+
+The obvious reading is "the metric is fine". The expensive reading is the right
+one: **crest factor is a property of the source, and the source has no effect on
+this quantity at all.** So the crest-factor term that was said to account for
+1.377 of the 2.579 accounts for nothing either.
+
+The gap did not shrink from 2.58x to 1.87x. **The whole 2.58x is unexplained**,
+and one of the two candidate mechanisms has been removed rather than confirmed.
+What remains must be a difference between the two *banks* -- different envelope
+settings, different presets, a different measurement window, or an error in one
+of the two original measurements -- and nothing in this experiment can say
+which. `env_seconds_to_rate(seconds, span_db)` stays unwritten, and the reason
+is now narrower and better founded than "some of it is unexplained".
+
+The disc is spent: it answered its question, and the answer eliminated the
+answer everyone expected.

@@ -402,7 +402,7 @@ Vehicle for when it resumes, already surveyed: bank B02 on D0 (6.0 MB) mixes
 1 (31524 Hz) at root MIDI 50; P011 V0 is single-voice, single-zone, playing
 sample 44 (44100 Hz) at root MIDI 60.
 
-## Envelope sustain: the anchor is unmeasured, and the disc to settle it is built (OPEN, 2026-08-18)
+## Envelope sustain: the source is eliminated, the 2.58x gap is not (OPEN, 2026-08-18; narrowed 2026-08-22)
 
 **Status: the SHAPE of the sustain-level law is solid; its ABSOLUTE anchoring is
 not.** §39 fitted `dB below peak = 0.547 x byte - 66.14` (R^2 0.980) over bytes
@@ -422,8 +422,26 @@ what exists is a relative law measured within one bank, needing a per-source
 offset before it can calibrate anything — which is why
 `env_seconds_to_rate(seconds, span_db)` stays unwritten.
 
-**Blocked on: nothing. The experiment is built, on the card, and has never been
-run.** `CD2-SUSANCHOR.iso`, id 2 — 12 presets on keys 36-47, one key each, the
+**Update 2026-08-22: SUSANCHOR has been run, and the answer is the third case --
+ZERO offset.** HRM-SIN measured +0.13/-0.12/-0.06/-0.09/+0.09 dB across the five
+bytes: mean -0.01 dB, spread 0.25 dB, no trend, against a within-run
+repeatability of 2.14%. Controls read 1.0002 and 0.9999. `sustain/peak` is
+source-independent (§42).
+
+That **removes** an explanation rather than supplying one. Crest factor is a
+property of the source, so if the source does not matter then neither does
+crest factor -- and the 1.377 it was said to account for goes with it. The gap
+is not 1.87x unexplained on top of an understood 1.377; **the whole 2.58x is
+unexplained.** What is left has to be a difference between the two banks --
+envelope settings, presets, measurement window, or an error in one of the two
+original measurements -- and this experiment cannot say which.
+
+**Now blocked on: a controlled comparison of the two BANKS**, not of two
+sources. The cheapest form is to re-measure ENVSPAN's byte 107 and SUSLEVEL's
+byte 108 in one pass through one capture path, the way SUSANCHOR did for the
+sources. Both discs still exist, parked as `XX_*.disabled` on the card.
+
+The original framing, for the record: `CD2-SUSANCHOR.iso`, id 2 — 12 presets on keys 36-47, one key each, the
 same five level bytes (84/92/100/108/116) rendered on BOTH sources in one bank,
 one pass, one capture path, so everything but the source is held constant and
 the difference between the two curves IS the source term. Interleaved SIN/HRM
