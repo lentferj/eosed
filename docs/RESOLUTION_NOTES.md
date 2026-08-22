@@ -3848,3 +3848,61 @@ is now narrower and better founded than "some of it is unexplained".
 
 The disc is spent: it answered its question, and the answer eliminated the
 answer everyone expected.
+
+---
+
+## §43 — The filter envelope's rate byte, in seconds (2026-08-22, live)
+
+§41 failed three times partly because nobody knew what a rate byte meant in
+seconds, so a dip at 5.6 s could not be mapped to a stage. That is now measured.
+
+    log2(seconds) = 0.08184 x byte - 3.9893        R^2 = 0.9998
+    -> the byte is a TIME constant: higher is SLOWER,
+       doubling every 12.2 bytes
+
+    byte  24   measured 0.24 s   fit 0.25 s
+    byte  40   measured 0.62 s   fit 0.61 s
+    byte  56   measured 1.54 s   fit 1.51 s
+    byte  72   measured 3.74 s   fit 3.74 s
+    byte  88   measured 9.14 s   fit 9.27 s
+
+### The design sidesteps the ordering question rather than waiting on it
+
+Set **all six segments to the same target (100) and the same rate R**. The
+envelope then has exactly one transition to make — from its start value up to
+100, during whichever segment runs first — and every later segment is already at
+its target, so nothing else moves. That times one segment's traversal without
+knowing which segment it is. §41's ordering question stays open and does not
+block this; the dependency runs the other way.
+
+### Two measurement traps, both avoided by measuring at the end
+
+- **The corner's low end is invisible.** The contour sits flat near 470 Hz for
+  the first ~0.9 s at byte 64 and only then climbs: down there the corner is
+  below most of the source's energy and the centroid barely moves while the
+  envelope is already travelling. A t10 would have folded that floor into the
+  law. The *completion* instant has no such problem, so traversal time is
+  note-on to 95% of the total excursion.
+- **The source cannot contribute a rise.** This is measured on the stationary
+  noise (§42's sibling artefact, verified on capture at 9.0-9.7% centroid spread
+  at 5 ms), not on a bass sample whose own onset was common-mode with the
+  envelope and destroyed the first attempt.
+
+### Bytes 104 and 120 did not finish, and that is a check rather than a gap
+
+Both were excluded for showing no traversal inside a 12 s note. The fit
+*predicts* that: byte 104 is 23 s and byte 120 is 57 s. Two points excluded on a
+measurement criterion, then independently accounted for by the law fitted to the
+other five.
+
+### It matches the amp envelope
+
+§37 measured the **amp** envelope decay halving every ~12.3 bytes. This is
+**12.2 bytes** per doubling on the **filter** envelope, from an unrelated
+experiment on a different source with a different observable. The two envelopes
+share a rate law, which was assumed by nobody and is now evidence rather than
+convenience.
+
+**What this unblocks:** §41's traversal-order experiment becomes readable —
+stage boundaries can now be predicted in seconds and a dip located against them
+instead of being reported as an unexplained time.
