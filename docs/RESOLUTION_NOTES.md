@@ -3926,3 +3926,71 @@ convenience.
 **What this unblocks:** §41's traversal-order experiment becomes readable —
 stage boundaries can now be predicted in seconds and a dip located against them
 instead of being reported as an unexplained time.
+
+---
+
+## §44 — The filter envelope's traversal order, settled (2026-08-22, live)
+
+**SEG0 -> SEG1 -> SEG2 -> SEG3 while the note is held, hold at SEG3's target
+until note-off, then SEG4 -> SEG5 on release.** Sequential in id order, not
+interleaved. `eos/params.py`'s stage names were wrong and are corrected.
+
+    id 93/94    SEG0   Atk1
+    id 95/96    SEG1   Atk2
+    id 97/98    SEG2   Dcy1
+    id 99/100   SEG3   Dcy2  <- THE SUSTAIN LEVEL
+    id 101/102  SEG4   Rls1
+    id 103/104  SEG5   Rls2
+
+### Why §41's design could not have answered this
+
+§41 held all six segments at one level and dropped one to zero. **A segment
+already at its target travels zero distance, and zero distance takes zero time**
+— so every at-target stage completed instantly and the dip landed at the same
+instant regardless of which segment carried it. That is exactly what it saw:
+SEG1, SEG2 and SEG3 all dipping at ~5.6 s. The data were fine; the experiment
+could not distinguish the orders it was posed against.
+
+### The design the rate law made possible
+
+Give every segment a full distance to travel (alternating 100/0) **and a
+distinct rate**, so each stage has a distinct *duration* (§43):
+
+    SEG0 rate 24 -> 0.25 s    SEG3 rate 48 -> 0.96 s
+    SEG1 rate 32 -> 0.39 s    SEG4 rate 56 -> 1.51 s
+    SEG2 rate 40 -> 0.61 s    SEG5 rate 64 -> 2.38 s
+
+Then the sequence of leg durations names the order. Observed, with levels
+100/0/100/0/100/0: a rise of ~0.22 s, a fall of ~0.32 s, a rise, a fall of
+~0.72 s, **then a flat hold for the rest of the note** — four legs, in id order,
+and SEG4/SEG5 never ran.
+
+Measured legs run consistently *shorter* than predicted, which is §43's floor
+effect: the corner's low end is below the source's energy, so the start of each
+leg is invisible and every leg is clipped at its quiet end. It biases durations
+one way and does not reorder them.
+
+### The control: invert every level, and the hold follows SEG3
+
+With levels 0/100/0/100/0/100 the predictions inverted, and so did the machine:
+
+    SEG0 target 0, starting at 0 -> no movement at all, as predicted
+    then rise, fall, rise
+    then a flat hold at ~11500 Hz -- BRIGHT
+
+**The sustain was dark when SEG3's target was 0 and bright when it was 100.**
+Flipping the input flipped the output, which is what the ascending/descending
+staircase in §41 failed to do and is why that result was withdrawn.
+
+### What this explains retroactively
+
+- **mpc2emu's "sustain" reads id 100**, which under the old labelling was
+  "Atk2 Level" and looked like an odd choice. Under the measured mapping id 100
+  is Dcy2's target — the sustain. Their field was right and our label was wrong.
+- **§41's "three of six inert on a held note"** now has its reason: SEG4 and
+  SEG5 are release stages, and SEG0 was inert in that particular experiment
+  because it started and ended at the same level. The observation was correct
+  and its cause is no longer unestablished.
+
+Not verified for the voice and aux envelopes (ids 67-80, 117-128). The same
+ordering is likely and is not measured; their notes are left alone.

@@ -195,16 +195,29 @@ _PARAMS: List[Parameter] = [
     # the *amp* envelope's TGTLVL really is 0..100, since it is a volume, and
     # the device agrees -- so this is a genuine transcription error in the
     # spec's own table, not a firmware-version difference.
+    #
+    # STAGE NAMES CORRECTED 2026-08-22, measured (docs/RESOLUTION_NOTES.md §44).
+    # These notes previously read Atk1/Dcy1/Rls1/Atk2/Dcy2/Rls2 in id order,
+    # i.e. an interleaved mapping. The hardware traverses SEG0..SEG3 IN ORDER
+    # while a note is held, then holds at SEG3's target until note-off, and runs
+    # SEG4/SEG5 on release. So SEG3's target level IS the sustain level, and the
+    # old labelling put "Atk2" where the sustain lives.
+    # Measured by giving every segment a full distance and a DISTINCT rate, so
+    # each stage has a distinct duration (§43's rate law), and confirmed by
+    # inverting every level: the held portion followed SEG3's target from dark
+    # to bright.
+    # NOT verified for the VOICE and AUX envelopes (ids 67-80, 117-128), which
+    # keep the old note text -- the same ordering is likely and is not measured.
     _p(93, "E4_VOICE_FENV_SEG0_RATE", "voice.filter.env", 0, 127, notes="Atk1 Rate"),
     _p(94, "E4_VOICE_FENV_SEG0_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk1 Level"),
-    _p(95, "E4_VOICE_FENV_SEG1_RATE", "voice.filter.env", 0, 127, notes="Dcy1 Rate"),
-    _p(96, "E4_VOICE_FENV_SEG1_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy1 Level"),
-    _p(97, "E4_VOICE_FENV_SEG2_RATE", "voice.filter.env", 0, 127, notes="Rls1 Rate"),
-    _p(98, "E4_VOICE_FENV_SEG2_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls1 Level"),
-    _p(99, "E4_VOICE_FENV_SEG3_RATE", "voice.filter.env", 0, 127, notes="Atk2 Rate"),
-    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk2 Level"),
-    _p(101, "E4_VOICE_FENV_SEG4_RATE", "voice.filter.env", 0, 127, notes="Dcy2 Rate"),
-    _p(102, "E4_VOICE_FENV_SEG4_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy2 Level"),
+    _p(95, "E4_VOICE_FENV_SEG1_RATE", "voice.filter.env", 0, 127, notes="Atk2 Rate"),
+    _p(96, "E4_VOICE_FENV_SEG1_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk2 Level"),
+    _p(97, "E4_VOICE_FENV_SEG2_RATE", "voice.filter.env", 0, 127, notes="Dcy1 Rate"),
+    _p(98, "E4_VOICE_FENV_SEG2_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy1 Level"),
+    _p(99, "E4_VOICE_FENV_SEG3_RATE", "voice.filter.env", 0, 127, notes="Dcy2 Rate"),
+    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy2 Level = SUSTAIN"),
+    _p(101, "E4_VOICE_FENV_SEG4_RATE", "voice.filter.env", 0, 127, notes="Rls1 Rate"),
+    _p(102, "E4_VOICE_FENV_SEG4_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls1 Level"),
     _p(103, "E4_VOICE_FENV_SEG5_RATE", "voice.filter.env", 0, 127, notes="Rls2 Rate"),
     _p(104, "E4_VOICE_FENV_SEG5_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls2 Level"),
 
