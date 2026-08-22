@@ -4101,3 +4101,77 @@ published fit is not being driven by its noisiest points — checked rather than
 asserted. The caveat still applies to *extrapolation* below byte 80, where the
 two projects' fits diverge to 1.88 dB apart at byte 64 and neither has good
 evidence.
+
+---
+
+## §46 — `FEnv+ -> FilFreq` depth: a product, to first order, with real compression (2026-08-22, live)
+
+**The shift is a product of envelope level and cord amount**, as the AKAI's is
+(s3ked §148) — so mpc2emu's conversion is structurally right and needs a
+constant, not a redesign. But the product holds only to first order, and the
+deviation is systematic rather than noise.
+
+    octaves ~= 5e-4 x level% x amount        (amount 0-100, level 0-100)
+
+At full level and full amount that is ~5 octaves, which on this base cutoff is
+already past where the corner leaves the measurable band.
+
+### Method
+
+Stationary noise (§42's artefact), filter 4-pole lowpass, base cutoff `FMORPH`
+40, all six envelope segments held at a constant level with rate 0 so the
+envelope is a plateau rather than a traversal, and the cord amount stepped.
+
+**The corner is a real frequency, not a proxy.** Each capture's power spectrum is
+divided by a REFERENCE capture taken with the filter wide open, which removes
+the source's own spectrum, the sampler's reconstruction roll-off and the capture
+chain in one step — §42 already showed that roll-off is real (8000-14000 Hz on
+file becomes 6700-11900 Hz at the output). The corner is then the highest
+frequency still within 3 dB of the passband of that ratio.
+
+**Trap 1 checked before anything else** (s3ked lost nine runs and a disc to it):
+amount 0 vs 100 moved the corner 6.68 octaves, so the envelope had distance to
+travel and the depth was actually under test. A null there would have meant an
+inert envelope, not an inert depth.
+
+**Traverse distance is stated, per §43's lesson:** the envelope sits at a
+constant level L for the whole note. Every octave figure is per that L.
+
+### The data
+
+    level  25   0.01488 oct per amount unit   R^2 0.9940
+    level  50   0.02445                       R^2 0.9900
+    level 100   0.04335                       R^2 0.9922  (amounts <= 60 only)
+
+Base corner with amount 0 was 222.7 / 234.4 / 234.4 Hz across the three levels —
+independent of envelope level, as it must be if the cord is the only path from
+envelope to filter. That is an internal check the design provides for free.
+
+### Where it stops being a product
+
+    k / level     5.95      4.89      4.34   x 1e-4      (levels 25, 50, 100)
+    spread 32%, and MONOTONIC in level -- not scatter
+
+    ratio at matched amount    L100/L50    L50/L25
+      amount 20                   2.20        2.65
+      amount 40                   1.97        2.06     <- clean product
+      amount 60                   1.74        1.89
+
+At amount 40 both ratios sit within measurement error of exactly 2. Away from
+there they drift the same way in both pairs: **the larger the total shift, the
+less than proportional it becomes.** That is compression as the corner climbs,
+and it is why the level-100 slope is fitted over amounts <= 60 — above that the
+corner reached the top of the measurable band (24 kHz, the analysis Nyquist).
+
+**For a converter this matters more than the constant.** A product law
+extrapolated past roughly three octaves of shift overshoots, and the E4XT clamps
+rather than continuing. Where it saturates is part of the answer, not an
+artefact to design around.
+
+### What it settles for the sibling project
+
+mpc2emu writes `SUSTN2` and `depth` from independent source fields and maps the
+E4B amount as `amount x 50`. Since the E4XT is a product in the same sense the
+AKAI is, that structure is sound and only the constant is in question — the
+one-line fix rather than the redesign. The compression above ~3 octaves applies
+to both machines' models and is the part most likely to be missing from either.
