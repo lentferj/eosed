@@ -291,7 +291,7 @@ def test_filter_type_names_match_sysex_spec_overlay_headers():
 @pytest.mark.parametrize("param_name,value,expected", [
     ("E4_VOICE_VENV_SEG0_RATE", 87, "87 (Atk1 Rate)"),
     ("E4_VOICE_VENV_SEG0_TGTLVL", 50, "50 (Atk1 Level)"),
-    ("E4_VOICE_FENV_SEG3_TGTLVL", 55, "55 (Atk2 Level)"),
+    ("E4_VOICE_FENV_SEG3_TGTLVL", 55, "55 (Dcy2 Level)"),
     ("E4_VOICE_AENV_SEG5_RATE", 12, "12 (Rls2 Rate)"),
 ])
 def test_describe_value_envelope_segments(param_name, value, expected):

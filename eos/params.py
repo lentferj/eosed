@@ -215,7 +215,7 @@ _PARAMS: List[Parameter] = [
     _p(97, "E4_VOICE_FENV_SEG2_RATE", "voice.filter.env", 0, 127, notes="Dcy1 Rate"),
     _p(98, "E4_VOICE_FENV_SEG2_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy1 Level"),
     _p(99, "E4_VOICE_FENV_SEG3_RATE", "voice.filter.env", 0, 127, notes="Dcy2 Rate"),
-    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy2 Level = SUSTAIN"),
+    _p(100, "E4_VOICE_FENV_SEG3_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Dcy2 Level"),
     _p(101, "E4_VOICE_FENV_SEG4_RATE", "voice.filter.env", 0, 127, notes="Rls1 Rate"),
     _p(102, "E4_VOICE_FENV_SEG4_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls1 Level"),
     _p(103, "E4_VOICE_FENV_SEG5_RATE", "voice.filter.env", 0, 127, notes="Rls2 Rate"),
