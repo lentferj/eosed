@@ -3732,6 +3732,36 @@ The countermeasure is not a better threshold. It is that every guard must be
 able to answer *"what would this look like if the thing under test were absent
 entirely?"* — and a peak meter answers that question with a comfortable number.
 
+### A fifth door into the same failure, and an ambiguity it leaves in §41's own result
+
+The sibling project hit this class again the same week, from a direction none of
+the four above covers. A cutoff-calibration bank of eleven presets, one per
+cutoff position, captured with a *verified* noise source, came back identical to
+3-4 significant figures on both RMS and centroid. Nothing was wrong with the
+source, the capture path or the analysis: their writer gates the whole filter
+block on `filter_type` being truthy, 0 in that enumeration means **Off**, and
+the generator had never set the field. The filter was not in the signal chain at
+all. It was caught by walking to the machine and reading the algorithm off the
+panel -- `PITCH NONE AMP` -- not by any amount of scrutiny of the numbers.
+
+**A verified instrument pointed at an inert parameter measures exactly as
+cleanly as one pointed at a live one.** Verifying the source harder cannot
+detect it; only asking whether the thing being swept is actually in the path can.
+
+This project's perturbation check already does that for the *cord* -- run 1's
+pre-flight confirmed depth 0 vs 100 moved the centroid 127 Hz before any contour
+was believed. It does **not** do it per segment, and that leaves §41's own
+headline observation ambiguous:
+
+    "three of six segments are inert on a held note"
+
+An inert segment is exactly what a release stage looks like during a held note.
+It is also exactly what a segment that is not in the signal path looks like. The
+knock-out experiment cannot tell those apart, so the finding constrains less than
+its wording suggests. Re-read it as *"SEG0, SEG4 and SEG5 produced no audible
+effect during a held note, for reasons not established"* until the rate -> time
+calibration makes the traversal readable.
+
 ### The other half: the material, not the machine
 
 Note 81 is unmapped on the AKAI conversion too (keygroups span 24..79), so
