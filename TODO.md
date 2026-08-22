@@ -402,7 +402,25 @@ Vehicle for when it resumes, already surveyed: bank B02 on D0 (6.0 MB) mixes
 1 (31524 Hz) at root MIDI 50; P011 V0 is single-voice, single-zone, playing
 sample 44 (44100 Hz) at root MIDI 60.
 
-## Envelope sustain: the source is eliminated, the 2.58x gap is not (OPEN, 2026-08-18; narrowed 2026-08-22)
+## Envelope sustain: RESOLVED — there was no 2.58x gap (2026-08-18; closed 2026-08-22)
+
+**RESOLVED 2026-08-22 (§45): the two banks agree.** Measured in one session
+through one capture path, ENVSPAN's byte-107 preset gives 0.2045 and SUSLEVEL's
+byte-107 preset gives 0.2031 — 0.69% apart, against a 2-3% take-to-take spread.
+
+**The discrepancy was a mislabelled axis.** The bank has no byte-108 preset; its
+sweep is non-uniform (64 72 80 88 96 100 104 107 110 113 116 118 120 122 124
+127) and had been indexed as though the steps were uniform, so 0.4565 — which
+belongs to byte 116 — was filed under 108 and compared against a correctly
+labelled 107.
+
+**The law is refitted and §39's is superseded:** 0.754 dB/byte, R^2 0.9999 over
+bytes 64-122, against §39's 0.547 dB/byte at R^2 0.980. The old slope is 38% low
+and its scatter was the mislabelling. `env_seconds_to_rate(seconds, span_db)`
+is no longer blocked on an unexplained anomaly; it is blocked only on someone
+writing it against the corrected law.
+
+Original framing follows.
 
 **Status: the SHAPE of the sustain-level law is solid; its ABSOLUTE anchoring is
 not.** §39 fitted `dB below peak = 0.547 x byte - 66.14` (R^2 0.980) over bytes

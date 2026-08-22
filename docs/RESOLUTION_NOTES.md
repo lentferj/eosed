@@ -3542,6 +3542,10 @@ Fitted over bytes 80-116 only — above the floor, below the ceiling, 10 points:
 
     dB below peak = 0.547 x byte - 66.14      R^2 = 0.980
 
+**SUPERSEDED 2026-08-22 — DO NOT USE. The byte labels behind this fit were
+wrong (the bank's sweep is non-uniform and was indexed as if uniform). The
+corrected law is 0.754 dB/byte at R^2 0.9999; see §45.**
+
 That is **0.547 dB per byte, one doubling every 11.0 bytes.** Residuals run
 -1.6 to +1.2 dB, so two significant figures is as much as it will carry.
 
@@ -3994,3 +3998,67 @@ staircase in §41 failed to do and is why that result was withdrawn.
 
 Not verified for the voice and aux envelopes (ids 67-80, 117-128). The same
 ordering is likely and is not measured; their notes are left alone.
+
+---
+
+## §45 — There was never a 2.58x. The banks agree; the byte labels did not (2026-08-22, live)
+
+**ENVSPAN and SUSLEVEL, measured in one session through one capture path, agree
+on the same byte to 0.69%.**
+
+    ENVSPAN  'SPAN LO S20'  sustain byte 107  ->  0.2045   (-13.78 dB)
+    SUSLEVEL 'SUS 107'      sustain byte 107  ->  0.2031   (-13.84 dB)
+
+Against a within-preset take-to-take spread of 2-3%, that is agreement, not
+discrepancy. §39's "bytes one apart cannot differ by 2.58x" was reporting a
+defect in the analysis, not in the machine.
+
+### Where the 2.58x came from
+
+**The bank has no byte-108 preset.** Its sweep is deliberately non-uniform:
+
+    64  72  80  88  96  100  104  107  110  113  116  118  120  122  124  127
+
+The value 0.4565 that §39 attributed to "byte 108" sits at **byte 116**, which
+measures 0.4495 today. A preset index was converted to a byte as though the
+steps were uniform, so every point above the spacing change carried a wrong
+label — and comparing one of those mislabelled points against ENVSPAN's
+correctly-labelled 107 produced a ratio that no physical law could explain.
+
+This is the second time this exact bank has been mis-indexed on the assumption
+of uniform spacing; the first was caught before publication, this one was not.
+
+### The corrected law
+
+Refitted from today's sixteen presets, sustain/peak as amplitude, `20log10`:
+
+    dB below peak = 0.7539 x byte - 94.21      R^2 = 0.9999   (bytes 64-122, n=14)
+    dB below peak = 0.7518 x byte - 94.03      R^2 = 0.9995   (bytes 80-116, n=9)
+
+**0.754 dB per byte, one doubling every ~8.0 bytes.**
+
+§39 published **0.547 dB/byte, R^2 0.980** over 80-116. That slope is 38% low
+and its scatter was the mislabelling, not the hardware: on correct labels the
+same range fits at R^2 0.9995. **§39's law should not be used.**
+
+Bytes 124 and 127 flatten (only 0.88 dB between 124 and full scale) — the
+ceiling clamp §39 correctly identified, and the reason the fit stops at 122.
+The three byte-127 controls read 0.9997, 1.0004 and 1.0003.
+
+### What this does and does not overturn
+
+- **§42 stands entirely.** `sustain/peak` is source-independent; that was
+  measured directly and does not depend on any byte label.
+- **§42's framing was wrong.** It said eliminating the source left "the whole
+  2.58x unexplained". The 2.58x did not exist, so there was nothing left to
+  explain. §42 removed a candidate mechanism for an artefact.
+- **§37's rate work is untouched** — different quantity, different experiment.
+
+### The shape of it
+
+Three measurements today were rigorous about the instrument and pointed at the
+wrong thing (§41's design, the ISO container, §43's prefactor without its span).
+This is the fourth and the cheapest: **the instrument was fine, the specimen was
+fine, and the axis was mislabelled.** A wrong x-value is not detectable by any
+amount of care about y — the machine faithfully reported what byte 107 does,
+twice, and the number was filed under 108.
