@@ -4355,3 +4355,64 @@ Preset names prove the *headers* arrived; they do not prove the samples did. One
 note per bank at C4, measured as lift over each capture's own pre-roll (§41),
 gave +57.3 / +51.9 / +40.6 / +50.3 dB. A listening audit started on a bank whose
 samples failed to load returns silence, and silence looks like a result.
+
+## §49 — Voice edits DO reach the audio, and the Voices page shows them (2026-08-23, live)
+
+Both of these correct limitations this project had recorded as facts. They came
+out of a live parameter fix on a six-voice, two-layer octave-stacked electric
+piano (PC 22 of the comparison bank) whose octave layers had arrived from a
+converter mistuned to +98 cents instead of +12 semitones.
+
+### §34's "a layered voice cannot be muted from here" is wrong
+
+§34 established — correctly, and it stays on the record — that writing
+`E4_PRESET_VOLUME` (id 1) read back perfectly and **did not move the audio by a
+single sample**. From that it concluded that a layered voice cannot be muted
+over the editor protocol to isolate another one.
+
+That generalised one parameter to a class it does not belong to.
+**`E4_GEN_VOLUME` (id 39), the per-voice level, reaches the audio immediately.**
+Setting one voice of a two-voice layer to −96 and capturing, then the other,
+separated the layers cleanly:
+
+    voice A alone   -46.83 dBFS
+    voice B alone   -40.99 dBFS
+
+So **remote layer soloing works**, and any measurement on a multi-voice preset
+can isolate the voice it is actually about. This matters more than it sounds:
+it is the difference between measuring a voice and measuring a mix. Restore the
+muted voice and read the restore back — the mute is a measurement tool, not a
+state anyone should be left holding.
+
+The distinction to carry forward is *preset*-scope versus *voice*-scope
+parameters, not "editor writes reach the audio" versus "they do not". Where a
+given parameter falls has to be tested, not assumed from either §34 or this.
+
+### The Voices page reflects a remote edit live
+
+CLAUDE.md and the spec both say a parameter edit does not appear on the
+device's own LCD until the preset is touched from the front panel, and a TUI
+must therefore track its own state model. On the **Preset Edit → Voices-Main**
+page that is not what happens: the volume/ctune/ftune columns update **as the
+writes land**, with no front-panel interaction at all. Photographed before and
+after — the same page, the same six rows, the values changed.
+
+This does not overturn the general rule, and the general rule is still the safe
+assumption for a UI. It does mean the machine's own display can be used as an
+independent check on what a remote write actually did, on at least one page. An
+operator standing at the rack sees the edit.
+
+### Sanity checks that belong to any live edit like this
+
+- **Read the before-state first.** A relayed diagnosis is a claim about the
+  device, and the device is right there. If the voices do not look the way the
+  report says, the edit is aimed at the wrong thing.
+- **Read every value back afterwards**, and report the read-back rather than
+  what was sent.
+- **A/B the audio**, because §34's case is exactly a write that read back
+  correctly and changed nothing audible.
+- **Watch for a confounded bin.** The octave layer here lands on the unison
+  layer's own second harmonic, so that frequency says nothing about the octave
+  layer's level. Isolating the voices was the only way to get a real number —
+  the mixed reading would have been a plausible wrong answer, §45's shape
+  exactly.
