@@ -4482,3 +4482,58 @@ move and one `F6`.
 And the rule from §47 applies to this trip too: the preset editor is not the
 main preset page, so **Program Change is ignored while you are in there.** Exit
 all the way back before handing the machine over, and confirm by hash.
+
+## §51 — Filter type ids confirmed; and a slope change that was inaudible for a reason (2026-08-23, live)
+
+### `FILTER_TYPE_NAMES` position mapping, confirmed
+
+`eos/params.py` transcribed the 21 filter-type names from the manual and carried
+an explicit caveat that **id == list position was an assumption**, with the check
+that would settle it written into the comment. Done:
+
+    id 0  ->  panel reads "2 Pole Low-pass"
+    id 1  ->  panel reads "4 Pole Low-pass"
+    id 3  ->  behaves as a highpass: fundamental -15.6 dB, 3-6 kHz +12.6 dB
+
+Three of twenty-one, but at both ends of the low run and across a type-family
+boundary, so what is confirmed is the *positional* mapping rather than three
+individual names. The rest stay transcription and the same one-line check
+settles any of them.
+
+### A real defect that was completely inaudible, and the reason matters
+
+A sibling project's AKAI reader never assigns a filter type, so every converted
+voice landed on the 4-pole (24 dB/oct) where the source machine's filter is
+2-pole (12 dB/oct). Genuine, documented mismatch. Setting all six voices of a
+converted preset from 4-pole to 2-pole and measuring:
+
+    body (300-1300 ms)   -0.8 to +0.8 dB in every octave band, every note
+    onset (0-150 ms)     scatter, no pattern
+
+against a prediction that the difference should grow ~12 dB per octave above the
+corner — tens of dB by 6 kHz on a 65 Hz corner. Measured about one.
+
+**The null was not accepted without a control.** §34 is a case on this exact
+device of a write that read back perfectly and never reached the audio, so
+"nothing changed" has two very different explanations. Setting a 2nd-order
+highpass instead moved the fundamental -15.6 dB and 3-6 kHz +12.6 dB: filter type
+writes do reach the sounding voice, and the null is real.
+
+**Why it is null:** the preset's filter envelope amount was saturated, sweeping
+the corner far above the sample's content for most of the note. When the corner
+is above everything present, 12 dB/oct and 24 dB/oct below it sound identical.
+
+The generalisable part is the ordering, and it is a trap worth naming: **two real
+defects where the first masks the second will, if fixed in the wrong order, make
+the wrong fix look like the one that worked.** Here the slope fix is inaudible
+until the envelope amount stops holding the filter open — so fixing the amount
+first, then the slope, is the only order in which either result means anything.
+
+### Also, in passing: the panel is the arbiter of the cutoff law
+
+The converted unison layer was predicted from the sibling's law to sit at 138 Hz.
+The device's Fc/Morph byte is 4 and its own Filter page reads **65 Hz** — a factor
+of about 2.1. Worth recording next to §50's open ~1.9x between two candidate
+envelope-rate laws: two different conversion laws, both out by about two, both at
+the dark/fast end of their range. That may be one shared bug rather than two, and
+is a cheaper thing to look for than either discrepancy alone.

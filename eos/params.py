@@ -690,9 +690,18 @@ FX_AMT_BUS_NAMES: Dict[int, str] = {0: "Main", 1: "Sub 1", 2: "Sub 2", 3: "Sub 3
 # transcribed from the SysEx spec (docs/RESOLUTION_NOTES.md §2) — real
 # corroboration, not just a repeated read of the same source.
 #
-# Still an assumption, not a hardware-confirmed fact: id == list position
-# (0-based). Verify by setting E4_VOICE_FTYPE live and comparing to what the
-# front panel shows, same as the FX algorithm tables above.
+# "id == list position (0-based)" was an ASSUMPTION here until 2026-08-23, when
+# it was checked the way this comment said to check it: set E4_VOICE_FTYPE and
+# read the front panel back (docs/RESOLUTION_NOTES.md §51).
+#
+#   id 0 -> panel shows "2 Pole Low-pass"
+#   id 1 -> panel shows "4 Pole Low-pass"
+#   id 3 -> behaves as a highpass (fundamental -15.6 dB, 3-6 kHz +12.6 dB)
+#
+# Three of twenty-one, at both ends of the low run and across a type-family
+# boundary, which is what makes the position mapping rather than the individual
+# names the thing confirmed. The remaining ids are still transcription; the same
+# one-line check settles any of them.
 FILTER_TYPE_NAMES: Dict[int, str] = {
     0: "2-Pole Lowpass", 1: "4-Pole Lowpass", 2: "6-Pole Lowpass",
     3: "2nd Order Highpass", 4: "4th Order Highpass",
