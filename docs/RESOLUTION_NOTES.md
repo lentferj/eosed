@@ -4745,3 +4745,68 @@ believe than a noisy signal, which is what makes it dangerous.
 
 Related: §41 (a guard that passed thirty captures of silence), §45 (a
 mislabelled axis producing a clean-looking law), §51, §53.
+
+## §55 — The assign group is note allocation, not a mute group (2026-08-23, live)
+
+Asked because a sibling project traced a percussive artefact on an AKAI S3000XL
+to its **keygroup mute group**: one note starts two keygroups and the second
+silences the first, leaving a ~10 ms burst of the first layer. The question was
+whether EOS can express that.
+
+**It cannot.**
+
+### The field exists, and it is not what its name suggests
+
+`E4_VOICE_ASSIGN_GROUP` (id 66, range 0-23) is the only candidate: values 0-14
+are Poly variants, **15-23 are Mono A..I**, nine independent groups. The sibling
+project's own E4B format notes map it to `vpar[27]` and call it a "choke group".
+
+Measured on a two-layer preset whose voices 0 and 1 both sound at one note:
+
+    both voices set to Mono A, single note   ->  +0.13 dB
+    10 ms envelope                           ->  no step anywhere
+
+Both layers keep sounding. There is no choke.
+
+### The control that makes that null mean something
+
+A null about a group setting is worthless until the group is shown to have
+authority (§54). Measured on the noise preset — one voice, flat, no decay of its
+own — with two overlapping notes 600 ms apart:
+
+| assign group | note 1 alone | both held | rise |
+|---|---|---|---|
+| Poly All | −46.2 dB | −43.2 dB | **+2.99 dB** |
+| Mono A | −45.7 dB | −46.4 dB | **−0.68 dB** |
+
++3 dB is two incoherent sources summing, exactly as it should be. Mono A gives
+no rise at all: the second note steals the first. **The group works perfectly —
+it is voice allocation across NOTES.** Two voices under one note are not in
+competition with each other, so a Mono group does not separate them.
+
+### The other candidate, weaker evidence
+
+`E4_VOICE_SOLO` (id 65: Off / Multiple Trigger / Melody last-low-high / Synth
+last-low-high / Fingered Glide) with both voices at Melody(last) changed the
+single-note mix by **+0.23 dB**. No positive control was run on this one, so it
+is "consistent with its documented meaning" — how a single voice retriggers —
+rather than firmly established.
+
+Nothing else in the parameter table is a candidate. `GROUP_SELECT` (id 227) is
+an editing selector, not a routing field.
+
+### Why it is worth writing down
+
+A converter targeting E4B will find a field called a choke group, set it, and
+produce a preset that measures correct and sounds wrong — the same shape as the
+four saturation nulls in §54, arrived at from the opposite direction. **The
+capability is real, the name is apt for what it does, and it does not do this.**
+
+The wider lesson is about where an evening goes: every filter parameter tried
+against that artefact measured correct and sounded insufficient, because the
+mechanism being modelled was not the mechanism producing the sound. Before
+tuning parameters to chase a difference, establish what produces it. A
+capability question answered early would have retired a filter type test, a
+filter envelope decay test, two cord-depth tests and a resonance calibration as
+irrelevant to the symptom — all of which produced good measurements of the wrong
+thing.
