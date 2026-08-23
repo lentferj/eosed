@@ -2947,6 +2947,12 @@ until the preset is touched. Demonstrated rather than quoted: setting
 a single sample. The consequence for any live experiment is sharp — a layered
 voice **cannot** be muted from here to isolate another one.
 
+> **The second sentence is WITHDRAWN; see §49.** The `E4_PRESET_VOLUME`
+> observation above stands and is reproducible. The generalisation from it does
+> not: `E4_GEN_VOLUME` (id 39), the per-*voice* level, reaches the audio
+> immediately, and muting one voice to isolate another works. Test any given
+> parameter rather than inferring its scope from either note.
+
 ### Two small live facts
 
 - `MASTER_AUDITION_KEY` (id 271) is in the spec's parameter table; this E4XT
