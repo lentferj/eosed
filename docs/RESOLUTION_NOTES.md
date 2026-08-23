@@ -4624,3 +4624,65 @@ Two hours after writing §47 up, and `lift_db` caught it where a peak/clip guard
 would not have. **Assert the selection on the device's own screen before
 recording, not after.** The re-run does exactly that and refuses to proceed on a
 hash mismatch.
+
+## §53 — Modulation cords SUM: depth beyond one cord is reachable (2026-08-23, live)
+
+A cord's amount tops out at ±100. That is not the ceiling on how much a
+destination can be modulated: **two cords with the same source and destination
+add, and their sum is indistinguishable from a single cord of the summed
+amount.**
+
+Measured on the single-voice noise preset, 2-pole, Q 0, base cutoff at Fc byte 0
+(~118 Hz measured), each capture divided by a wide-open reference:
+
+| cord 0 | cord 1 | corner | octaves over base |
+|---|---|---|---|
+| 0 | 0 | 111.6 Hz | −0.08 |
+| 37 | 0 | 613.6 Hz | +2.38 |
+| 0 | 37 | 613.6 Hz | +2.38 |
+| 37 | 37 | 2186.5 Hz | +4.21 |
+| **74** | **0** | **2186.5 Hz** | **+4.21** |
+| 37 | 74 | >19 kHz | saturated |
+
+`37 + 37` and `74 + 0` land on the same frequency to the resolution of the
+measurement. The slot used does not matter and the destination does not pick a
+single winner.
+
+So a driver that needs more depth than one cord provides should **allocate a
+second cord** rather than clamping. Nothing about this is specific to
+`FEnv → FilFreq`; it is a property of the modulation summing.
+
+### The trap that made this take three attempts
+
+The first two attempts measured a filter that was **already fully open**, and
+therefore could not distinguish "the cords sum" from "the second cord is
+ignored". A voice with a 2.1 kHz base cutoff reaches past the machine's own
+11.9 kHz output roll-off (§41) at a depth of only 37 units, so 37, 100 and 137
+all sound identical — and reporting that as "they do not sum" would have been a
+false negative with a clean-looking table behind it.
+
+**A saturated instrument cannot report a difference.** The question only became
+answerable by moving it to a low base cutoff where the sum still lands inside
+the audio band. Same family as §51's null and §45's mislabelled axis: the
+measurement was fine, the operating point was wrong.
+
+(The first attempt had a second fault on top: the test note sounded two voices,
+and the untested one was 6 dB louder and swept its own filter wide open at the
+same instant. An in-preset "control" is only a control if the thing being
+measured is audible over it.)
+
+### A consequence worth stating separately
+
+Reaching further does not mean hearing further. On a voice whose corner is
+already past the output roll-off at the smaller depth, the extra octaves land
+entirely outside the audio band and change nothing audible. Depth headroom is
+worth having for correctness; it is not automatically worth having for tone.
+
+### Unresolved, and left as a question rather than a correction
+
+§46 fitted `octaves ≈ 5.14e-4 × level% × amount`, which predicts 1.90 octaves at
+amount 37 and 3.80 at 74. This run measured 2.38 and 4.21 — about 20% more. §46
+was measured on the **4-pole** from a different base cutoff, so base dependence
+and filter-type dependence both fit and neither has been separated. Do not
+re-derive from §46's constant without checking it at the base and type in use,
+and do not treat the 20% here as a correction to it.
