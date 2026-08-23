@@ -4422,3 +4422,63 @@ operator standing at the rack sees the edit.
   layer's level. Isolating the voices was the only way to get a real number —
   the mixed reading would have been a plausible wrong answer, §45's shape
   exactly.
+
+## §50 — The amp envelope's stage order, settled off the machine's own display (2026-08-23, live)
+
+§44 measured the FENV traversal order and said in terms that VENV and AENV were
+**not** verified, keeping the spec's interleaved labels for both. VENV is now
+settled, and the answer is the boring one: **it uses the same order as FENV.**
+
+    SEG0 = Atk1    SEG1 = Atk2    SEG2 = Dcy1
+    SEG3 = Dcy2    SEG4 = Rls1    SEG5 = Rls2
+
+So SEG3's target level is the sustain for the amplitude envelope too, and the
+old labels had "Atk2" sitting on it. `eos/params.py` ids 70-81 corrected.
+
+### How, and why it did not need another audio measurement
+
+§44 cost a day of captures because the question was *what does the hardware do*.
+This one is *what does the hardware call them*, and the machine will simply say:
+**Preset Edit → Voices → `EditVce` → the Amp/Filt page group draws both
+envelopes**, six labelled rate/level pairs and a plot of the resulting shape.
+
+The mapping was NOT read off the page's two-column layout — that layout is
+ambiguous about whether the columns run down or interleave. Each displayed pair
+was matched to the value read back over SysEx for a specific segment id, on a
+preset where the pairs are distinct enough to make the matching unique
+(`Atk2` = 0/100 could only be SEG1; `Dcy2` = 0/96 could only be SEG3). Both
+envelopes were checked independently and agree.
+
+**AENV (ids 117-128) is still unverified** and keeps the old labels. One visit
+to the Lfo/Aux page group settles it the same way.
+
+### The graphical envelope page is a cross-check worth remembering
+
+The page plots the envelope, not just its numbers. For comparing this machine
+against another manufacturer's — which is what prompted the trip — a picture
+sidesteps having to agree on units first, and it caught something the numbers
+had already implied but did not make obvious: a decay stage with a **high** rate
+byte (87, and higher is slower here) that travels only from level 100 to level
+96. The slowest stage in the envelope is also completely inaudible. Read as
+numbers that looks like a long decay; drawn, it is a flat line.
+
+That is worth stating as a general caution, because it is the same trap as
+§41's: **a rate byte is a time constant, and the elapsed time depends on the
+distance the segment has to travel.** Neither number means anything alone.
+
+### Panel navigation, for the next person
+
+    PRESET_EDIT (5Ah)        -> Voices-Main, one row per voice
+    CURSOR_UP / CURSOR_DOWN  -> choose the voice row (rows scroll past 4)
+    F6                       -> EditVce, entering that voice's editor
+    PAGE_PREV / PAGE_NEXT    -> within the Amp/Filt group:
+                                Amp Envelope | Filter | Filter Envelope
+    PAGE_EXIT (5Eh)          -> back to Voices-Main; twice to the preset page
+
+The voice editor **remembers the last page visited**, so stepping voice to voice
+lands on the same page each time and the per-voice cost is one exit, one cursor
+move and one `F6`.
+
+And the rule from §47 applies to this trip too: the preset editor is not the
+main preset page, so **Program Change is ignored while you are in there.** Exit
+all the way back before handing the machine over, and confirm by hash.

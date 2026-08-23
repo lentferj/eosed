@@ -154,16 +154,24 @@ _PARAMS: List[Parameter] = [
     # -- VOICE: amplifier (ids 68-81) -----------------------------------------
     _p(68, "E4_VOICE_VOLENV_DEPTH", "voice.amp", 0, 16, notes="-96dB to -48dB by 3's"),
     _p(69, "E4_VOICE_SUBMIX", "voice.amp", -1, 3, notes="see SUBMIX_LABELS; 4-7 with Octopus card"),
+    # STAGE NAMES CORRECTED 2026-08-23, read off the machine's own Amp Envelope
+    # page (docs/RESOLUTION_NOTES.md §50). §44 measured this ordering for FENV
+    # and explicitly left VENV unverified with the old interleaved labels; the
+    # panel settles it -- VENV uses the SAME order as FENV. The mapping is not
+    # inferred from the page layout but from matching each displayed pair to the
+    # value read back over SysEx for that segment id, with every pair distinct.
+    # So SEG3's target level is the SUSTAIN here too, and the old labels put
+    # "Atk2" on it.
     _p(70, "E4_VOICE_VENV_SEG0_RATE", "voice.amp.env", 0, 127, notes="Atk1 Rate"),
     _p(71, "E4_VOICE_VENV_SEG0_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Atk1 Level"),
-    _p(72, "E4_VOICE_VENV_SEG1_RATE", "voice.amp.env", 0, 127, notes="Dcy1 Rate"),
-    _p(73, "E4_VOICE_VENV_SEG1_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Dcy1 Level"),
-    _p(74, "E4_VOICE_VENV_SEG2_RATE", "voice.amp.env", 0, 127, notes="Rls1 Rate"),
-    _p(75, "E4_VOICE_VENV_SEG2_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Rls1 Level"),
-    _p(76, "E4_VOICE_VENV_SEG3_RATE", "voice.amp.env", 0, 127, notes="Atk2 Rate"),
-    _p(77, "E4_VOICE_VENV_SEG3_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Atk2 Level"),
-    _p(78, "E4_VOICE_VENV_SEG4_RATE", "voice.amp.env", 0, 127, notes="Dcy2 Rate"),
-    _p(79, "E4_VOICE_VENV_SEG4_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Dcy2 Level"),
+    _p(72, "E4_VOICE_VENV_SEG1_RATE", "voice.amp.env", 0, 127, notes="Atk2 Rate"),
+    _p(73, "E4_VOICE_VENV_SEG1_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Atk2 Level"),
+    _p(74, "E4_VOICE_VENV_SEG2_RATE", "voice.amp.env", 0, 127, notes="Dcy1 Rate"),
+    _p(75, "E4_VOICE_VENV_SEG2_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Dcy1 Level"),
+    _p(76, "E4_VOICE_VENV_SEG3_RATE", "voice.amp.env", 0, 127, notes="Dcy2 Rate"),
+    _p(77, "E4_VOICE_VENV_SEG3_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Dcy2 Level"),
+    _p(78, "E4_VOICE_VENV_SEG4_RATE", "voice.amp.env", 0, 127, notes="Rls1 Rate"),
+    _p(79, "E4_VOICE_VENV_SEG4_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Rls1 Level"),
     _p(80, "E4_VOICE_VENV_SEG5_RATE", "voice.amp.env", 0, 127, notes="Rls2 Rate"),
     _p(81, "E4_VOICE_VENV_SEG5_TGTLVL", "voice.amp.env", 0, 100, unit="%", notes="Rls2 Level"),
 
@@ -206,8 +214,11 @@ _PARAMS: List[Parameter] = [
     # each stage has a distinct duration (§43's rate law), and confirmed by
     # inverting every level: the held portion followed SEG3's target from dark
     # to bright.
-    # NOT verified for the VOICE and AUX envelopes (ids 67-80, 117-128), which
-    # keep the old note text -- the same ordering is likely and is not measured.
+    # The VOICE (amp) envelope was confirmed to use this same ordering on
+    # 2026-08-23 off the device's own Amp Envelope page (§50); see ids 70-81.
+    # The AUX envelope (ids 117-128) is STILL UNVERIFIED and keeps the old note
+    # text -- the same ordering is likely, and one visit to the panel's Aux
+    # Envelope page would settle it the way VENV was settled.
     _p(93, "E4_VOICE_FENV_SEG0_RATE", "voice.filter.env", 0, 127, notes="Atk1 Rate"),
     _p(94, "E4_VOICE_FENV_SEG0_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Atk1 Level"),
     _p(95, "E4_VOICE_FENV_SEG1_RATE", "voice.filter.env", 0, 127, notes="Atk2 Rate"),
