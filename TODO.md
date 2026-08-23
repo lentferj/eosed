@@ -1371,3 +1371,28 @@ landed on an implausible result. Cross-check against
 `../mpc2emu/docs/E4B_FORMAT.md`'s independently RE'd structure, or against
 the NEW-format dump (whose header states per-section parameter counts
 explicitly) once that path is live-verified.
+
+## Two clients on one port: replies land in the wrong queue (OPEN, 2026-08-23)
+
+**Status:** observed live, not yet handled in code.
+
+With the eosed TUI running and a second client (a probe script) on the same
+`ESI M4U eX` ports, a `get_parameter` came back raising
+`ValueError: reply did not include parameter 223` — the frame in the queue was
+a reply to the *other* client's request. ALSA delivers the device's replies to
+every subscriber, so both clients see both conversations.
+
+This is not a device fault and not a bug in the request/reply framing. It is
+that `EosBridge._receive` takes the next frame and `get_parameter` then insists
+that frame answers *its* question. `get_parameters` already tolerates it —
+it matches ids and keeps receiving until every requested id has been seen —
+so the fix is to make the single-parameter path behave like the plural one:
+keep reading until the requested id arrives or the timeout expires, discarding
+frames that answer something else, rather than failing on the first mismatch.
+
+Worth doing regardless of multi-client use: it is the same shape as any
+unsolicited or late frame arriving mid-conversation.
+
+**Workaround meanwhile,** and it is the hardware rule anyway: one client at a
+time. A probe that must run alongside the TUI should confirm its selector
+before trusting any read, and retry on mismatch.
