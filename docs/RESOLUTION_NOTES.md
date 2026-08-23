@@ -4537,3 +4537,90 @@ of about 2.1. Worth recording next to §50's open ~1.9x between two candidate
 envelope-rate laws: two different conversion laws, both out by about two, both at
 the dark/fast end of their range. That may be one shared bug rather than two, and
 is a cheaper thing to look for than either discrepancy alone.
+
+## §52 — The filter, measured: id 84 is Q, the panel's Hz is not the corner, and both resonances clamp at 112 (2026-08-23, live)
+
+A calibration run on a white-noise preset — flat, non-decaying, played at its
+root key so nothing is resampled — with every capture divided by a wide-open
+reference so the sampler's own output roll-off comes out of the answer (§41).
+
+### `E4_VOICE_FKEY_XFORM` (id 84) is the resonance control
+
+The spec's name for id 84 is "meaning varies by filter type", and nothing in
+this project or the sibling's file layout named it. Ids 85-92, the ones labelled
+"filter-type dependent", move the panel's `Q` field **not at all**. Id 84 does,
+and the panel prints it 1:1 — set 46, panel reads 46, over the whole 0..127.
+
+So on the lowpass types **id 84 is Q**. Identified the same way §51 settled the
+filter-type ids: set it, look at the machine, put it back.
+
+### The panel's printed cutoff is NOT the corner, and is wrong at the dark end
+
+| Fc byte | panel prints | measured −3 dB | slope |
+|---|---|---|---|
+| 0 | 57 Hz | 118 Hz | −12.7 |
+| 4 | 65 Hz | 129 Hz | −12.9 |
+| 15 | 87 Hz | 182 Hz | −12.8 |
+| 32 | 135 Hz | 237 Hz | −12.7 |
+| 64 | 294 Hz | 398 Hz | −12.6 |
+| 100 | 669 Hz | 689 Hz | −12.3 |
+
+The panel is out by **2.0-2.1x at the bottom**, converging to agreement by byte
+100. Look at what it prints down there: 57, 59, 61, 63, 65, 67, 69 — **linear,
+2 Hz per byte** — while the real corner is exponential throughout. The display
+is wrong, not the filter.
+
+This is a trap with an innocent appearance: anyone calibrating a conversion law
+by reading the machine's own screen inherits a factor of two at the dark end and
+nothing at the bright end, which is far harder to spot than a constant error.
+**Measure the corner; do not read it off the panel.** It also cost this project
+a wrong claim to a sibling — a converter law was reported as "2.1x too dark" on
+the strength of a panel reading, and was in fact correct to 7%.
+
+**The slope column is the trust boundary.** It holds −12.7/−12.8 through byte 64
+and degrades to −7.7 by byte 220 — that is the fit running out of spectrum above
+the corner, not the filter changing. Points above byte ~120 are not usable.
+
+12 dB/oct confirmed for the 2-pole; the 4-pole measured −20 to −24 dB/oct, and
+its corner sits 10-20% below the 2-pole's for the same byte.
+
+### Resonance: one calibration covers both filter types, and both clamp at 112
+
+Peak height above the passband, corner parked at ~1300 Hz:
+
+    byte     0    16    32    48    64    80    96   108   112   127
+    2-pole +0.1  +1.4  +3.8  +6.1  +9.2 +11.9 +14.4 +15.5 +17.8 +17.8
+    4-pole +0.1              +18.3       +28.7 +31.1 +35.5 +35.5
+
+**The 4-pole's peak in dB is exactly twice the 2-pole's at the same byte** —
+ratio 2.00, 2.00, 2.00, 1.99, 1.99 at every point measured. That is what
+cascading two identical sections does, and it means one measured curve times
+`poles/2` covers the family. No per-type calibration matrix is needed.
+
+**Both types clamp at byte 112.** Everything from 112 to 127 measures the same
+filter, flat within noise, while the panel goes on printing the number set. A
+writer that clamps its own output to 127 is silently writing 112, and fifteen
+steps of range do not exist.
+
+**No self-oscillation anywhere**, including a +35 dB peak at the top of the
+4-pole. Checked rather than assumed: a filter ringing on its own puts energy in
+the capture *before* the note is sent, so every point recorded its pre-roll
+level. All sat at −85 to −86 dBFS.
+
+Converting through the 2-pole relation `|H|peak/|H|0 = Q/sqrt(1 - 1/(4Q^2))`,
+**the 2-pole tops out at Q ≈ 7.8**. Anything asking for more gets the ceiling,
+and two different requested values above it become the same filter.
+
+### And the §47 trap again, in this project's own run
+
+The resonance A/B on a second preset captured six files of silence: the panel
+was still parked in the noise preset's filter editor from this calibration,
+Program Change is ignored there, so every note went to the wrong preset and
+landed outside its zones. The parameter writes were unaffected — they address
+the edit context, not the sounding preset, and read back correctly — but the
+audio was of something else entirely.
+
+Two hours after writing §47 up, and `lift_db` caught it where a peak/clip guard
+would not have. **Assert the selection on the device's own screen before
+recording, not after.** The re-run does exactly that and refuses to proceed on a
+hash mismatch.

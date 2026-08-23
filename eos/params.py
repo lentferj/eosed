@@ -184,7 +184,17 @@ _PARAMS: List[Parameter] = [
     # reading against an unfamiliar filter type.
     _p(82, "E4_VOICE_FTYPE", "voice.filter", 0, 255, notes="max is filter-type dependent ('variable' in spec)"),
     _p(83, "E4_VOICE_FMORPH", "voice.filter", 0, 255, notes="Fc/Morph"),
-    _p(84, "E4_VOICE_FKEY_XFORM", "voice.filter", 0, 127, notes="meaning varies by filter type"),
+    # id 84 IS RESONANCE (Q) on the lowpass types -- measured 2026-08-23, §52.
+    # The spec's "meaning varies by filter type" is literally true and useless;
+    # ids 85-92, the ones labelled filter-type dependent, move the panel's Q
+    # field not at all, and id 84 drives it 1:1 (set 46, panel reads 46). Peak
+    # height rises to a CLAMP at byte 112 -- 112..127 are the same filter on
+    # both the 2- and 4-pole -- so the usable range is 0..112, not 0..127.
+    # Name kept as transcribed: it is the spec's, and on a morphing filter type
+    # this id may well be a key transform. Do not assume either meaning without
+    # checking the panel for the type in use.
+    _p(84, "E4_VOICE_FKEY_XFORM", "voice.filter", 0, 127,
+       notes="Q/resonance on lowpass types (measured, §52); clamps at 112"),
     _p(85, "E4_VOICE_FILT_GEN_PARM1", "voice.filter", 0, 255, notes="reserved for future expansion"),
     _p(86, "E4_VOICE_FILT_GEN_PARM2", "voice.filter", 0, 255, notes="reserved for future expansion"),
     _p(87, "E4_VOICE_FILT_GEN_PARM3", "voice.filter", 0, 255, notes="filter-type dependent; see notes above"),
