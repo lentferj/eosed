@@ -4678,11 +4678,70 @@ already past the output roll-off at the smaller depth, the extra octaves land
 entirely outside the audio band and change nothing audible. Depth headroom is
 worth having for correctness; it is not automatically worth having for tone.
 
-### Unresolved, and left as a question rather than a correction
+### §46's depth constant does not survive contact with this base, and the replacement is not known either
 
-§46 fitted `octaves ≈ 5.14e-4 × level% × amount`, which predicts 1.90 octaves at
-amount 37 and 3.80 at 74. This run measured 2.38 and 4.21 — about 20% more. §46
-was measured on the **4-pole** from a different base cutoff, so base dependence
-and filter-type dependence both fit and neither has been separated. Do not
-re-derive from §46's constant without checking it at the base and type in use,
-and do not treat the 20% here as a correction to it.
+§46 fitted `octaves ≈ 5.14e-4 × level% × amount` on the **4-pole** from a
+different base cutoff. Against the 2-pole from Fc byte 0:
+
+| amount | §46 predicts | measured | oct per unit |
+|---|---|---|---|
+| 37 | 1.90 oct | **2.38 oct** (614 Hz) | 0.0643 |
+| 74 | 3.80 oct | **4.21 oct** (2187 Hz) | 0.0569 |
+| 100 | 5.14 oct | **>7.38 oct** (>19.6 kHz) | — |
+
+The first two points alone would say "about 20% more, and slightly compressive".
+They also extrapolate to 5.69 octaves at amount 100 — about 6 kHz — and the
+machine delivers **more than 19 kHz**. So the relation is superlinear near the
+top, or something else changes above ~74, and two clean points plus a lower
+bound cannot distinguish those.
+
+**Use none of the three numbers.** Not §46's 5.14, not the 0.057 oct/unit these
+points suggest, and not 7.38 except as a lower bound. A real depth law needs its
+own run at a base low enough that amount 100 still lands inside the audio band —
+and byte 0 *is* the bottom of the cutoff range, so that run needs a different
+approach rather than more points.
+
+The practical consequence is the useful part: **one cord at full depth already
+clears the audio band from a ~120 Hz base.** Any voice sitting that dark is
+saturated at a single cord, and no amount of extra depth is audible on it.
+
+## §54 — A saturated instrument cannot report a difference (2026-08-23)
+
+Not a new measurement. A rule, promoted out of §51 and §53 because it caused
+**four** null results in one evening, in four different guises, and each time the
+null looked like a clean answer:
+
+1. **Filter slope.** 4-pole to 2-pole moved the audio ~1 dB where the argument
+   predicted tens. The filter envelope held the corner above the sample's
+   content, so both slopes passed everything (§51).
+2. **Filter envelope decay.** Halving the decay time changed nothing, for the
+   same reason: after the corner is up, how fast it got there is invisible.
+3. **A second modulation cord, on a bright voice.** From a 2.1 kHz base, depth
+   37 already clears the machine's 11.9 kHz output roll-off, so 37, 100 and 137
+   are one sound (§53).
+4. **The same cord test on the dark voices**, chosen precisely because 129 Hz
+   looked unsaturated. It is not: one cord at full depth reaches past 19 kHz
+   from that base, which the noise table already said and nobody applied.
+
+The shape is always the same. **A control that is already at its limit produces
+a flat, confident, meaningless null** — and a flat null is much easier to
+believe than a noisy signal, which is what makes it dangerous.
+
+### What to do about it
+
+- **Before running an A/B, ask what the control's range is at this operating
+  point.** Not its range in principle: at the base cutoff, envelope depth and
+  filter type actually in use.
+- **Prove the control has authority before trusting a null.** §51's highpass
+  probe is the pattern: ask the parameter for something that *cannot* sound the
+  same, and confirm it does. A null without that step cannot distinguish "no
+  effect" from "no effect reached the audio".
+- **Move the operating point rather than adding points.** §53's question only
+  became answerable at a base cutoff low enough that the answer landed inside
+  the audio band. More repetitions at a saturated point buy nothing.
+- **When the prediction and the measurement disagree, check whether the
+  measurement had room to agree.** Three of the four above were predicted by
+  numbers already in this file.
+
+Related: §41 (a guard that passed thirty captures of silence), §45 (a
+mislabelled axis producing a clean-looking law), §51, §53.
