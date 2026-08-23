@@ -4784,16 +4784,57 @@ no rise at all: the second note steals the first. **The group works perfectly �
 it is voice allocation across NOTES.** Two voices under one note are not in
 competition with each other, so a Mono group does not separate them.
 
-### The other candidate, weaker evidence
+### Solo Mode, and the two combined — also null, also controlled
 
 `E4_VOICE_SOLO` (id 65: Off / Multiple Trigger / Melody last-low-high / Synth
-last-low-high / Fingered Glide) with both voices at Melody(last) changed the
-single-note mix by **+0.23 dB**. No positive control was run on this one, so it
-is "consistent with its documented meaning" — how a single voice retriggers —
-rather than firmly established.
+last-low-high / Fingered Glide) was tested the same way, alone and stacked on
+Mono A. Single note, both voices, median level against the untouched baseline:
+
+| setting | 50 ms – 1.0 s | first 100 ms |
+|---|---|---|
+| Multiple Trigger | +0.50 dB | −0.42 dB |
+| Multiple Trigger + Mono A | +0.57 dB | −0.06 dB |
+| Synth (last) + Mono A | +0.54 dB | +0.33 dB |
+
+The ~+0.5 dB is common to cases sharing no setting, so it is capture variation.
+Both layers keep sounding in all three.
+
+And both solo modes carry their own control, on the noise preset, two
+overlapping notes:
+
+    Solo Off          rise when the 2nd note joins   +3.07 dB
+    Multiple Trigger  rise                           -0.52 dB   steals
+    Synth (last)      rise                           +0.09 dB   steals
+
+They do exactly what the manual says — stop a second NOTE sounding — and have no
+opinion about two voices allocated by one note-on.
 
 Nothing else in the parameter table is a candidate. `GROUP_SELECT` (id 227) is
 an editing selector, not a routing field.
+
+### The manual says why, and it matches
+
+EOS 4.0 p340, Assign Group: *"assign a certain number of output CHANNELS to each
+voice… Voices will ROTATE WITHIN THEIR ASSIGNED BIN of channels… Mono A-I: Nine
+monophonic channels. Any voices assigned to the same letter interrupt each
+other"*, with the example of *"an open high hat… cancelled by a closed high
+hat"* — two different keys. p338, Solo Mode: *"prevents more than one NOTE from
+sounding at once"*.
+
+**Both mechanisms key off a new note-on contending for something.** One note-on
+that starts two voices creates no contention at either level, so neither fires.
+That is precisely why "any voices assigned to the same letter interrupt each
+other" reads as though it should apply here, and does not — and why the
+widely-given advice to pair Solo Mode with Assign Group is correct for the
+hi-hat case and irrelevant to this one.
+
+### How firmly this is closed
+
+Three legs: the assign group measured with a control, both solo modes measured
+with controls both alone and combined, and the manual describing both purely in
+terms of notes. What is **not** claimed is that nothing in EOS can do it — two
+fields were tested and two manual sections read, which is not an exhaustive
+search of the format.
 
 ### Why it is worth writing down
 
