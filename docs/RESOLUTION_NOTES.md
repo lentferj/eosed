@@ -4273,3 +4273,85 @@ which cost the sibling project a measurement round and a debugging round.
 A machine can be correct, loaded, and answering, and still be incapable of the
 measurement about to be taken on it. "Ready" is a claim about the *page*, not
 only about the contents of RAM.
+
+## §48 — A load path that cannot fall into the page trap, and what a power cycle leaves behind (2026-08-23, live)
+
+Staging the same four-bank comparison a second time, this time from cold. Both
+findings below are about *routes and state*, not about the protocol.
+
+### `Load...` is on the main preset page, and it comes back by itself
+
+§34 reached the disk subsystem through `DISK_BROWSE` (`5Dh`), which is what left
+the machine on the browser's BANK page and produced §47's handover failure.
+There is a second route, and it is strictly better for anything scripted.
+
+**`F4` on the main preset page opens a compact LOAD dialog** — three fields and
+three soft keys, no browser involved:
+
+    +--------------------------------------------------+
+    | L |  Drive : D2 <volume>                          |
+    | O |  Folder: F000 <folder>                        |
+    | A |  Bank  : B001 <bank>                          |
+    | D |                                               |
+    +--------------------------------------------------+
+      Cancel (F1)            Merge (F4)          Load (F6)
+
+- Cursor up/down moves between the three fields; `INC`/`DEC` steps the value.
+- Changing **Drive** re-points **Bank** to that volume's `B000` automatically,
+  so a wrong-volume load takes a deliberate mistake rather than an oversight.
+- `Merge` is offered here as a *button*, not as the confirmation dialog of §47.
+  Both exist; they are different screens.
+- **On completion the device returns to the main preset page on its own.** That
+  is the whole value of this path: the operator never stands on a page that
+  ignores Program Change, so §47's trap cannot arise. The screen hash after each
+  of four consecutive loads was the preset page's, every time.
+
+Drive and Bank persist between openings of the dialog, so merging N banks off one
+volume is `F4`, `INC`, `F4` per bank after the first.
+
+### RAM does not survive a power cycle — and the machine says so honestly
+
+The E4XT was powered down with four banks resident and 120.7 MB free. It came
+back with **nothing**: `Untitled Bank`, `P000 Untitled Preset`, 128.0 MB free.
+
+Worth recording as a *negative* alongside a sibling machine's behaviour: the
+K2000 in the same rack comes back holding program headers whose sample RAM has
+emptied, so a glance at its display suggests a loaded instrument that cannot
+sound. The E4XT has no such intermediate state. Empty is empty, and it is
+visible on the first screen.
+
+### The empty-RAM placeholder is a real off-by-one hazard
+
+That placeholder `P000` is the reason bank 1 went in with **Load** rather than
+**Merge** here. Merging into empty RAM risks appending *after* the placeholder
+and shifting every subsequent bank's base by one — which would not fail, it
+would silently renumber a comparison whose whole point is that PC number N means
+source N. Load destroys nothing when there is nothing resident, and reproduces
+the documented layout.
+
+Either way the check is the same one §47 already demands, and it is the only
+thing that actually settles it: **read the preset names back off the device and
+confirm where each bank starts.** Four banks of 10/12/6/6 landed at 0-9, 10-21,
+22-27, 28-33 with 34+ still empty, and the preset-page screen hashes for two
+spot-checked slots matched 2026-08-22's recorded values byte for byte.
+
+### A merged bank keeps the first-loaded bank's name, over all of it
+
+The title line at the top of the preset page shows **`MXORIGE4`** — the name of
+the bank loaded *first* — above all 34 presets, including the 24 that came from
+the three banks merged in after it. There is no per-preset indication of which
+bank a preset arrived from.
+
+So in a merged bank the title line is not an attribution. Anyone reading a
+result off the screen mid-session would attribute every preset to the first
+bank, and be wrong for 71% of them. **The PC number is the only thing that
+identifies the source**, which is why the range table above is the artefact that
+matters. This is the more expensive of the two findings here: the load path is a
+convenience, this one silently mislabels data.
+
+### One more guard worth the fifteen seconds
+
+Preset names prove the *headers* arrived; they do not prove the samples did. One
+note per bank at C4, measured as lift over each capture's own pre-roll (§41),
+gave +57.3 / +51.9 / +40.6 / +50.3 dB. A listening audit started on a bank whose
+samples failed to load returns silence, and silence looks like a result.
