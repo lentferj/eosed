@@ -4851,3 +4851,86 @@ capability question answered early would have retired a filter type test, a
 filter envelope decay test, two cord-depth tests and a resonance calibration as
 irrelevant to the symptom — all of which produced good measurements of the wrong
 thing.
+
+## §56 — The FEnv→FilFreq depth law: linear in cutoff BYTES, not octaves (2026-08-24, live)
+
+57 points on the noise preset, 2-pole, Q 0, envelope parked at level 100 so the
+cord amount is the only variable, every corner divided by a wide-open reference
+taken at that same base.
+
+### The law
+
+    delta_byte = 0.02506 × level_percent × amount
+
+41 unsaturated points across five base cutoffs, residual RMS **2.1 bytes**. At
+level 100 that is `delta_byte = 2.506 × amount`; fitted with a free intercept it
+comes out `2.5318 × amount − 1.53`, so the origin sits where it should.
+
+**The cord adds a fixed number of cutoff BYTES.** Not octaves, not Hz.
+
+### The base-dependence question, answered
+
+| base byte | slope | points |
+|---|---|---|
+| 0 | 2.5101 byte/unit | 19 |
+| 12 | 2.5179 | 7 |
+| 32 | 2.5094 | 6 |
+| 64 | 2.4536 | 5 |
+| 100 | 2.4486 | 4 |
+
+**It does not depend on the base.** Five bases agree to about 2.5%, and the two
+low ones have the fewest points and the highest corners, where inverting
+byte↔Hz is least reliable.
+
+In *octaves* the same data looks strongly base-dependent — 0.0917 oct/unit from
+byte 0 against 0.0542 from byte 100, a factor of 1.7 — and every bit of that is
+an artefact of the byte→Hz curve not being a pure exponential. Picking the wrong
+unit turned a constant into a function of the base.
+
+### Level and amount really are a product
+
+Four envelope levels at amount 60, base byte 0, converted back to bytes:
+
+    level  25 -> byte  38.9      level  75 -> byte 109.1
+    level  50 -> byte  74.7      level 100 -> byte 147.8
+
+1.4754 byte per level-unit through the origin, i.e. 2.459 byte per amount-unit
+at level 100 — matching the amount sweep's 2.506 to 2%.
+
+### Saturation is the cutoff range, not the cord
+
+Every saturated point predicts `base_byte + 2.506 × amount ≥ 250.3`; every
+unsaturated one predicts `≤ 238.1`. No overlap. The cord is not clamping —
+the cutoff byte is running out of range at 255.
+
+**One cord at full depth is worth 250.6 bytes of a 0..255 range**, so it spans
+essentially the whole cutoff range from any base, and overflow to a second cord
+(§53) does not arise for this destination. It remains real for others.
+
+### Why this matters beyond the number
+
+A sibling converter shipped `octaves = 5.14e-4 × level% × amount` — the right
+*form*, a clean product, in the wrong *unit*. Three voices of one preset needed
+cord amounts of 32, 15 and 39 to put their corners in the same place, which
+looked like evidence that the law was base-dependent and unpredictable. Through
+this law those three land on bytes 215, 217 and 217: one constant, three bases.
+
+Those three amounts were chosen earlier the same night by direct measurement,
+with no law involved. That they collapse onto one byte offset is the strongest
+check available here — the calibration reproduces what independent measurement
+already picked.
+
+**The inverse, which is the thing to put in code:**
+
+    amount = clamp(round((target_byte − base_byte) / 2.506), 0, 100)
+
+with `target_byte` from §52's cutoff calibration — *not* from the panel's
+printed Hz, which is wrong at the dark end.
+
+### A limitation of the method, recorded because it was asked for
+
+The two-independent-readings discipline of §52 could not be applied here. The
+panel's Filter page shows the **static Fc parameter**, not the modulated corner,
+so it prints the same value at every cord amount. It is a real second reading
+for each base and was recorded that way, but nothing on the machine displays the
+quantity this section calibrates.
