@@ -4934,3 +4934,30 @@ panel's Filter page shows the **static Fc parameter**, not the modulated corner,
 so it prints the same value at every cord amount. It is a real second reading
 for each base and was recorded that way, but nothing on the machine displays the
 quantity this section calibrates.
+
+### Independently refitted, and what the disagreement showed
+
+The sibling project refitted the same 57 raw points from scratch — doing the
+Hz→byte inversion themselves in log-Hz rather than reusing the converted
+numbers — and got **2.480 against 2.506, agreeing to 1.0%**. Per-base slopes
+2.334 / 2.554 / 2.519 / 2.384 / 2.441: base-independence confirmed by both fits.
+
+The interesting part is where the two fits *disagreed*. Their residual RMS was
+**23.7 bytes against 2.1**, because they extrapolated the byte↔Hz curve above
+byte 100 — past the trust boundary §52 draws from the measured slope column.
+Inside the boundary the fits agree; outside it, the same data turns to noise.
+That is the boundary earning its keep, and it is a better argument for stating
+one than any amount of prose about it.
+
+### The AKAI end, for the record
+
+Measured in parallel by a third project on the same kind of source: the AKAI's
+depth is linear at 0.002612 octaves per `SUSTN2 × depth`, and **its corner has a
+hard ceiling at 7.86 kHz** (eight points, two bases, 1.6% spread).
+
+That closes the account of the whole evening. The converter's old constant asked
+for a corner past 19 kHz; the source machine parks at 7.86 kHz. Every filter
+parameter tried against the symptom measured correct and sounded insufficient
+because the corner was already above everything the material contained — §54's
+saturation rule, arrived at from the other end and confirmed on the source
+machine rather than on this one.
