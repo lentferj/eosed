@@ -5740,3 +5740,89 @@ The next step belongs to the writer, not to the machine: check bit 3 of the
 `options` word on the mid- and high-keygroup samples of the converted bank
 against the low-keygroup ones. If it is set on all of them, the flag is not
 sufficient and the loop points themselves are the next place to look.
+
+## §66 — The machine was playing an older copy of the samples, and it took two of them with the same name to see it (2026-08-24, live)
+
+§65 ended by asking the sibling project to check bit 3 of the `options` word on
+the mid- and high-keygroup samples of the converted bank. It did: **the bit is
+set on all sixteen samples in the file.** So the flag was not the thing that was
+missing, and the next place to look was the machine.
+
+**Read off the panel** — `Sample Edit` → `Tools1` (F2) → `LpType` (F2):
+
+| sample | used by | length | Loop type | Loop in release |
+|---|---|---|---|---|
+| S021 | voice 3 / voice 5's neighbours | 1.19 s | on | **off** |
+| S026 | voice 4 (high keygroup) | 0.86 s | on | **off** |
+| S054 | voice 1 (low keygroup) | 1.19 s | on | **on** |
+
+**S021 and S054 carry the same name and the same length.** They are two copies
+of one sample sitting in RAM at once — an older one and a newer one — and only
+the newer one has the flag.
+
+And the preset's voices are split across them. Voice→sample, read three times
+per voice with the voice reselected each round because the whole reading turns
+on one surprising number:
+
+    v0 24   v1 54   v2 25   v3 22   v4 26   v5 23
+
+**Five voices point into the old copy. One points at the new one — and it is
+the only voice that releases.** That is the entire result of §65 restated with
+its cause attached: the mid and high keygroups do not fail to release because
+of anything the converter wrote, but because the machine is not playing what
+the converter wrote. The file on the card is correct.
+
+### Why this is proof and not another correlation
+
+Two samples with **the same name and the same length** read differently in the
+same dialog, minutes apart, on the same page. That is the parity check the
+dialog needed: it tracks the selected sample rather than showing one global
+value, which could not be told from a single reading, and it is the reason to
+believe both the `off`s and the `on`.
+
+It also settles the two questions §65 left open, in the opposite direction from
+the one it feared:
+
+- **The panel field is real and honoured.** A sample with the flag on releases
+  under envelope control — slowing its release rate from 69 to 110 stretched an
+  850 ms fall past 1.5 s (§65). A sample with it off stops within ~100 ms and
+  the rate does nothing.
+- **Bit 3 stands.** §64's identification was never in trouble. The converter set
+  it on all sixteen and the copy the machine loaded from that file reads `on`.
+
+**And §65's self-criticism was right about the fact and wrong about the
+reason.** "I measured the sample that already worked" was true — but what made
+it work was not that it was a luckier member of the same set. It was a
+different copy of the file, loaded at a different time. The tail lengths that
+looked like the mechanism (12 ms where a release exists, 2 ms where it does
+not) are a correlation with which copy is which, and they never could have been
+the mechanism: 12 ms of data past the loop cannot produce an 850 ms fall, still
+less one that stretches past 1.5 s when the envelope is slowed. *A quantity
+three orders of magnitude too small to explain the effect is not the cause of
+it, however cleanly it splits the table.*
+
+### What this costs the listening test
+
+Jan's A/B verdict — lower octaves near perfect, release too short and the
+attack click too weak higher up — was taken on a preset **five voices of which
+were stale**. The one keygroup he called near perfect is the one voice playing
+the current sample. The verdict is sound as a description of what came out of
+the speakers and cannot be used to grade the converter, because the converter's
+output was only a sixth of what was sounding.
+
+The fix is not in the converter. It is to clear RAM and load the bank once,
+into a machine with no older copy of it resident, and re-run the audit.
+
+### Panel notes, recorded because each cost a round trip
+
+- `Sample Edit` opens on the last sample touched. `PAGE_NEXT` / `PAGE_PREV`
+  step one sample at a time and the header shows the neighbours, which makes
+  the walk self-checking. **Typing a sample number on the keypad and pressing
+  ENTER does not select it** — the page returned to the sample it started on.
+- The `LpType` dialog takes `Cancel` on F1 and `OK` on F6. Cancel is the one to
+  use: OK accepts, and accepting unchanged values is a write nobody asked for.
+  One OK was pressed on the first sample's dialog with nothing altered.
+- A modal warning about an unrelated sample in RAM re-appears on almost every
+  page transition inside the sample editor and **swallows the keypress that
+  provoked it**, so a step that looks like it did nothing has usually done
+  nothing. Photographing every keypress is what made that legible.
