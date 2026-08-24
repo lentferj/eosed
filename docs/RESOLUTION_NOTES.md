@@ -5428,19 +5428,30 @@ Three distinct bytes is thin for an exponent, and the reason to trust the slope
 anyway is not the point count but §43: a different envelope, a different
 subject and a different run put the halving at 12.2 bytes against this 12.27.
 
-**The prefactor is the weaker half, and it is biased in the region a converter
-would use.** Against four fresh measurements taken later the same day on real
-sampled material rather than noise (§67):
+**The prefactor holds up.** Against four fresh measurements taken later the same
+day on real sampled material rather than noise (§67), fitted with the window
+kept 15 dB clear of the noise floor:
 
 | byte | §63 predicts | measured | error |
 |---|---|---|---|
-| 69 | 28.04 | 27.36 / 27.97 | −2.4% / −0.2% |
-| 80 | 15.02 | 13.44 / 14.24 | −10.5% / −5.2% |
+| 69 | 28.04 | 28.35 / 28.24 | +1.1% / +0.7% |
+| 80 | 15.02 | 15.52 / 14.99 | +3.3% / −0.2% |
 
-**Within 1% at 69 and 5–10% fast at 80.** Inverting the law for a target rate
-therefore lands about a byte high: for 15.224 dB/s it gives 79.7 where direct
-measurement gives 78.1–78.9. Use the slope from here and take the byte from
-measurement.
+**Within 1–3% at both.** The exponent implied by those pairs is 0.05615 per byte
+against this law's 0.0565 — 0.6% apart. Inverting for 15.224 dB/s gives 79.8
+from the law and 80.04 from the measurements.
+
+> **This table replaces an earlier one that said the opposite** — that the
+> prefactor ran 5–10% fast at byte 80, and that the byte for 15.224 dB/s was
+> 78–79. Those numbers came from fits whose window ran down to 6 dB above the
+> noise floor. **Near the floor a log-domain fall flattens**, because the
+> measured RMS is signal plus floor rather than signal alone; those points sit
+> above the true line and lever the fitted slope down. The slowest release
+> spends longest there and took the most damage, which is why byte 80 looked
+> biased and byte 69 did not. The residual-by-thirds output diagnosed it: at
+> floor+6 all four fits show the same +,−,+ curvature, and at floor+15 it
+> vanishes and the residuals halve. **Keep the fit window at least 15 dB clear
+> of the floor.**
 
 One methodological difference accounts for some of that and should be stated:
 §63's dB/s is a **two-point crossing measure** — 10 dB divided by the interval
@@ -6004,15 +6015,23 @@ for the release rate byte the voices carry. Inverting §63 for 15.224 gives byte
 | high | 34.75 (resid 2.16) | 26.78 (resid 2.35) | — |
 
 Solving each keygroup's own two points for the byte that lands on 15.224 gives
-**78.1 and 78.9**. So the converter's release mapping should be producing about
-**78–79 where it produces 69**, and the audible consequence is a release 1.8×
-too fast — which is exactly the half of Jan's verdict that survived the merge
-being fixed.
+**80.0**. So the converter's release mapping should be producing about **80
+where it produces 69**, and the audible consequence is a release 1.8× too fast
+— which is exactly the half of Jan's verdict that survived the merge being
+fixed.
+
+> **Corrected the same evening.** This first read 78.1 and 78.9, from fits whose
+> window ran to 6 dB above the noise floor; see §63's amendment for why that
+> biases the slow end and how the residual thirds diagnosed it. Re-fitted 15 dB
+> clear of the floor the two pairs give 28.35/28.24 at byte 69 and 15.52/14.99
+> at byte 80, and the target byte is **80**. §63's own inversion gives 79.8, so
+> the two routes agree to a fifth of a byte.
 
 Two cautions on that number. The per-byte constant implied by these two points
-is 0.061–0.065 against §63's 0.0565, measured over a much longer sweep on a
-cleaner subject; two points do not re-derive a law, and §63's is the one to
-trust for anything else. And **the top keygroup will not fit a straight line at
+was originally 0.061–0.065 against §63's 0.0565 — a disagreement that turned out
+to be the floor artefact above, and which corrects to 0.05615, within 0.6% of
+§63. Two points still do not re-derive a law, and §63's is the one to
+trust for anything else.
 either rate** — residuals of 2.16 and 2.35 against 0.22–1.26 elsewhere, with a
 visible knee in the printed shape. It is consistent, it is not the key scaling
 §65 ruled out, and it is unexplained. Left open rather than averaged away.
