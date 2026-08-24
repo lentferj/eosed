@@ -5642,3 +5642,101 @@ amendment rather than a new section:** §62's sweep was −1, −2, −3, −4, 
 point shared a sign, so the sign could not appear as a variable, and the
 conclusion generalised from a half-explored axis without saying so. *A sweep
 that never crosses zero has not measured a signed field.*
+
+## §65 — The E4XT does not scale envelope rates with key; the release is missing per KEYGROUP (2026-08-24, live)
+
+Jan's A/B verdict on the converted preset was that the lower octaves are near
+perfect, and that further up the release is too short and the attack click too
+weak — "on lower notes less noticeable, on the higher notes quite noticeable".
+Two symptoms varying together with pitch invited one mechanism: that the E4XT
+scales envelope rates with key while the source machine does not. The sibling
+project had already measured the source as key-independent (0.21% spread across
+four octaves), so this side was the remaining suspect.
+
+**Measured within a keygroup, which is the whole design of the test.** Comparing
+note 26 against note 88 across the preset changes the sample, the cutoff and the
+envelope at once. Each of the three key ranges was swept internally, so within a
+row the sample and every parameter are fixed and only the pitch moves. The
+partner voice of each pair was muted so the sustaining layer was alone, and the
+result is reported in dB/s, never in seconds — an error that varies with pitch
+hides inside a time.
+
+Before launching: the preset's only `Key+` source routes to `FilFreq` at amount
+0, and no cord targets an envelope rate, so anything found would have been
+architectural rather than something the writer asked for.
+
+| voice | note | dB/s | residual | points |
+|---|---|---|---|---|
+| low kg | 26 | 25.59 | 1.48 | 85 |
+| low kg | 40 | 26.75 | 0.79 | 86 |
+| low kg | 52 | 27.09 | 0.56 | 87 |
+
+**25.59 → 27.09 dB/s over 26 semitones: 1.059×, +0.23% per semitone.** Two
+octaves of pitch buy 6% of rate, and the point with the worst residual is the
+one holding up the low end. **The key-scaling hypothesis is dead**, on this
+machine as on the other one.
+
+### What the failed rows were actually saying
+
+The mid and high keygroups produced *no fall to fit* — 0 and 1 points inside a
+window that wants a straight stretch between 2 dB below note-off and 5 dB above
+the floor. A fit that declines to run is a result if you look at what it
+declined to fit:
+
+| | at off | +20 ms | +100 ms | +300 ms |
+|---|---|---|---|---|
+| low kg, note 40 | −52 | −55 | −58 | −63 |
+| mid kg, note 66 | −45 | −47 | −61 | −84 |
+| high kg, note 84 | −39 | −39 | −40 | −84 |
+
+Full level right up to note-off, so the loop is running during the hold. Then
+gone inside ~100 ms. **Those keygroups do not release, they stop.**
+
+### Two checks, one run
+
+**The envelopes are identical.** Read back from all six voices: Atk1 0/100,
+Atk2 0/100, Dcy1 99/68, Dcy2 0/68, Rls1 69/0, Rls2 0/0, FEnv Rls1 70, filter
+cord 31 — the same six numbers on the low, mid and high voices alike. So this is
+not a parameter that got written differently in one keygroup.
+
+**And the release rate has no purchase.** Slowing Rls1 from 69 to 110 — §63's
+law says that is 28 dB/s down to about 6, a 4.6× longer fall:
+
+| keygroup | Rls1 69 | Rls1 110 |
+|---|---|---|
+| high | 180 ms to floor | 220 ms to floor |
+| low (control) | 850 ms to floor | never reaches it: −54 at note-off, still −59 after 1.5 s |
+
+The control is what makes the null mean anything. The identical edit on the low
+keygroup turns an 850 ms fall into one that has travelled 5 dB in a second and a
+half; on the high keygroup it moves nothing. **The amplitude release is
+unreachable on the mid and high keygroups** — something is ending the note
+before the envelope can, exactly as in the earlier case where the filter
+envelope was closing first.
+
+Here it is not the filter: the filter release and its cord are identical across
+the keygroups too. Sound at full level through the hold and gone within ~100 ms
+of note-off is the signature of **loop-in-release not being in effect** —
+playback leaves the loop at note-off, plays whatever follows it, and stops. The
+sibling project measured those post-loop tails at 100, 110 and 12400 frames,
+i.e. about 2 ms, 2 ms and 280 ms.
+
+### What this costs the earlier conclusion
+
+§64 established bit 3 of the E4B `options` word by measuring the converted
+bank's release at 27.25 dB/s against 28.0 predicted. That measurement was taken
+on **one voice of the low keygroup**, and the conclusion — that the flag was now
+set — was generalised to all sixteen samples from it. The flag is real and the
+bit is right; what was never checked is whether the writer set it *everywhere*.
+Two thirds of this preset says it did not, or that something else about those
+samples defeats it.
+
+**A confirmation taken on one member of a set confirms that member.** The low
+keygroup was the natural place to measure because it was the one with an audible
+release — which is to say the sample was chosen *because* it already worked, and
+that is the selection that hid the defect for a day.
+
+The next step belongs to the writer, not to the machine: check bit 3 of the
+`options` word on the mid- and high-keygroup samples of the converted bank
+against the low-keygroup ones. If it is set on all of them, the flag is not
+sufficient and the loop points themselves are the next place to look.
