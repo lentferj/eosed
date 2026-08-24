@@ -5541,3 +5541,35 @@ evidence alone cannot separate the two.
 The decisive test is audible rather than structural — set the flag from the
 panel and measure whether the release appears at its calibrated rate — because
 the RAM sample header cannot be read back without writing the bank to disk.
+
+### Confirmed audibly: A/B/A on the flag itself
+
+The flag was toggled on the sounding sample from the panel, measured, and set
+back. Level after note-off:
+
+    flag OFF   -54  ->  -83 (floor) within 0.1 s        instant
+    flag ON    -54  -57  -63  -71  -77  -83             over 2.5 s
+               3.4  3.6  4.0  4.5  5.0  6.0 s
+    flag OFF   -54  ->  -83 within 0.1 s                instant again
+
+With it on, four captures give **13.96 / 14.06 / 14.14 / 14.20 dB/s**, residual
+0.5–0.7 dB over ~160 points each — a straight line. Mean 14.09 dB/s, i.e.
+**2.84 s for a 40 dB fall**, against §63's prediction of 15.1 dB/s and 2.65 s
+for that rate byte: **7%**.
+
+So one measurement confirms three things at once — that loop-in-release is the
+mechanism, that §63's rate law describes the release, and that a release
+matched by *rate* rather than by *time* lands on the source machine's own figure
+(the AKAI measures 15.2 dB/s and 2.64 s for the corresponding setting).
+
+It also finally disposes of a suspect: all four flag-on captures alternated the
+full-depth footswitch→key-sustain cord between +100 and 0, and the curves are
+indistinguishable (13.96/14.14 against 14.06/14.20). The 7.84 s "sustain"
+withdrawn above was entirely the metric.
+
+**Still not established: that bit 3 is where the flag is stored.** The audible
+test cannot see the header, and the header cannot be read back from RAM without
+writing the bank to disk. Bit 3 remains a correlation with an era — strengthened
+by nothing, and weakened as a lone clue by the sibling's check that "6 frames
+past the loop end" appears in 815 samples against 45 carrying bit 3, so the two
+do not travel together after all.
