@@ -6395,3 +6395,63 @@ matching what someone hears** — the filter envelope has to be converted
 faithfully too, and on a bright transposed sample its contribution can be larger
 than the amplitude envelope's. The two machines' filter sections must agree
 before an amplitude calibration is audible as a match.
+
+## §71 — The recalibrated conversion, measured against the machine it copies (2026-08-24, live)
+
+The first bank either project has converted with a release rate taken from a
+hardware measurement rather than from a constant. Loaded alone — **Load, not
+Merge**, so the two conversions were never resident together and their shared
+sample names could not come into play at all.
+
+**Identified by what the machine reports**, not by which bank was loaded: the
+release rate byte read back **80 on all three sustaining voices**, where the
+same voices read 69 earlier the same day.
+
+### The envelope, partner muted, at notes within ±11 semitones of a root
+
+| keygroup | semitones from root | dB/s | residual |
+|---|---|---|---|
+| low | −8 | **15.30** | 0.44 |
+| mid | +6 | **14.59** | 0.20 |
+| top | +4 | 10.12 | **2.57** |
+
+**Against the source machine's 15.224 dB/s: +0.5% and −4.2%.** Against the same
+notes on the previous conversion — 27.17 and 28.21 — the new bank is 1.78× and
+1.93× slower. **The error against the source was 87% before and is 0.5–4% now.**
+
+### Time from note-off to the noise floor, whole preset
+
+| note | reference preset | old conversion | recalibrated | ratio |
+|---|---|---|---|---|
+| 26 | 0.05 s | 0.84 s | 1.37 s | 1.63× |
+| 40 | 0.03 s | 0.88 s | 1.31 s | 1.49× |
+| 52 | 0.02 s | 0.90 s | 1.56 s | 1.73× |
+| 64 | 0.03 s | 1.14 s | 1.84 s | 1.61× |
+| 72 | 0.19 s | **1.30 s** | **2.64 s** | **2.03×** |
+| 84 | 0.20 s | 1.17 s | 1.36 s | **1.16×** |
+
+Same rig, same gain, same notes and hold as the pre-erase captures, so the two
+older columns are recorded audio rather than a second resident bank.
+
+### The two numbers that are not rates, both predicted before the run
+
+- **The top keygroup's residual of 2.57** against 0.20–0.44 elsewhere. §70: the
+  filter release runs at its own fixed rate, so on a *slower* amplitude fall it
+  finishes early and bends the curve. Same signature as the 6–7% divergence at
+  slow bytes in the both-subjects skeleton. **Predicting that a number would be
+  uninterpretable, and finding it uninterpretable, is a result.**
+- **Note 84 moving only 1.16×** where everything else moved 1.49–2.03×. It is
+  +12 from the top keygroup's root, i.e. outside the window where the envelope
+  dominates. Every note inside ±11 of a root moved by half to double; the one
+  note outside it barely moved.
+
+Neither is a defect in the conversion, and both would have looked like one to
+anyone reading the table without §70.
+
+### What is left
+
+The mid keygroup's −4.2% is the largest remaining discrepancy and it is smaller
+than the filter's own contribution at those pitches. **Nothing about it should be
+chased until the filter envelope's release direction has been measured**
+(TODO.md) — §43's law is fitted on rises only, and correcting a few percent
+against an assumed reference is how a few percent becomes a lot.
