@@ -6463,3 +6463,138 @@ than the filter's own contribution at those pitches. **Nothing about it should b
 chased until the filter envelope's release direction has been measured**
 (TODO.md) — §43's law is fitted on rises only, and correcting a few percent
 against an assumed reference is how a few percent becomes a lot.
+
+## §72 — Three constants checked, and the clipping trap that nearly ate the first one (2026-08-25, live)
+
+Three checks on constants a sibling project shipped with nothing behind them,
+all on the calibration bank's noise preset at a root-matched key, envelope parked
+to jump to full and hold, filter cord zeroed. Every parameter saved first and
+restored on every path — 19 of 19 read back identical.
+
+### The trap: a wide-open filter is the loudest thing the voice makes
+
+The first pass **clipped**, and clipped exactly where the answer was being read:
+
+    cutoff byte   251  252  253  254  255
+    samples at full scale    1    4   14   57  172
+
+and every attack capture clipped as well. **A clipped measurement and a
+saturated filter are indistinguishable from the shape of the answer alone** —
+both make the top bytes look identical, which is what the table under test
+predicted. Caught by Jan before it produced a number.
+
+The control that separates them is **two source levels**: if the saturation
+point stays at the same byte it is the filter, if it moves it is the output
+stage. Everything below was repeated 12 dB down, all peaks −2.4 to −12.7 dBFS,
+zero clipped samples, with the absolute peak printed beside every result.
+
+**The source's own headroom is not the output's.** This bank is authored at −6
+dBFS deliberately; that says nothing about what a wide-open filter plus the
+preset's and the output pair's gain do downstream.
+
+### 1. The cutoff does NOT saturate — 252–255 are not identical
+
+8–16 kHz band energy, bytes 248 → 255, at −12 dB:
+
+    108.94  109.40  109.84  110.26  110.65  111.03  111.39  111.73
+
+**Monotonic, 0.35–0.46 dB per byte, still climbing at 255.** Maximum spectral
+deviation from byte 255: **2.68 dB at 252**, 1.98 at 253, **1.00 at 254**.
+
+**And the level control says it is the filter and not the output stage**: the
+clipped run gave 2.76 / 1.79 / 1.01 for the same three bytes. The pattern did
+not move with level, because there is no saturation point to move. Positive
+control passed — byte 200 differs from 255 by 45.8 dB.
+
+Writing 255 for a fully-open filter remains correct; **treating 252 as
+equivalent to 255 discards about 2.7 dB**, and a sibling reports 742 voices at
+fully-open across one disc, so it is the commonest setting there is.
+
+### 2. Resonance is flat from byte 88 to 110 and steps at 112
+
+Peak height against a Q=0 reference at the same cutoff:
+
+| byte | 88 | 92 | 96 | 100 | 104 | 108 | 110 | 112 | 116 |
+|---|---|---|---|---|---|---|---|---|---|
+| dB | 20.56 | 20.25 | 20.67 | 20.72 | 21.03 | 21.05 | 21.05 | **23.66** | 23.70 |
+
+**0.8 dB across 22 bytes, then 2.62 dB between 110 and 112, then nothing.**
+§52's "clamps at 112" is that step and the flat above it.
+
+The question asked was whether a table entry at 108 is a typo for 104. **The
+measurement says the distinction is not audible in that region**, because the
+machine has no gradient there to interpolate across — a mis-placed anchor
+between 96 and 110 lands on a plateau either way. The step at 112 is what
+matters. (The absolute dB here is a spectral peak height and not the same
+observable as a resonance figure in a spec table; the *shape* is the result.)
+
+### 3. Rate byte 0 is instant, and it agrees with §57 from the other side
+
+The first estimator measured note-on-command to steady, carrying an unknown
+fixed latency, and returned **rate 1 faster than rate 0** — impossible, and the
+tell that it was unreliable at the end being tested. Replaced with an
+offset-free measure: time between two points **on the rising edge**, steady−20
+dB to steady−3 dB, at 0.5 ms resolution.
+
+| rate | 0 | 1 | 2 | 3 | 5 | 8 | 16 | 24 |
+|---|---|---|---|---|---|---|---|---|
+| ms | **0.5** | **0.5** | 16.0 | 22.5 | 15.0 | 22.5 | 41.5 | 84.0 |
+
+**Rates 0 and 1 complete inside one 0.5 ms window.** So the rate law's ~31 ms
+floor at byte 0 is not a floor and the byte is genuinely instant.
+
+**And it puts the boundary where §57 put it, from the opposite direction.** §57
+measured *decays*: rates 0 and 1 silent, rate 2 a 0.0 ms burst, rate 3 the first
+usable rung. This measures *attacks* and finds rates 0 and 1 instant with rate 2
+the first that takes measurable time. Two directions, two runs, one boundary.
+
+## §73 — The last unexplained shape was the instrument beating against itself (2026-08-25)
+
+The top keygroup's knee — residuals of 2.16 and 2.35 against 0.22–1.26
+elsewhere, consistent across rate bytes, surviving §65's key-scaling exclusion
+and the floor-contamination correction of §63 — has an answer, and it needed no
+bench time. A sibling project measuring a different machine found periodic
+structure in its own release residuals and suggested the same test here.
+
+Residual spectra, 0.5–20 Hz, cubic detrend, on the release of all nine
+clean-load captures:
+
+| capture | peak-to-mean | top three (Hz / magnitude) |
+|---|---|---|
+| low, +4 | 2.5× | 4.83/10.8 3.86/10.0 19.32/6.6 |
+| mid, +6 | 5.1× | 4.83/10.7 3.86/7.4 5.80/4.1 |
+| top, +4 | 4.0× | 4.83/11.5 3.86/8.8 1.93/7.0 |
+| **top, +12** | 5.6× | **1.93/43.8 2.90/34.7 0.97/27.5** |
+| top, +24 | 2.1× | 3.86/6.4 2.90/6.4 13.53/4.6 |
+
+**The one capture with the knee is the only one whose release is dominated by a
+low-frequency series, and its magnitudes are four times anything else** —
+0.97 / 1.93 / 2.90 Hz, a fundamental and its harmonics, which is what several
+detuned oscillators produce. The instrument is a layered electric-piano type
+whose layers are deliberately detuned. It beats.
+
+**Two controls make it a result rather than a coincidence.**
+
+**The clean captures are not quiet — they carry 3.86 Hz**, and this preset's
+LFO1 runs at **3.78 Hz** (read from the file by the sibling). So the estimator
+detects real few-Hz modulation everywhere, at the frequency the file predicts.
+That rules out "everything beats, this one louder" *and* validates the
+instrument in the same measurement.
+
+**And the noise bank shows nothing**: peak-to-mean 2.1–2.5× with magnitudes 7–11,
+against 4.9–12.2× and magnitudes to 127 on musical material. Noise has no beat
+frequency and the measurement says so.
+
+### What it costs and what it is worth
+
+**A second independent reason for a stationary calibration subject**, after
+loop-in-release: every rate measured on musical material carries this and the
+noise bank cannot. It also gives the both-subjects skeleton divergence at slow
+bytes (§70) a candidate that is not the filter release — **both stay open**, since
+that divergence grew toward the slow end, which fits a filter finishing early
+and does not obviously fit beating.
+
+Three things were blamed for the top keygroup across one evening — key scaling
+(§65, excluded), the filter (§70, real but not this), and the sample's contour —
+and the residual structure inside the fits was none of them. *A fit's residual
+is data. If it has a shape, something made it.*
