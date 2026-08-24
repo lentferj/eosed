@@ -4524,6 +4524,16 @@ boundary, so what is confirmed is the *positional* mapping rather than three
 individual names. The rest stay transcription and the same one-line check
 settles any of them.
 
+**Re-confirmed 2026-08-25 on third-party authored content**, because a sibling
+project's file decode now rests on it. A bank loaded read-only from the machine's
+own disc reads parameter id 1 on a voice whose stored filter byte the sibling
+decodes as a 4-pole lowpass; the panel prints **`Filter  4 Pole Low-pass`** for
+that voice, with `Frequency: 20000Hz` at cutoff byte 255 and `Q 0`. So the two
+projects' filter numbering differs only in scale — one is the E4XT parameter id,
+the other a canonical enum — and both name the same filter. **A cross-project
+disagreement about a number is not a disagreement about the thing until both
+scales are stated.**
+
 ### A real defect that was completely inaudible, and the reason matters
 
 A sibling project's AKAI reader never assigns a filter type, so every converted
