@@ -5757,8 +5757,15 @@ missing, and the next place to look was the machine.
 | S054 | voice 1 (low keygroup) | 1.19 s | on | **on** |
 
 **S021 and S054 carry the same name and the same length.** They are two copies
-of one sample sitting in RAM at once — an older one and a newer one — and only
-the newer one has the flag.
+of one sample sitting in RAM at once, and only one has the flag.
+
+> **Amended, same day (§67).** This section called S021–S026 "an older copy of
+> the converted bank". They are not: they are the **reference bank's own
+> samples**, loaded long before the merge, and the two banks share all sixteen
+> sample names. The reference preset's own map — `v0 24, v1 21, v2 25, v3 22,
+> v4 26, v5 23` — points into exactly that range, which is what settles it. The
+> mechanism below is unchanged and the conclusion is unchanged; what was wrong
+> was whose samples they were.
 
 And the preset's voices are split across them. Voice→sample, read three times
 per voice with the voice reselected each round because the whole reading turns
@@ -5826,3 +5833,89 @@ into a machine with no older copy of it resident, and re-run the audit.
   page transition inside the sample editor and **swallows the keypress that
   provoked it**, so a step that looks like it did nothing has usually done
   nothing. Photographing every keypress is what made that legible.
+
+## §67 — Merge rebinds a preset's samples by name to whatever is already resident (2026-08-24, live)
+
+RAM erased and the converted bank loaded **alone** into an empty machine. Both
+halves matter: it is the only arrangement in which its samples cannot be matched
+against anything, and §66 showed that with the reference bank resident they are.
+
+| | v0 | v1 | v2 | v3 | v4 | v5 |
+|---|---|---|---|---|---|---|
+| merged over the reference bank | 24 | **54** | 25 | 22 | 26 | 23 |
+| loaded alone into empty RAM | 4 | 1 | 5 | 2 | 6 | 3 |
+
+**Five voices were bound at exactly +20 — the reference bank's copies of the
+same-named samples — and one was bound to a freshly loaded copy.** Loaded alone
+the map is 1..6, six distinct consecutive ids, stable over three reads.
+
+So the merge resolves a preset's sample references **by name against samples
+already in RAM**, and loads a sample only when nothing resident matches. The
+sibling project has since shown the two banks' sixteen samples are identical in
+name, in size and in PCM, differing in exactly one bit of the `options` word, so
+name matching had every reason to succeed — which it did, on fifteen of sixteen.
+
+**Why the sixteenth loaded anyway is unexplained.** It is the first entry in the
+file. It is not a content or size discriminator, since every one of the sixteen
+differs from its resident twin in the same single bit. A first-entry special
+case is as plausible as anything else and nothing here tests it. Recorded as
+open rather than guessed at.
+
+**One candidate is dead, cheaply.** Before the erase the panel read sample RAM
+**7 MB used of 128 MB, 5%**. The merge did not rebind because it ran out of
+room; it had 121 MB free and rebound anyway.
+
+### The defect is closed, and it was never the converter's
+
+Release rate on the cleanly loaded preset, all three keygroups, partner voice
+muted, fitted over one absolute window — +0.10 s to +1.00 s after note-off — that
+the printed shapes show is inside the straight part of every capture:
+
+| keygroup | notes | dB/s |
+|---|---|---|
+| low | 26 / 40 / 52 | 27.51 / 27.19 / 27.24 |
+| mid | 62 / 66 / 70 | 28.16 / 27.94 / 27.74 |
+| high | 76 / 84 / 96 | 28.64 / 34.73 / 34.08 |
+
+**§63's law predicts 28.1 dB/s for the release rate byte these voices carry.**
+Seven of the nine land within 3% of it. The mid and high keygroups — the two
+that in §65 produced *no fall to fit at all*, gone inside 100 ms — now fall for
+about a second and a half, exactly like the low one.
+
+The two fastest readings, at the top of the top keygroup, come with residuals of
+2.14 and 1.28 against 0.2–0.5 elsewhere, and their printed shapes have a visible
+knee that one straight line cannot represent. **They are not evidence of key
+scaling** — §65 measured that question properly and found +0.23%/semitone — and
+they are not quoted as a rate here.
+
+### What this means for the converter, and for every future merge
+
+Nothing in the converted bank was wrong. The file was correct when §64 measured
+it and it is correct now. **A preset can be loaded, read back parameter by
+parameter, dumped, and audited by ear, and still be playing another bank's
+samples** — the sample *numbers* in the preset are the only place it shows, and
+nobody reads those because they are not a setting anyone chose.
+
+Two defects in one day whose common property is that they are invisible to every
+check in use: a sample flag that no parameter read-back reports, and a sample
+binding that no dump shows. Both were found only by measuring the audio and
+disbelieving the result.
+
+The practical consequence for anyone writing banks: **give samples names that
+cannot collide with a bank the user might already have loaded.** A revised bank
+merged over its own earlier version, or over the reference it was derived from,
+will otherwise bind silently to the older samples every time.
+
+And for anyone auditing by ear: **a listening test run over a merge is not a
+test of the file.** The verdict that started this chain — near perfect low,
+release too short high — described the machine accurately and graded a preset
+five sixths of which was another bank's audio.
+
+### Two small things worth having
+
+- **The panel prints `0mb` for empty sample RAM where the SysEx query still
+  reports §21c's ~3 MB floor.** Two different numbers for the same state. The
+  panel's is the intuitive one; a client must still use the floor.
+- Loading a bank into empty RAM makes it **P000 upward**, and the machine lands
+  on `P000` by itself with the bank's name in the title bar. No page trap and
+  no dialog to dismiss — unlike the merge path of §48.
