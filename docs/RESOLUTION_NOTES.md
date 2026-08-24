@@ -5438,3 +5438,57 @@ have overshot badly in the opposite direction.
 wrong; it does not tell you which of them.** Both halves here disagreed with
 each other, and the measurement supported the one that had been labelled
 "inferred, not measured" over the one written down from a live calibration.
+
+## §64 — "Loop in release" is a separate flag, and without it a release cannot exist (2026-08-24, live)
+
+A voice whose amplitude release rate had no audible effect at all: the note
+stopped within 20 ms of note-off at rate 69 and at rate 80, where §63's
+calibration says those are 28.1 and 15.1 dB/s. The same parameter id behaves
+exactly as calibrated on a different preset, so the rate law was never in doubt.
+
+Read off the machine — **Sample Edit → Tools1 → LpType**:
+
+    Sample Loop Parameters
+      Loop type        : on
+      Loop in release  : off
+
+**The loop is enabled and does not run through the release.** At note-off the
+voice leaves the loop, plays out whatever sample data lies past the loop end —
+a few tens of milliseconds — and stops. No envelope setting can reach past that.
+
+### What was eliminated first, and why the order mattered
+
+Each of these was measured before the flag was found, and each is worth keeping
+because each is a plausible answer that happens to be wrong:
+
+- **the filter envelope closing** — cord to zero, and the filter release
+  slowed: no change
+- **the sample running out** — holds of 1.0, 2.0, 3.0 and 4.5 s all stopped
+  0.01–0.07 s after note-off, so it tracks note-off and not absolute time. This
+  also proves the loop itself works: a 1.19 s sample still sounding at 4.5 s is
+  looping.
+- **the envelope never reaching its sustain segment** — held 8 s and 12 s, and
+  separately set the decay rate to 0 so the sustain is reached at once: no
+  change
+- **an unusual full-depth footswitch→key-sustain cord** — zeroed: no change
+
+### A withdrawn number, from the same session
+
+One run reported the note persisting 7.84 s with that cord at +100 against
+1.92 s at zero — a spectacular result, and false. The metric counted anything
+more than 6 dB above a floor estimated from the file's own lead-in, and on a
+quiet capture the noise wanders across that line indefinitely. Printing the
+envelope killed it: four runs alternating the cord between 100 and 0 all show
+−54 dBFS just before note-off and the floor 0.1 s later.
+
+**Look at the shape, not the summary** — §41 for silence, §58 for an inflated
+depth, and here for an invented sustain.
+
+### Why this had never surfaced
+
+A release is only audible on a sample that is still sounding when the key is
+released, which means a looped one. Any converter that writes the loop points
+and the loop-type flag but not *loop in release* produces samples that loop
+perfectly while held and have no release at all — and nothing about that is
+visible in a parameter read-back, a file dump, or a held note. It takes someone
+listening for a release, on a looped sample, with a reason to expect one.
