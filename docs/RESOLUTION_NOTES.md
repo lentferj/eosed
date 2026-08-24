@@ -5329,3 +5329,49 @@ opens the amplitude envelope for the measurement and puts it back, and restores
 the cord on every path. **A `finally` block is only as good as the list of
 things it was written to remember**, and the one thing the run had changed most
 recently was the one it forgot.
+
+## §62 — The first step of a field is where the law breaks (2026-08-24, live)
+
+A modulation depth was wanted at 7.35 cents RMS. The cord amount field is
+0..127, so one unit ought to be far finer than that. Measured, with the
+modulation rate pinned and the selective estimator (§59):
+
+| amount | rms cents | minus floor | per unit | vs linear |
+|---|---|---|---|---|
+| 0 | 2.25 | — | — | floor |
+| −1 | 3.85 | 3.12 | 3.12 | **0.40** |
+| −2 | 16.12 | 15.96 | 7.98 | 1.02 |
+| −3 | 22.36 | 22.25 | 7.42 | 0.95 |
+| −4 | 28.50 | 28.41 | 7.10 | 0.91 |
+| −6 | 46.94 | 46.89 | 7.81 | 1.00 |
+
+**From amount 2 upward the field is linear at ~7.6 cents RMS per unit. The first
+step is not: amount 1 delivers 40% of a unit**, and the jump from 1 to 2 is five
+times where it should be two.
+
+So the target was unreachable — it falls between amount 1 (undershoot 2.4×) and
+amount 2 (overshoot 2.2×), with no byte in between. **The quantisation, not the
+law, was the limit**, and a field with 127 steps still could not resolve a depth
+well inside its range.
+
+### The pattern this completes
+
+Four instances in one day, all the same shape — a field linear across its
+working range and not linear at its very bottom rung:
+
+- **§57**: envelope decay rates 0 and 1 both produce silence; rate 3 is the
+  first usable value, and rate 2 is 15 dB below it.
+- **§60**: the cutoff curve is not log-linear between bytes 4 and 64; reading it
+  as though it were puts a target 35% out.
+- **§58**: an LFO depth law fitted from 25% upward carries a +9.00 cent
+  intercept at zero, which cannot be real and is the entire disagreement below
+  3%.
+- **§62**: this.
+
+**A law fitted over a field's middle should not be trusted at its first step.**
+On this machine the first step has been wrong every time anyone has looked, and
+it is exactly where a converter lands whenever a source asks for "a little".
+
+Practical consequence for anything driving the E4XT: if a computed value rounds
+to 1, measure what 1 actually does before shipping it. It may be delivering
+under half of what the arithmetic says.
