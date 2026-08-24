@@ -5573,3 +5573,35 @@ writing the bank to disk. Bit 3 remains a correlation with an era — strengthen
 by nothing, and weakened as a lone clue by the sibling's check that "6 frames
 past the loop end" appears in 815 samples against 45 carrying bit 3, so the two
 do not travel together after all.
+
+### Bit 3 confirmed, and a hot SD swap that propagates
+
+**A bank written by the converter with bit 3 set sustains through its release,
+with nobody touching a dialog.** Isolated voice, `Rls1` rate 69, three runs:
+
+    27.17 dB/s   residual 0.57 dB over 86 points
+    27.33 dB/s   residual 0.53 dB over 85 points
+    16.05 dB/s   residual **4.07** -- discarded on its own residual, seven times
+                 the others, with an envelope shape identical to them
+
+**27.25 dB/s against §63's 28.0 predicted for that rate byte — 2.7%**, in the
+same direction as the by-hand test's 7% at a different rate. So bit 3 of the E4B
+sample header's `options` word is where "loop in release" is stored. That was
+the last inference in this chain and it is now a measurement.
+
+The third run is worth keeping as an example of the discipline paying for
+itself: a fit reporting 16 dB/s where two neighbours report 27 would have been
+a puzzle, and its residual said "do not use me" without anyone having to
+adjudicate.
+
+**A hot SD swap under a running ZuluSCSI propagates.** The card was changed
+underneath a powered sampler and the disk browser showed the new image on the
+next `Drives → drive → Banks` navigation — five banks where the same navigation
+had shown four an hour earlier with the old image in place. **No restart, no
+stale directory.** That is worth recording because the opposite was the
+reasonable expectation: SCSI is not designed for it, and the fallback plan was a
+power cycle costing a hand-built reference preset.
+
+Both halves of that were tested against the same navigation on the same day, one
+with the old image and one with the new, which is what makes it a result rather
+than an absence of trouble.
