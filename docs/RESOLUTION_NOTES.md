@@ -5399,6 +5399,19 @@ latency between the two sustains, which cancels in the slope.)
 So the rate law is **span-independent**, and arithmetic that divides a span to
 obtain a rate has the wrong shape regardless of which constant it divides by.
 
+> **Do not over-generalise that sentence** (added 2026-08-24). It is about
+> obtaining the *rate law* by dividing a span, and about the **release** stage
+> in particular, whose endpoint is silence — a level neither machine measures,
+> and which both sides of a conversion invent from their own parameter scales.
+> A **decay** stage is different: it runs from peak to the sustain level, an
+> endpoint both machines agree on and can be metered. Converting a decay *time*
+> into a rate legitimately needs that span, and a span-aware decay conversion is
+> correct. **The span is wrong only where the endpoint is invented.** The
+> sibling project's measurements make the split visible: its decay conversion
+> agrees with the source machine to 1–7% while its release conversion is out by
+> 1.6–4×, and the only structural difference between the two is which endpoint
+> is real.
+
     dB/s = 1382 × exp(−0.0565 × rate)        halving every 12.3 bytes
 
 The 12.3-byte halving matches §43's filter-envelope rate law (12.2 bytes) to
