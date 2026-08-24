@@ -5404,6 +5404,38 @@ obtain a rate has the wrong shape regardless of which constant it divides by.
 The 12.3-byte halving matches §43's filter-envelope rate law (12.2 bytes) to
 within measurement: **the two envelopes share one rate scale.**
 
+**Provenance, recorded because a sibling is about to hardcode this** (added
+2026-08-24, §67): the law rests on **three rate bytes — 60, 69 and 87 — at two
+sustain levels**, six measurements, on the noise preset described above, with
+roughly 50 dB and 73 dB of travel above the output floor. **Fitted window
+[60, 87]**, so bytes in the high 70s and low 80s interpolate rather than
+extrapolate.
+
+Three distinct bytes is thin for an exponent, and the reason to trust the slope
+anyway is not the point count but §43: a different envelope, a different
+subject and a different run put the halving at 12.2 bytes against this 12.27.
+
+**The prefactor is the weaker half, and it is biased in the region a converter
+would use.** Against four fresh measurements taken later the same day on real
+sampled material rather than noise (§67):
+
+| byte | §63 predicts | measured | error |
+|---|---|---|---|
+| 69 | 28.04 | 27.36 / 27.97 | −2.4% / −0.2% |
+| 80 | 15.02 | 13.44 / 14.24 | −10.5% / −5.2% |
+
+**Within 1% at 69 and 5–10% fast at 80.** Inverting the law for a target rate
+therefore lands about a byte high: for 15.224 dB/s it gives 79.7 where direct
+measurement gives 78.1–78.9. Use the slope from here and take the byte from
+measurement.
+
+One methodological difference accounts for some of that and should be stated:
+§63's dB/s is a **two-point crossing measure** — 10 dB divided by the interval
+between the −10 and −20 dB crossings — where §67's are least-squares fits over a
+fixed window. The crossing measure is the more fragile of the two, being
+sensitive to the exact crossing samples and to curvature near the top of the
+fall.
+
 ### The amplitude span, measured rather than inferred
 
 Every segment parked at one level, steady output against level 100:
