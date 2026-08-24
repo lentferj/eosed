@@ -5012,3 +5012,72 @@ level in fixed windows instead of trusting the summary number — the same
 correction that separates §41's thirty silent captures from a real measurement,
 and the same one that withdrew four findings on 2026-08-22. **A summary
 statistic computed over a file with nothing in it still returns a number.**
+
+## §58 — LFO→Pitch depth is linear and waveform-independent; and an estimator that lied (2026-08-24, live)
+
+Sixteen captures on a sustained ~330 Hz partial, cord amount swept from 1.57% to
+25.2% of full scale, each shape measured over the same amounts in one session.
+Depth read from the instantaneous frequency of the isolated partial (bandpass →
+analytic signal → unwrapped phase → derivative).
+
+### The LFO waveform does not change the peak excursion
+
+One-sided cents, derived from the **modulation fundamental** with each shape's
+own Fourier factor applied (`4/π` for a square, `8/π²` for a triangle):
+
+| amount | % of scale | triangle | square | ratio |
+|---|---|---|---|---|
+| −2 | 1.57 | 30.1 | 30.4 | 0.993 |
+| −4 | 3.15 | 53.2 | 53.2 | 1.000 |
+| −6 | 4.72 | 87.5 | 88.0 | 0.995 |
+| −8 | 6.30 | 110.5 | 111.0 | 0.996 |
+| −12 | 9.45 | 168.0 | 164.4 | 1.022 |
+
+Mean 1.001. A calibration taken with one waveform transfers to another.
+
+**Two waveforms whose harmonic content differs completely, agreeing to 1% on the
+derived peak, is also the strongest available validation of the estimator** —
+and it is what exposed the one below.
+
+### The response is linear well below any previous calibration
+
+Eight triangle points over 1.57–25.2% fit `cents = 16.362 × pct + 7.38`,
+residual RMS 8.2 cents, with no curvature. A sibling's constant fitted over
+25–100% and extrapolated down predicts values whose ratio to these runs 0.891 to
+1.086, mean **1.006**. The extrapolation was justified; it simply had not been
+checked.
+
+The one real caveat is the intercept. A fit with a free constant term gives
++9.00 cents at zero cord, which cannot be true, and that intercept is the entire
+disagreement at the bottom: at 1.57% it overshoots by 11%. Above ~3% it stops
+mattering.
+
+### The estimator that lied, and why it looked like the safe one
+
+This section's first result was "the depth is 19% more than predicted". It was
+not. That figure came from a **2nd/98th-percentile range of the instantaneous
+frequency**, chosen precisely because it "assumes nothing about the waveform".
+
+It assumes something worse: that the tracker's excursions belong to the signal.
+It collects the phase-tracker's overshoot at the triangle's corners and the
+sample's own pitch wobble adding at the extremes. At one amount it reported
+180–189 cents peak-to-peak where the fundamental-derived figure is 175.
+
+**A shape-agnostic estimator is not automatically an unbiased one.** The
+percentile range makes no assumption about the modulation and a large one about
+the measurement chain. The fundamental-amplitude estimator makes an explicit
+assumption about shape — which is testable, and was tested, by two shapes
+agreeing to 1%.
+
+The general form, and it is not §54's: there, a null was empty because the
+*control* was saturated. Here a positive result was inflated because the
+*instrument* was reporting its own artefacts. Both look like clean numbers.
+**Prefer the estimator whose assumption you can test over the one whose
+assumption is hidden.**
+
+### Data limits
+
+The square becomes untrackable above amount −12: at −32 it reports 7.92 Hz,
+double the true rate, because the pitch steps carry the partial out of the
+±70 Hz analysis band. Those points are recorded and flagged, and must not be
+fitted. The triangle tracks cleanly across the whole sweep.
