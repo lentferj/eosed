@@ -5492,3 +5492,52 @@ and the loop-type flag but not *loop in release* produces samples that loop
 perfectly while held and have no release at all — and nothing about that is
 visible in a parameter read-back, a file dump, or a held note. It takes someone
 listening for a release, on a looped sample, with a reason to expect one.
+
+### Where the flag lives, and a contrast that was not one
+
+The obvious next question was which sample header bit carries it. The obvious
+answer — compare a preset whose releases *do* work — turned out to be a trap
+worth recording.
+
+**A working release is not evidence of the flag.** The preset whose releases
+measured cleanly at every rate byte (§63) uses samples that are **12 seconds
+long**, held for 1.5 s. Their option bits are `0x0031`, byte-for-byte identical
+to the samples with no release at all. They kept sounding through the release
+because ten seconds of data remained, not because anything was set. The
+"contrast" was a difference in sample length wearing a flag's clothes.
+
+That also confirms the mechanism from the other side: with loop-in-release off,
+the voice leaves the loop at note-off and plays out whatever remains. Where the
+loop sits near the end of the data — 52483 frames with the loop at
+51646..51982 — nothing remains, and the note stops in 20 ms.
+
+**A survey of the option word across 125 banks found five values, not two:**
+
+| value | count | |
+|---|---|---|
+| `0x0031` | 1219 | looped |
+| `0x0020` | 240 | unlooped |
+| **`0x0039`** | 38 | |
+| **`0x0079`** | 6 | |
+| **`0x0078`** | 1 | |
+
+```
+0x0031 = 0b0011_0001
+0x0039 = 0b0011_1001
+                ^ bit 3 (0x08)
+```
+
+**Every file carrying bit 3 is dated 2002-09-21** — original-era banks. The
+other 121 files, spanning 2002 to 2026 and including everything the sibling
+toolchain has produced, carry only `0x0031` and `0x0020`.
+
+**Not yet a verified meaning.** Bit 3 is present in exactly the files old enough
+to have been made by the manufacturer's own tools and absent everywhere else,
+which is consistent with loop-in-release and equally consistent with any other
+flag those tools set. One convention travels with it: every bit-3 sample has
+**6 frames past the loop end** where every `0x0031` sample has **0**, and file
+evidence alone cannot separate the two.
+
+The decisive test is audible rather than structural — set the flag from the
+panel and measure whether the release appears at its calibrated rate — because
+the RAM sample header cannot be read back without writing the bank to disk.
