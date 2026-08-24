@@ -5081,3 +5081,93 @@ The square becomes untrackable above amount −12: at −32 it reports 7.92 Hz,
 double the true rate, because the pitch steps carry the partial out of the
 ±70 Hz analysis band. Those points are recorded and flagged, and must not be
 fitted. The triangle tracks cleanly across the whole sweep.
+
+## §59 — A vibrato-depth instrument that cannot make an octave error (2026-08-24)
+
+Built because both projects' phase-tracking estimators fail the same way: they
+must decide which partial to follow, and when the deviation grows the partial
+walks out of the analysis band and the tracker reports the artefact instead of
+failing. §58 records this project's version (7.92 Hz reported for a 3.73 Hz
+modulation); a sibling's sweep produced 649, 577, 558, 547, 543, 524, 570, 305,
+516 cents with the tracked fundamental collapsing and sticking.
+
+`~/temp/e4xt_ref/sideband.py`. Reads a WAV, returns a result or a refusal.
+
+### The estimator
+
+Frequency modulation puts sidebands around each harmonic at multiples of the
+modulation rate. **The power-weighted variance of the spectrum about the carrier
+is the mean square frequency deviation**, for *any* periodic modulating
+waveform — so the RMS deviation needs no assumption about shape at all. Only the
+conversion to a *peak* needs one (√2 sine, √3 triangle), and both are reported
+alongside the RMS.
+
+Inverting the first sideband ratio `J₁(β)/J₀(β)` was rejected: it is
+non-monotonic and diverges near `J₀`'s zeros at β = 2.405 and 5.52, and a ±88
+cent vibrato at 3.73 Hz on a 330 Hz carrier sits at β = 4.5, between them.
+
+No fundamental is ever estimated, so an octave error has nowhere to enter.
+
+### Two bugs that had to be fixed before it was exact
+
+- **The moment must be taken in cents, not Hz.** Modulation is exponential in
+  frequency — ±88 cents on 330 Hz is +16.9 Hz up and −16.1 Hz down — so a
+  linear-frequency moment overweights the up-excursion and read 3.5% high. In
+  log-frequency the bias disappears entirely.
+- **A pure tone does not give zero variance.** The analysis window has a width
+  of its own, and at small depths that width *is* the answer: 5 cents read +38%.
+  The bias is now computed by pushing an unmodulated tone through the identical
+  pipeline and subtracted, rather than assumed.
+
+Amplitude modulation is divided out first — a decaying note is AM, and its
+sidebands land in the same place.
+
+### Measured accuracy
+
+| condition | error |
+|---|---|
+| 5–150 cents, sine and triangle | ±0.0% |
+| square (RMS) | −1.5% at 25, −0.9% at 88 |
+| noise down to 6 dB SNR | +1.3% |
+| 0 dB SNR | +4.9% |
+| amplitude decay to 0.7 s | ±0.0% |
+| decay 0.35 s | +2.5% |
+
+### What it refuses, and the ceiling that is structural
+
+It returns a refusal with a reason for: carrier-to-noise under 12 dB; sideband
+energy reaching the edge of the integration band; a modulation rate under 2.5
+FFT bins in a sub-window; and a required band that would reach the neighbouring
+harmonic.
+
+That last one is a **hard ceiling of about 200 cents RMS on any harmonic-rich
+source**, and playing a different note does not move it — sidebands spread as
+3×deviation while the neighbouring harmonic sits one carrier away, and the
+deviation scales with the carrier:
+
+    carrier  150 Hz -> ~171 cents      carrier  660 Hz -> ~217 cents
+    carrier  330 Hz -> ~204 cents      carrier 1000 Hz -> ~222 cents
+
+A measurement needing more than that has to be restructured, not retried.
+
+### Peak-picking cannot find the carrier
+
+At large modulation index the spectrum has a **dip at the centre** — `J₀` passes
+through zero — and the tallest component is a sideband. On real captures that
+dragged the carrier estimate from 330 Hz to 444 Hz. The carrier is now the
+cluster's power centroid, iterated, which does not care which component is
+tallest.
+
+### The two estimators disagree by 8% on real signal, and both are right
+
+Cross-checked against §58's captures: sideband/phase-fundamental = **1.085**
+(triangle, 5 points, spread 1.083–1.088) and **1.074** (square, 4 points).
+**Both estimators are exact to ±0.0% on synthetics**, so this is a property of
+the signal, not of either method — and the extra was traced to the modulation's
+own harmonics rather than to drift.
+
+They measure different things. The moment counts all spectral spread in the
+band; the phase-fundamental counts only the component at the modulation rate.
+**For calibrating a depth field the fundamental-only estimator is more
+selective; for "how far does the pitch actually move" the moment is right.**
+Pick per question, and do not average them.
