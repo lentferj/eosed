@@ -3896,6 +3896,30 @@ transition to target 100, observed as a full-range corner excursion (floor ~470
 Hz to plateau ~11.6 kHz). Anyone fitting a shorter stage should expect a smaller
 prefactor by roughly the distance ratio.
 
+### This law is measured on a RISE. The release is assumed. (added 2026-08-24)
+
+Every point above is a transition **upward, to target 100**. **Whether a release
+segment obeys the same law was never measured**, and nothing here entitles anyone
+to assume it does — the amplitude envelope's segments were only shown to share
+one scale (§63, §69) by measuring them.
+
+Recorded because a decision now rests on it. The sibling project found its filter
+release path computing a span in **dB**, from a law that maps an *amplitude
+sustain byte* to dB below peak, for an envelope §56 says the machine runs on a
+**cutoff byte** scale — a span in the wrong unit, with a comment asserting the
+unit as a fact. It nevertheless lands **within 2 rate bytes** of this law across
+30 combinations of filter sustain and release time, worst case 1.19× in time,
+because that unit error and the 0.52× distance difference above very nearly
+cancel. The near-constant offset is the tell: **shape right, anchor off.**
+
+They chose not to correct it, and the reason is this section's gap:
+**correcting a 1.19× error against an assumed reference is how a 1.19× error
+becomes a 1.4× one.** Closing that would take a filter-inert subject with a
+filter cord deliberately added, measuring a downward traversal — and it is not
+worth the bench time while the amplitude error it would have masked was 1.8×.
+
+*A law measured in one direction is a law measured in one direction.*
+
 ### The design sidesteps the ordering question rather than waiting on it
 
 Set **all six segments to the same target (100) and the same rate R**. The
