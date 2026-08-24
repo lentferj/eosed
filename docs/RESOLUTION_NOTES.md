@@ -5605,3 +5605,40 @@ power cycle costing a hand-built reference preset.
 Both halves of that were tested against the same navigation on the same day, one
 with the old image and one with the new, which is what makes it a result rather
 than an absence of trouble.
+
+### §62 amended — the first-step anomaly is a SIGN asymmetry
+
+§62 measured that field on the **negative side only** and concluded that amount
+1 delivers 40% of a linear unit, and that a target of 7.35 cents RMS was
+unreachable between −1 and −2. That is true of negative amounts and not of the
+field.
+
+Same cord slot, same voices, magnitudes swept both ways:
+
+| amount | rms cents | per unit | | amount | rms cents | per unit |
+|---|---|---|---|---|---|---|
+| +1 | 8.48 | 8.48 | | −1 | 3.78 | 3.78 |
+| +2 | 20.84 | 10.42 | | −2 | 16.17 | 8.09 |
+
+**Positive delivers more than the negative of the same magnitude — 2.24× at
+|1|, 1.29× at |2|**, converging as the magnitude grows. Reproducible: +1
+measured 8.48 twice with a −1 and a ±2 in between.
+
+So the unreachable target was reachable all along on the other side of zero:
+`+1` gives 8.48 against a 7.35 target, **15% over**, where `−1` gives 3.78,
+49% under.
+
+The practical consequence is for anyone who negates a cord for phase reasons —
+a common thing to do when two machines' LFOs start in opposite directions.
+**The negation is not free at small amplitudes**: it costs more than half the
+modulation at ±1. A magnitude derived on the positive side cannot be carried
+across the sign unchanged.
+
+No explanation is offered here. Two's-complement rounding in the amount
+encoding is the obvious guess and it has not been tested.
+
+**And the methodological point, which is the reason this is written as an
+amendment rather than a new section:** §62's sweep was −1, −2, −3, −4, −6. Every
+point shared a sign, so the sign could not appear as a variable, and the
+conclusion generalised from a half-explored axis without saying so. *A sweep
+that never crosses zero has not measured a signed field.*
