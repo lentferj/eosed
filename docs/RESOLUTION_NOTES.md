@@ -5277,3 +5277,55 @@ at Q 0, and a set computed by a law, were being compared on a preset that had
 since had resonance applied to every voice. Both were valid for a machine state
 that no longer existed. **A calibration carries the conditions it was taken
 under, and changing any of them invalidates it silently.**
+
+### §61a — Aiming at the real Q closes the gap, and exposes a floor
+
+Following §61, all six voices of the test preset were re-aimed by measurement at
+their **actual** Q rather than from a Q-0 table. Verified afterwards:
+
+| voice | Q | amount | target | measured | ratio |
+|---|---|---|---|---|---|
+| v1 | 112 | 25 | 5161 Hz | 4974 Hz | 0.964 |
+| v3 | 112 | 14 | 7414 Hz | 7453 Hz | 1.005 |
+| v5 | 102 | 29 | 4153 Hz | 4183 Hz | 1.007 |
+
+**No residual.** The 1.49–1.61× miss was entirely the Q shift; nothing else was
+hiding underneath it. Worth noting how far the three candidate answers diverge —
+measured-at-real-Q **25/14/29**, the law's 34/21/37, and an earlier
+measured-at-Q-0 32/15/39 — when only one set was obtained under the conditions
+the preset actually runs at.
+
+**And there is a floor.** On the low-cutoff voices (byte 4, Q 41) the target of
+207 Hz is unreachable: at cord amount **zero** the peak already sits at 523 Hz,
+2.5× above target, lifted there by the resonance alone. Reducing the modulation
+cannot help, because the floor is the resonance rather than the modulation.
+
+A curve-fit will happily extrapolate to amount 0 and report it as the answer —
+which is both unreachable as a solution and worse musically, since it removes
+the modulation entirely. What is still reproducible is the **sweep size**:
+
+    source asks   138 → 207 Hz  = 0.59 octaves
+    machine gives 523 → 739 Hz  = 0.50 octaves at amount 8
+
+so the amount was chosen to match the sweep and the offset reported, rather than
+picking a number that hits neither.
+
+**This is a constraint on any conversion, not a tuning problem.** Where a
+source's resonance maps to a Q whose lift exceeds the source's own cutoff
+target, the target cannot be reached on this machine at any modulation depth.
+What to do then — match the sweep, clamp to the floor, or sacrifice the
+resonance — is a policy question rather than an arithmetic one.
+
+### A restore path that was not complete
+
+The first attempt aborted mid-reference: the voice under test carries a
+mute-group cut (§57) that makes it a 13.7 ms burst, far too short to read a
+filter off, and the script had no provision for it. Its `finally` restored the
+cutoff and the muted partner's volume but **not the cord amount**, leaving that
+voice at zero.
+
+Caught by reading the machine back rather than trusting the cleanup. The rerun
+opens the amplitude envelope for the measurement and puts it back, and restores
+the cord on every path. **A `finally` block is only as good as the list of
+things it was written to remember**, and the one thing the run had changed most
+recently was the one it forgot.
