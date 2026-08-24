@@ -5424,6 +5424,21 @@ roughly 50 dB and 73 dB of travel above the output floor. **Fitted window
 [60, 87]**, so bytes in the high 70s and low 80s interpolate rather than
 extrapolate.
 
+**And the subject was not stationary during a release** (added 2026-08-24). The
+noise bank this law was measured on has **loop-in-release CLEAR** on both of its
+samples — read off the disc image, `options` bit 3 not set. So at note-off the
+voice leaves the loop and plays out whatever data follows it, exactly as §64
+describes. **This is not a claim that the law is contaminated:** the releases
+measured here are short enough that they almost certainly stayed inside the
+remaining data, and the estimator only needed the −10 dB and −20 dB crossings.
+But it puts a ceiling on the subject. **A fall at byte 100 takes about 9 s and
+would not have survived it** — precisely the region a later sweep was designed
+to reach. The replacement calibration bank, built with the flag asserted, turned
+out to be necessary for a reason nobody had identified when it was commissioned.
+
+*A calibration subject can carry the defect the calibration exists to exclude.*
+Check the subject's own flags before trusting a measurement made on it.
+
 Three distinct bytes is thin for an exponent, and the reason to trust the slope
 anyway is not the point count but §43: a different envelope, a different
 subject and a different run put the halving at 12.2 bytes against this 12.27.
