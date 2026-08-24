@@ -6306,3 +6306,68 @@ one bus carries edits and another carries notes. `select_verified` now reads the
 LCD back after every Program Change and refuses if two presets share a screen.
 
 *Verify the thing that produces the measurement, not the thing you addressed.*
+
+## §70 — The top keygroup's scatter was the FILTER, and musical material cannot measure the rate law (2026-08-24, live)
+
+The pitch sweep on musical material came back non-monotonic and wide — **18.34
+dB/s at +8 semitones from root, 50.51 at +16, 36.07 at +12** — with *low*
+residuals, so each was a straight fall with a wildly different slope. §69 had
+just shown the machine's rate does not move at all across −24..+24 on a
+stationary source, so it had to be the material.
+
+These voices carry a filter-envelope release with a large `FEnv → FilFreq` cord,
+which the calibration bank deliberately does not. The cutoff is **fixed** while
+transposition slides the sample's spectrum across it, so how much energy the
+closing filter removes depends on pitch — and not monotonically, because it
+depends on where that sample's energy happens to sit relative to a fixed corner.
+
+Same discriminator as §64's: take the cord to zero and re-measure.
+
+| semitones from root | cord 31 (as found) | cord 0 |
+|---|---|---|
+| +4 | 27.74 | **28.18** |
+| +8 | **19.05** | **28.22** |
+| +12 | **39.46** | **28.13** |
+| +16 | **49.38** | 25.23 *(18 points, note-off only 20 dB over the floor)* |
+| +24 | 39.77 | no fall to fit |
+
+**Zero the filter cord and a 19-to-49 dB/s scatter collapses to 28.1 ± 0.05**,
+matching the noise bank and §63's prediction of 28.02. Residuals fall from
+0.23–1.49 to 0.13–0.19.
+
+**So the "release rate" measured on musical material is the amplitude envelope
+and the filter closing together**, and the filter's share depends on pitch. It
+is not an envelope property, not key scaling (§69 excluded that on a clean
+subject), and not something a converter fixes by changing a rate byte.
+
+### Which means musical material cannot measure the law
+
+The same four-byte skeleton run on both subjects:
+
+| byte | noise bank | musical (mid keygroup) | §63 predicts |
+|---|---|---|---|
+| 60 | 46.48 | 46.72 | 46.59 |
+| 72 | 23.70 | 23.84 | 23.65 |
+| 88 | 9.67 | **8.97** | 9.58 |
+| 100 | 4.84 | **4.51** | 4.86 |
+
+**The two subjects agree to 1% at the fast bytes and diverge by 6–7% at the slow
+ones**, and the musical thirds turn curved exactly where they diverge (−0.19
++0.36 −0.17 at byte 100 against ±0.05 on noise). The filter release runs at its
+own fixed rate, so on a *slow* amplitude fall it finishes early and stops
+contributing partway down — bending the curve and dragging the fitted slope.
+
+**The purpose-built subject was necessary and this is the measurement that shows
+it.** Not for the reason it was commissioned — the loop-in-release flag — but
+because a preset with any filter modulation at all cannot measure an amplitude
+envelope. §63's original noise preset was right to have the cord zeroed, and
+that detail was the load-bearing one.
+
+### And a caution for anyone matching a release by ear
+
+A listener hears the amplitude envelope and the filter together. **Calibrating
+the amplitude rate byte to a target dB/s is necessary and not sufficient for
+matching what someone hears** — the filter envelope has to be converted
+faithfully too, and on a bright transposed sample its contribution can be larger
+than the amplitude envelope's. The two machines' filter sections must agree
+before an amplitude calibration is audible as a match.
