@@ -1396,3 +1396,30 @@ unsolicited or late frame arriving mid-conversation.
 **Workaround meanwhile,** and it is the hardware rule anyway: one client at a
 time. A probe that must run alongside the TUI should confirm its selector
 before trusting any read, and retry on mismatch.
+
+## Preset snapshot/replay — a stand-in, and why restore still matters (2026-08-24)
+
+**Status:** `tools/preset_snapshot.py` exists and is verified end to end. The
+real item above — protocol-level preset restore — is still open and this does
+not close it.
+
+The gap it covers: the E4XT's RAM does not survive a power cycle (§48), and
+restore is not built, so **every hand-built reference preset on this bench has
+been one power cycle away from gone.** A session's worth of parameter edits had
+no way back except reading the values out of a chat log. That surfaced when a
+bank needed loading from a new SCSI volume, which requires a card swap, which
+requires a power cycle, which would have destroyed the reference preset the new
+bank was to be compared against.
+
+`capture` / `verify` / `replay` over the voice parameter table, 128 ids per
+voice. Verified on a scratch preset: capture, perturb three parameters, `verify`
+reported exactly those three, `replay` restored them, `verify` came back
+identical.
+
+**What it is not.** It replays voice parameters only — no sample zones, no
+links, no preset-level fields, no name, no sample data. A preset whose character
+lives in its zone layout does not come back from it. **Protocol-level restore is
+still the right fix**, and this exists because that does not.
+
+`verify` writes nothing, so checking a capture is free. A capture nobody has
+restored from is a backup nobody has restored from.
