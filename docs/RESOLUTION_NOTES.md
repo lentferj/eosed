@@ -4581,6 +4581,14 @@ the strength of a panel reading, and was in fact correct to 7%.
 and degrades to −7.7 by byte 220 — that is the fit running out of spectrum above
 the corner, not the filter changing. Points above byte ~120 are not usable.
 
+> **AMENDED 2026-08-24 — that last sentence was too broad and a sibling project
+> was entitled to lean on it harder than the data deserved.** The boundary is
+> correct for the **slope** and wrong for the **corner**. §60 re-measured the
+> region directly: interpolating this table across the gap gives 931 / 1145 /
+> 1950 Hz at bytes 119 / 135 / 179 against a measured 918 / 1092 / 2003 — 1.4%,
+> 4.9% and 2.6%. **The corner column is usable across the whole range;** only
+> the slope column stops at byte ~120.
+
 12 dB/oct confirmed for the 2-pole; the 4-pole measured −20 to −24 dB/oct, and
 its corner sits 10-20% below the 2-pole's for the same byte.
 
@@ -5171,3 +5179,54 @@ band; the phase-fundamental counts only the component at the modulation rate.
 **For calibrating a depth field the fundamental-only estimator is more
 selective; for "how far does the pitch actually move" the moment is right.**
 Pick per question, and do not average them.
+
+## §60 — The cutoff table re-measured where it is used, and a trust boundary that was too broad (2026-08-24, live)
+
+§52 swept the cutoff range and told the reader to trust bytes 0–100. Real
+converted programs put their cutoffs at bytes 119–179 — entirely inside the
+region that warning covered — and two tables disagreed there by 26–39%. Two
+extrapolations disagreeing is not evidence about either, so the region was
+measured directly.
+
+Noise preset, 2-pole, Q 0, cord zeroed, every capture divided by a wide-open
+reference. **−3 dB crossing**, model-free:
+
+| byte | measured | §52 | byte | measured | §52 |
+|---|---|---|---|---|---|
+| 4 | 128.8 Hz | 129 | 128 | 1001.4 Hz | — |
+| 64 | 397.4 | 398 | 135 | 1092.0 | — |
+| 80 | 515.4 | 516 | 145 | 1298.6 | 1300 |
+| 100 | 687.9 | 689 | 160 | 1589.6 | — |
+| 110 | 772.2 | — | 179 | 2002.7 | — |
+| 119 | 918.3 | — | 195 | 2523.3 | 2526 |
+
+**§52 reproduces to better than 0.3% at every byte where it had a point.**
+
+### The correction to §52's own wording
+
+§52's "points above byte ~120 are not usable" was aimed at the **slope** column,
+which genuinely degrades from −12.7 to −7.7 dB/oct as the roll-off runs out of
+spectrum. It was written as though it covered the whole row. It does not:
+interpolating §52's **corner** column across the gap gives 931 / 1145 / 1950 Hz
+where the direct measurement gives 918 / 1092 / 2003 — 1.4%, 4.9%, 2.6%.
+
+The boundary was correctly placed for the quantity it was derived from and
+wrongly generalised to its neighbour. §52 now carries that amendment inline,
+because a sibling project reasonably declined to trust the table on the strength
+of the original sentence, and a warning that is too broad costs as much as one
+that is too narrow.
+
+### Two estimators, disagreeing informatively
+
+A 2-pole model `|H|² = A/(1 + (f/f_c)⁴)` was fitted to every point as a second
+opinion. Its `f_c` runs **below** the −3 dB crossing at low bytes (92 vs 129 at
+byte 4) and **above** it at high bytes (2518 vs 2003 at byte 179), crossing over
+around bytes 135–145 where the fit residual is also smallest — 0.07–0.27 dB
+there against 1.3 dB at both ends.
+
+A true Butterworth 2-pole has its −3 dB point exactly at `f_c`, so the
+divergence says the response is not that shape at the extremes; over-damped at
+the bottom is the obvious guess given `Q` reads 0. **The −3 dB crossing is
+reported as the answer because it is model-free and it is what "cutoff" means.**
+The fitted column is kept because a residual that rises at both ends and
+collapses in the middle is a statement about the filter, not noise.
