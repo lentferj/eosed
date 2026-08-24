@@ -6019,3 +6019,68 @@ visible knee in the printed shape. It is consistent, it is not the key scaling
 
 Rate 69 was restored on all three voices and read back. The fix belongs in the
 file, not in RAM.
+
+### §63 extended — a free point at byte 99, twelve bytes outside the fit
+
+Byte 99 is the **decay** rate the converted bank's sustaining voices carry, and
+it can be read off captures taken for something else entirely: the fall while the
+note is still held, before any release. On the mid keygroup, three notes:
+
+| note | dB/s |
+|---|---|
+| 62 | 5.39 |
+| 66 | 5.36 |
+| 70 | 5.34 |
+
+**0.9% spread across three notes** — the cleanest decay reading in the set.
+
+| | dB/s at byte 99 |
+|---|---|
+| measured | **5.36** |
+| §63's law | 5.14 (4% low) |
+| the sibling's constant | 6.1 (14% high) |
+
+Two things follow. **§63 predicts a byte twelve outside its fitted window
+[60, 87] to within 4%**, which is the first evidence that the slow end is
+reachable by extrapolation — the end a planned sweep exists to measure. One
+point is not a range and this one rides on a decay segment rather than a
+release, so it does not retire the sweep; it lowers the risk that the law falls
+apart there.
+
+And **the decay and release segments share the rate scale.** §63 already argued
+the filter and amplitude envelopes share one (12.2 against 12.3 bytes per
+halving); this is a third context on the same scale.
+
+**But the held level is only the envelope on a stationary source.** Total decay
+travelled at note-off, with byte-identical envelopes on all six voices:
+
+    14.7  17.1  24.6  27.2  28.2  32.1  34.2  35.8  39.9  dB
+
+**14.7 to 39.9 dB from the same bytes.** The sample's own contour dominates
+everywhere except the mid keygroup, whose notes sit within a few semitones of
+its root. Anything measured off a held level on musical material is measuring
+two things at once.
+
+### A null that was underpowered, not negative
+
+An earlier pass looked for the sample's loop period showing through the held
+level, found lags that did not track pitch, and reported "not the loop". **The
+analysis used 5 ms envelope windows and the loops are 7.6 and 15.3 ms at root —
+3 to 13 ms at the notes played.** A 5 ms window cannot resolve a period under
+10 ms, so the test could not have detected what it was looking for.
+
+Redone at 0.5 ms on the held portion, low keygroup:
+
+| note | semitones from root | loop period | best lag | ρ | ratio |
+|---|---|---|---|---|---|
+| 26 | −22 | 27.08 ms | 13.50 ms | 0.96 | 0.50 |
+| 40 | −8 | 12.06 ms | 6.00 ms | 0.98 | 0.50 |
+| 52 | +4 | 6.03 ms | 3.00 ms | 0.99 | 0.50 |
+
+**Exactly half the loop period at all three notes across 26 semitones.** The
+loop is showing through at its second harmonic and it tracks pitch precisely.
+The null is withdrawn.
+
+*Check the resolution of a measurement against the size of the thing being
+looked for before reporting its absence.* A null from an instrument that cannot
+see the effect is not evidence, and it reads exactly like one that is.
