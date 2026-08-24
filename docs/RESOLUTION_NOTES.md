@@ -5919,3 +5919,58 @@ five sixths of which was another bank's audio.
 - Loading a bank into empty RAM makes it **P000 upward**, and the machine lands
   on `P000` by itself with the bank's name in the title bar. No page trap and
   no dialog to dismiss — unlike the merge path of §48.
+
+### §67 extended — with the release working, a calibration error is visible underneath it
+
+How long each version sounds after note-off, same rig, same gain, same hold, at
+the six notes the listening test used — time from note-off to within 6 dB of the
+noise floor:
+
+| note | reference preset | conversion, merged | conversion, clean |
+|---|---|---|---|
+| 26 | 0.05 s | 0.78 s | 0.84 s |
+| 40 | 0.03 s | 0.87 s | 0.88 s |
+| 52 | 0.02 s | 0.90 s | 0.90 s |
+| 64 | 0.03 s | **0.02 s** | 1.14 s |
+| 72 | 0.19 s | **0.19 s** | 1.30 s |
+| 84 | 0.20 s | **0.09 s** | 1.17 s |
+
+The middle column is the audit Jan was given: it tracks the *reference* preset
+wherever the merge rebound it, and departs from it only in the low keygroup —
+the one voice bound to the bank's own sample. Column three is the same file with
+nothing else resident.
+
+**And the reference preset itself barely releases at all** — 0.02–0.20 s at
+every note. Its samples are the ones §66 read as `Loop in release: off`. That is
+not a defect in it; it is simply not the thing the conversion is trying to
+match.
+
+### The rate byte is about 1.8× too fast
+
+The source machine was measured elsewhere at **15.224 dB/s**, essentially
+key-independent. The clean conversion measures 27–28, which is §63's prediction
+for the release rate byte the voices carry. Inverting §63 for 15.224 gives byte
+79.8, so byte 80 was predicted and then tested rather than asserted:
+
+| keygroup | rate 69 | rate 80 | predicted at 80 |
+|---|---|---|---|
+| low | 27.36 dB/s | **13.44** | 15.05 |
+| mid | 27.97 dB/s | **14.24** | 15.05 |
+| high | 34.75 (resid 2.16) | 26.78 (resid 2.35) | — |
+
+Solving each keygroup's own two points for the byte that lands on 15.224 gives
+**78.1 and 78.9**. So the converter's release mapping should be producing about
+**78–79 where it produces 69**, and the audible consequence is a release 1.8×
+too fast — which is exactly the half of Jan's verdict that survived the merge
+being fixed.
+
+Two cautions on that number. The per-byte constant implied by these two points
+is 0.061–0.065 against §63's 0.0565, measured over a much longer sweep on a
+cleaner subject; two points do not re-derive a law, and §63's is the one to
+trust for anything else. And **the top keygroup will not fit a straight line at
+either rate** — residuals of 2.16 and 2.35 against 0.22–1.26 elsewhere, with a
+visible knee in the printed shape. It is consistent, it is not the key scaling
+§65 ruled out, and it is unexplained. Left open rather than averaged away.
+
+Rate 69 was restored on all three voices and read back. The fix belongs in the
+file, not in RAM.
