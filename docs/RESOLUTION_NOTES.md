@@ -5375,3 +5375,66 @@ it is exactly where a converter lands whenever a source asks for "a little".
 Practical consequence for anything driving the E4XT: if a computed value rounds
 to 1, measure what 1 actually does before shipping it. It may be delivering
 under half of what the arithmetic says.
+
+## §63 — Envelope rate is a SPEED, and the amplitude span is ~90 dB (2026-08-24, live)
+
+Two questions that a sibling project could not separate from its own code, both
+answerable without assuming any constant.
+
+### The rate byte sets dB per second, not a segment duration
+
+Noise preset, envelope parked so it jumps straight to a sustain level and holds,
+release the only thing moving:
+
+| sustain | rate 60 | rate 69 | rate 87 |
+|---|---|---|---|
+| 70 | 47.6 dB/s | 27.8 | 10.4 |
+| 100 | 45.5 dB/s | 28.6 | 9.9 |
+
+**The dB/s is the same at every sustain level.** The time to fall a fixed number
+of dB does not depend on where the fall starts; only the total release time
+scales, because the distance does. (Raw times differ by a constant ~0.12 s
+latency between the two sustains, which cancels in the slope.)
+
+So the rate law is **span-independent**, and arithmetic that divides a span to
+obtain a rate has the wrong shape regardless of which constant it divides by.
+
+    dB/s = 1382 × exp(−0.0565 × rate)        halving every 12.3 bytes
+
+The 12.3-byte halving matches §43's filter-envelope rate law (12.2 bytes) to
+within measurement: **the two envelopes share one rate scale.**
+
+### The amplitude span, measured rather than inferred
+
+Every segment parked at one level, steady output against level 100:
+
+| level | dB below 100 | level | dB below 100 |
+|---|---|---|---|
+| 100 | 0.00 | 30 | −61.36 |
+| 80 | −13.02 | 20 | −69.41 |
+| 60 | −32.52 | 12 | −72.60 |
+| 40 | −51.47 | ≤6 | floor (−73.5) |
+
+0.964 dB per level unit through the linear region, extrapolating to **−90 dB at
+level 0** — a lower bound, since levels at or below 6 sit on the output floor.
+
+A sibling's inferred `ENV_FULL_SPAN_DB = 97.82` is close; a "~55 dB" figure
+taken from an old calibration's comment is not. **The inconsistency between the
+two was real and resolved in favour of the inferred constant** — the comment
+described that calibration's own conditions, not the field's range.
+
+### Why the arithmetic still mattered less than expected
+
+The hypothesis under test was that releases were coming out roughly three times
+too fast. With the measured law, the test preset's octave layer — sustain level
+68, about 47 dB of audible travel — releases in **1.68 s at rate 69** against a
+desired 1.979 s. That is **18% fast, not 3× fast.**
+
+An 18% error is worth fixing and is not what a listener describes as "quite a
+bit longer". Shipping a 3× correction on the strength of the inconsistency would
+have overshot badly in the opposite direction.
+
+**A contradiction between two numbers in one codebase tells you something is
+wrong; it does not tell you which of them.** Both halves here disagreed with
+each other, and the measurement supported the one that had been labelled
+"inferred, not measured" over the one written down from a live calibration.
