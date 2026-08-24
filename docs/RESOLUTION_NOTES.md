@@ -6433,6 +6433,14 @@ notes on the previous conversion — 27.17 and 28.21 — the new bank is 1.78× 
 Same rig, same gain, same notes and hold as the pre-erase captures, so the two
 older columns are recorded audio rather than a second resident bank.
 
+**Keep the first column.** The reference preset releases in **0.02–0.20 s** at
+every note while the faithful conversion takes **1.3–2.6 s** — two orders of
+magnitude apart, and both correct for what they are. The reference is a
+hand-built preset from a library, its samples carry loop-in-release clear (§66),
+and it was never trying to imitate the source machine. **It is not ground truth
+for a release and using it as one would condemn a correct conversion.** Worth
+having on record the next time a reference preset is reached for as a target.
+
 ### The two numbers that are not rates, both predicted before the run
 
 - **The top keygroup's residual of 2.57** against 0.20–0.44 elsewhere. §70: the
