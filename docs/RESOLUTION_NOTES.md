@@ -6199,3 +6199,110 @@ R² would have looked fine on every one of those fits.
 have seen the alternative.* Ask what the measurement would have shown if the
 opposite were true, and check the instrument can show it — before reporting
 either an effect or its absence.
+
+## §69 — The rate law measured properly: 1% from byte 60 to 100, and flat in key (2026-08-24, live)
+
+A purpose-built calibration bank — flat looped white noise, zones root-matched
+so nothing is resampled, **loop-in-release asserted at the byte** (§63's own
+subject does not have it), two independent noise draws at two sustain levels,
+and two presets differing **only in root key**.
+
+Everything below is on that subject, fitted 15 dB clear of the noise floor with
+residual thirds printed, over falls of 38–57 dB.
+
+### The premise: the byte is a SPEED
+
+| preset | sustain byte | level at note-off | dB/s |
+|---|---|---|---|
+| draw A | 100 | −10.8 | 27.96 |
+| draw A | 76 | −27.8 | 28.31 |
+| draw B | 100 | −10.8 | 27.97 |
+| draw B | 76 | −27.8 | 28.33 |
+
+**17 dB apart at note-off, the same dB/s to 1.3%**, reproduced on two
+independent draws. §63 argued this from two sustain levels on a subject that no
+longer exists; it now holds on one that can be rebuilt from its own description.
+
+### The mechanism: rate does not depend on key, or on distance from root
+
+One sample, one envelope, one voice; only the root key differs between the two
+presets, so a note played in both is the same audio at a different distance from
+its root.
+
+| note | root 72 | root 96 |
+|---|---|---|
+| 72 | +0 → **27.98** | −24 → **27.95** |
+| 84 | +12 → **28.00** | −12 → **28.03** |
+| 96 | +24 → **27.99** | +0 → **28.00** |
+
+**Six captures, 27.95 to 28.03, spread 0.3%, across root distances −24 to +24.**
+The same distance reached from either preset agrees to 0.05 dB/s, which is a
+free internal control the design provides.
+
+**So the machine does not scale envelope rates with key, and does not scale them
+with distance from root either.** §65 reached the first half over a narrow range;
+this settles both over four octaves.
+
+**And it moves the unexplained curvature off the machine.** The musical material
+showed an apparent release rate climbing from 28 to 39.6 dB/s toward the top of a
+keygroup. On a stationary source at the same pitches the rate does not move at
+all. **That climb is the sample's own contour showing through a fit that assumes
+the envelope is the only thing moving** — not an envelope property, and not
+anything a converter can correct by changing a rate byte.
+
+### The law, measured across the range it is used in
+
+| byte | measured | §63 predicts | ratio |
+|---|---|---|---|
+| 60 | 46.48 | 46.59 | 1.00 |
+| 72 | 23.70 | 23.65 | 1.00 |
+| 88 | 9.67 | 9.58 | 1.01 |
+| 100 | 4.84 | 4.86 | 1.00 |
+
+**Within 1% at every byte, including byte 100 — twelve outside §63's fitted
+window of [60, 87].** Residuals 0.41–0.43 with thirds inside ±0.12.
+
+`dB/s = 1382 × exp(−0.0565 × rate)` stands **as written**, now over a measured
+60–100 rather than a fitted 60–87 with extrapolation beyond. A seven-point refit
+proposed by the sibling project should not be adopted: it was pulled by a pair of
+floor-contaminated points from this bench, and at byte 72 it predicts 23.88
+against the 23.70 measured here.
+
+### Two things the run settled on the way past
+
+**A merge places presets by NEITHER field in the file.** The bank was written
+with its preset bodies at ordinals 0–5 and its table-of-contents entries at
+10–15 — the two disagree inside one file, which is a writer bug. Merged over a
+resident six-preset bank they landed at **P006–P011**: appended, as §48
+describes. Neither number placed anything, and the resident preset at `P000` was
+never at risk.
+
+**A new disc image on an already-enumerated SCSI id appears without a restart.**
+The bank was written to a card volume the machine had enumerated hours earlier
+with different contents, and the new bank was visible on the next browse. This is
+the second instance, after §64's hot SD swap.
+
+### The run that had to be thrown away, and what it looked like from inside
+
+The first attempt was started with the LCD still in the disk browser after the
+merge. **§47: a Program Change is honoured only on the main preset page.** So the
+editor protocol's preset-select moved the *edit* target while the *sounding*
+preset never changed — **fourteen captures of one preset, labelled as six**, with
+every parameter write landing on presets that were not making the sound.
+
+It did not look like a failure. Preset names read back correctly, roots read back
+correctly, the pair-identification checks all passed, and every capture produced
+a clean fit with small residuals. **The tell was in the data**: the skeleton swept
+the rate byte from 60 to 100 and returned **28.4 dB/s at every one of them** — a
+control that changes nothing is either a broken control or a broken run.
+
+It was caught by someone listening, who said *what you are playing right now is
+not noise* before the numbers had been read at all.
+
+**So the identification discipline of §68 was necessary and not sufficient.** The
+run verified everything about *which preset it was addressing* and nothing about
+*which preset was sounding*, and those are different questions on a machine where
+one bus carries edits and another carries notes. `select_verified` now reads the
+LCD back after every Program Change and refuses if two presets share a screen.
+
+*Verify the thing that produces the measurement, not the thing you addressed.*
