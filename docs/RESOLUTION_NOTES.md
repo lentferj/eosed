@@ -5230,3 +5230,50 @@ the bottom is the obvious guess given `Q` reads 0. **The −3 dB crossing is
 reported as the answer because it is model-free and it is what "cutoff" means.**
 The fitted column is kept because a residual that rises at both ends and
 collapses in the middle is a statement about the filter, not noise.
+
+## §61 — Resonance moves the corner, by up to an octave (2026-08-24, live)
+
+The cutoff calibration of §52/§60 was taken at **Q 0**. Applying it to voices
+running at Q 102–112 put their filters 1.49–1.61× above target — near-constant
+across three different base cutoffs, so systematic.
+
+Measured on the noise preset: fix the cutoff byte, sweep Q, watch both the
+resonant peak and the −3 dB crossing.
+
+**−3 dB crossing, as a multiple of the same byte at Q 0:**
+
+| byte | Q 41 | Q 64 | Q 102 | Q 112 |
+|---|---|---|---|---|
+| 119 | 1.37 | 1.50 | 1.63 | 1.68 |
+| 135 | 1.59 | 1.78 | 1.94 | 2.00 |
+| 179 | 1.94 | 2.24 | 2.59 | 2.75 |
+
+At byte 135 the corner goes from 1092 Hz at Q 0 to 2184 Hz at Q 112 — **a full
+octave from the resonance control alone.**
+
+### It is not "two features of two curves"
+
+The obvious alternative explanation was that a resonant peak and an over-damped
+−3 dB crossing are simply different features and nothing is moving. Both were
+measured, and **both move together**, so the response really is shifting rather
+than changing shape around a fixed corner.
+
+### The shift is not a single factor
+
+It grows with Q *and* with the cutoff byte: 1.68× at byte 119 against 2.75× at
+byte 179, both at Q 112. So it cannot be corrected with a constant. A conversion
+that wants a corner frequency needs a Q-aware surface, or the targeting has to
+be done by measurement at the voice's actual Q.
+
+### The consequence for anything driving this filter
+
+**Cutoff and resonance are not independent controls on this machine.** A driver
+that sets a corner from a Q-0 calibration and then applies resonance will miss
+by up to an octave, and will miss more the brighter the voice. Two parameters
+calibrated separately and correct separately can still be wrong together.
+
+It also retired an A/B before it ran: a set of cord amounts aimed by measurement
+at Q 0, and a set computed by a law, were being compared on a preset that had
+since had resonance applied to every voice. Both were valid for a machine state
+that no longer existed. **A calibration carries the conditions it was taken
+under, and changing any of them invalidates it silently.**
