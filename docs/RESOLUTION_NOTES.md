@@ -4961,3 +4961,54 @@ parameter tried against the symptom measured correct and sounded insufficient
 because the corner was already above everything the material contained — §54's
 saturation rule, arrived at from the other end and confirmed on the source
 machine rather than on this one.
+
+## §57 — The amplitude envelope's audible floor: rate 0 closes before any sound leaves (2026-08-24, live)
+
+A decay-to-silence at the fastest rate the envelope offers produces **nothing at
+all**, not a very short burst. Measured on an isolated voice with `Dcy1` level 0
+and the rate swept, against the capture's own −84 dBFS noise floor:
+
+| Dcy1 rate | burst | peak |
+|---|---|---|
+| 0 | **silent** | −73.7 dBFS |
+| 1 | **silent** | −74.2 |
+| 2 | 0.0 ms | −65.1 |
+| 3 | **13.4 ms** | −50.8 |
+| 5 | 16.6 ms | −41.9 |
+| 8 | 17.0 ms | −37.0 |
+
+**Rate 3 is the first usable rung.** Rates 0 and 1 close the envelope before any
+audio leaves the voice; rate 2 is 15 dB below rate 3 and 0 ms long, so it is not
+a near miss.
+
+**The peak climbs with the rate, not only the duration.** A slower decay lets
+more of the attack transient out before the envelope reaches zero, so choosing
+too fast a rate loses the burst's amplitude as well as its length. That is why
+the gap between rate 2 and rate 3 is a cliff rather than a slope.
+
+Reproducible: an independent run at rate 3 measured 13.7 ms at −50.7 dBFS
+against 13.4 ms at −50.8 dBFS.
+
+### Why it matters, and the shape of the mistake
+
+A converter asked to render a ~10 ms cut computes a decay faster than the rate
+byte can express and clamps to the fastest available — rate 0 — which is the
+correct instinct and the wrong result, because the fastest available rate is
+*before any sound*. The layer disappears entirely: 24 dB of missing content
+presented as a fix.
+
+**The nearest EXPRESSIBLE value is a better approximation than the nearest
+representable one.** Clamping should stop at the audible floor, not at the
+numeric one. The sibling project now floors this at rate 3, gated on "a decay
+was asked for AND the sustain is zero" — a rate 0 into a real sustain is a
+legitimate instant jump and must stay one.
+
+### And a withdrawal, because it is the same lesson twice
+
+The first pass at this reported "a 4.3 ms burst at −73.9 dBFS". That was the
+peak of the noise floor across a 3.5 s file, with the onset detector locking on
+to sample zero because there was no onset to find. It was caught by printing the
+level in fixed windows instead of trusting the summary number — the same
+correction that separates §41's thirty silent captures from a real measurement,
+and the same one that withdrew four findings on 2026-08-22. **A summary
+statistic computed over a file with nothing in it still returns a number.**
