@@ -6084,3 +6084,22 @@ The null is withdrawn.
 *Check the resolution of a measurement against the size of the thing being
 looked for before reporting its absence.* A null from an instrument that cannot
 see the effect is not evidence, and it reads exactly like one that is.
+
+### The high keygroup's curvature is NOT the floor artefact
+
+Worth separating, since one correction could easily be taken to dissolve the
+other. Re-fitted 15 dB clear of the floor, rate 69, residual mean by thirds of
+the fall:
+
+| capture | dB/s | residual | thirds |
+|---|---|---|---|
+| low, +4 from root | 28.20 | 0.27 | +0.01 −0.01 −0.00 |
+| mid, +10 | 28.00 | 0.18 | +0.04 −0.03 −0.01 |
+| high, +4 | 29.13 | 0.92 | +0.40 −0.87 +0.46 |
+| high, +12 | **36.07** | **1.78** | **−0.80 +1.79 −0.96** |
+| high, +24 | 39.62 | 0.22 | −0.09 +0.16 −0.06 |
+
+The floor artefact produced **+,−,+** on every capture it touched, and moving the
+window removed it. The high keygroup at +12 shows **−,+,−** — the opposite sign
+pattern, larger, and it survives the window change. Different sign, different
+cause. The three shapes of §67's extension are still unexplained.
