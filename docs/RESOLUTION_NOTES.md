@@ -6122,3 +6122,65 @@ The floor artefact produced **+,−,+** on every capture it touched, and moving 
 window removed it. The high keygroup at +12 shows **−,+,−** — the opposite sign
 pattern, larger, and it survives the window change. Different sign, different
 cause. The three shapes of §67's extension are still unexplained.
+
+## §68 — Four defects with one shape, and three withdrawals with another (2026-08-24)
+
+Written down because both patterns recurred inside a single evening, and neither
+is about this machine specifically.
+
+### The defects: everything upstream reported success
+
+| what was wrong | what said it was fine |
+|---|---|
+| a sample flag set in the file and not honoured by the machine | the file, and every parameter read-back |
+| a preset's samples resolved to a different bank's identically-named copies | the file, the parameter dump, and a listening test |
+| a rate constant wrong by 13–19% for months | a 5% discrepancy in a note, written off as not worth chasing |
+| a preset number written to one field of a file and read from another | the writer, and a full test suite |
+
+**None of them were detectable without going to the machine and measuring.**
+Each lives in the gap between what was written and what the machine did with it,
+and a test that compares a writer to its own expectations cannot see into that
+gap — it compares the project to itself.
+
+The listening test is the sharpest case: it *did* reach the machine, and it
+still could not see the second defect, because what it heard was another bank's
+audio wearing the right envelopes and it had no reason to suspect the binding.
+**Reaching the hardware is necessary and not sufficient; the measurement has to
+be of a quantity the defect can move.**
+
+### The identification corollary
+
+A preset name is a label. **A preset number is also a label, and so is a stated
+preset count** — anything the machine does not have to act on can drift without
+anything upstream noticing. Two of the four above are exactly that.
+
+So: **identify by a field the machine demonstrably acts on.** A root key it
+transposes by. A rate byte it slews at. A sample number a voice actually plays.
+Where a run depends on having the right subject in front of it, read that field
+back and refuse if it disagrees, rather than trusting the label that named it.
+
+### The withdrawals: a method whose limits were never checked
+
+Three findings were withdrawn the same evening, all correct-looking at the time:
+
+- a null from an autocorrelation on 5 ms windows, looking for a 3–13 ms period
+- a 5–10% bias from fits whose window ran down to 6 dB above the noise floor
+- a "contradiction with the machine" resting on a constant already under suspicion
+
+**One shape: a method whose resolution, range or reference was never checked
+against the size of the thing being measured.** All three produced results that
+looked entirely reasonable from the inside — a clean null, a plausible bias, a
+confident prediction. Nothing in any of the three would have raised a hand.
+
+What caught two of the three was a specific question from someone reading the
+raw numbers — *print the residuals by thirds*, *here are the actual loop
+lengths* — which is the practical argument for reporting shapes and tables
+rather than summaries. **A summary gives a reader nothing to ask about**, and an
+R² would have looked fine on every one of those fits.
+
+### The one to keep
+
+*A result that looks fine from the inside is not evidence that the method could
+have seen the alternative.* Ask what the measurement would have shown if the
+opposite were true, and check the instrument can show it — before reporting
+either an effect or its absence.
