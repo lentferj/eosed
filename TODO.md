@@ -1423,3 +1423,35 @@ still the right fix**, and this exists because that does not.
 
 `verify` writes nothing, so checking a capture is free. A capture nobody has
 restored from is a backup nobody has restored from.
+
+## Filter envelope: the rate law is measured on a RISE only (2026-08-24)
+
+**Status:** open, low priority, needs the bench. **Blocked on:** a filter-inert
+subject with a filter cord deliberately added.
+
+§43 fitted the filter envelope's rate byte to 0.9998 across bytes 24–88 — but
+every point is a transition **upward to target 100**. Whether a *release*
+segment obeys the same law has never been measured. The amplitude envelope's
+segments were only shown to share one scale by measuring them (§63, §69), so
+nothing entitles anyone to assume it here.
+
+**Why it is worth having and not worth doing yet.** The sibling project's filter
+release computes its span in dB, from a law that maps an *amplitude* sustain
+byte to dB below peak, for an envelope §56 says the machine runs on a **cutoff
+byte** scale. It still lands within 2 rate bytes across 30 combinations, worst
+case 1.19× in time, because that unit error and §43's 0.52× distance difference
+very nearly cancel. Correcting a 1.19× error against an assumed reference is how
+it becomes a 1.4× one — so the measurement has to come first, and the amplitude
+error it would have masked (1.8×) is already fixed.
+
+**The procedure**, when it earns the time: the calibration bank is filter-inert
+by design, so add a `FEnv → FilFreq` cord in RAM on one of its noise presets,
+park the envelope so the release is the only stage moving, and time a downward
+traversal at several rate bytes. §43's two measurement traps apply unchanged —
+the corner's low end is invisible, so measure to a completion instant rather
+than a t10, and keep the source stationary.
+
+**It becomes urgent** if a listening test on the recalibrated bank reports
+something the amplitude release does not explain. §70: the filter carries more
+of what a listener hears than the amplitude envelope does at some pitches, so
+that residual would look like an amplitude error and would not be one.
