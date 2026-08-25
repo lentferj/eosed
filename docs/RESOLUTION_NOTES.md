@@ -233,11 +233,29 @@ words**; the OLD dump body is:
                    link-number order. No links -> no link data at all.
     <Voices>       first word = number of voices, then per voice:
 
-        group number            1 word
         voice parameters      146 words   General(20) Tuning(11) Amp/Filt(37)
                                           Lfo/Aux(24) Cords(54)
         number of sample zones  1 word
         zone blocks            13 words each, ONLY if the count is > 1
+
+**The group number is the FIRST of those 146 words, not an extra one.** The
+spec says "The first word is the Group number associated with the Voice. What
+follows are the Voice Parameters", which reads as a separate word — and this
+section said so until the arithmetic was checked against a real dump. It is
+`E4_GEN_GROUP_NUM`, the first of the General(20). The spec's own sum settles it
+where its prose does not: *"There are 146 total base parameters per Voice. This
+number along with the number of Samples word = 147 words, or 294 Bytes."* 147,
+not 148.
+
+**Verified against two live dumps** (2026-08-25):
+
+| | predicted | actual |
+|---|---|---|
+| 1-voice, 8-zone preset | 66 + 292 + 2 + 8×26 = **568** | **568** |
+| 6-voice, 1-zone-each preset | walk all six voices | consumes **1830 of 1830** |
+
+A one-word error here is not cosmetic: it shifts **every** field of **every**
+voice by one word, and the resulting values are all plausible.
 
 **"66 Bytes of Preset so far if no Links"** — the spec's own checkpoint, which
 is worth keeping as an arithmetic check on any parser: 2 (number) + 16 (name) +
