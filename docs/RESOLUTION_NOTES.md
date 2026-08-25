@@ -6860,3 +6860,55 @@ repeatable.
 
 *The trap is not that the page matters. It is that a dropped Program Change
 produces a plausible measurement of the preset that was already selected.*
+
+## §76 — The General(20) block is ids 37–56 in id order, pinned two ways (2026-08-25, live)
+
+A hand edit made at the front panel, dumped and diffed against the body that was
+sent, resolved the voice-parameter block's first group outright.
+
+**The diff was five words**, one of them the preset number:
+
+    voice 0 word 2     0 -> +10      voice 2 word 2    -6 ->  -8
+    voice 1 word 2   -16 -> -18      voice 3 word 2   -16 -> -18
+
+Four voices, one index, values in dB — **word 2 is `E4_GEN_VOLUME`, id 39.** And
+the whole block follows:
+
+| word | id | | word | id | | word | id |
+|---|---|---|---|---|---|---|---|
+| 0 | 37 GROUP_NUM | | 4 | 41 CTUNE | | 8 | 45 KEY_LOW |
+| 1 | 38 SAMPLE | | 5 | 42 FTUNE | | 9 | 46 KEY_LOWFADE |
+| 2 | 39 VOLUME | | 6 | 43 XPOSE | | 10 | 47 KEY_HIGH |
+| 3 | 40 PAN | | 7 | 44 ORIG_KEY | | 11 | 48 KEY_HIGHFADE |
+
+words 12–15 are ids 49–52 (`VEL_*`), words 16–19 ids 53–56 (`RT_*`).
+
+**Pinned twice, independently.** A sibling project located words 1, 7, 8 and 10
+by *column matching* — searching the block for the one index whose values across
+all voices matched a vector predicted from its own converter output, and
+refusing on anything but a unique hit. Those four land exactly on their
+id-order positions, and that method never used the ordering. **Neither
+derivation is a transcription of the spec**, which gives only the group sizes.
+
+It also settles a mapping that was deliberately left open: a voice word holding
+`12` looked like a transpose and is **`E4_GEN_CTUNE`** (id 41, coarse tune,
+*Voice only*) — which is why it has no counterpart in a zone block. The zone
+block's 13 fields are the General(20) **minus the six *Voice only* ids** (37,
+41, 43, 53–56), exactly `SAMPLE_ZONE_PARAM_IDS`.
+
+### A saturated field is not a measurement
+
+The edit was made by ear to correct a level imbalance no measurement had
+explained. **Voice 0 sits at `+10` — the field's maximum** — and the other three
+were then moved *down* by 2 dB each.
+
+**That is what running out of range looks like.** The balance shift actually
+wanted is **at least 12 dB of attack against sustain, and 12 is a lower bound**;
+the listener raised one layer until it stopped rising and continued in the only
+direction left.
+
+*A control at its end stop records where the range ended, not where the person
+wanted to be.* Fitting a correction to `+10/−2/−2/−2` would encode the ceiling
+as if it were a choice. The way to recover the unclamped figure is to move all
+four proportionally — 0 and −12 — and ask whether that is still right or whether
+more is wanted, which is another listen rather than another build.
