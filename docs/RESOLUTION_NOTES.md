@@ -216,6 +216,52 @@ raw 0-127 parameter value is unaffected and fully controllable.
 
 ## §6 — Preset dump field order cross-check (open)
 
+### The spec's own layout, transcribed 2026-08-25
+
+Recorded because a sibling project is about to hand-edit a dump body, and the
+alternative was inferring this from a hexdump. **All parameters are 2-byte
+words**; the OLD dump body is:
+
+    {<NUMBER>, <NAME>, <Global Parms>, <Links>, <Voices>}
+
+    <NUMBER>       one word, preset number 0-999
+    <NAME>         16 ASCII characters
+    <Global Parms> ids 0-5 first (TRANSPOSE, VOLUME, CTRL_A..D), then effects
+                   A and B. "If the effects A or B Algorithm is 0, then the
+                   effects parameters are the values of Master Effects A or B."
+    <Links>        first word = number of links; then 13 words per link, in
+                   link-number order. No links -> no link data at all.
+    <Voices>       first word = number of voices, then per voice:
+
+        group number            1 word
+        voice parameters      146 words   General(20) Tuning(11) Amp/Filt(37)
+                                          Lfo/Aux(24) Cords(54)
+        number of sample zones  1 word
+        zone blocks            13 words each, ONLY if the count is > 1
+
+**"66 Bytes of Preset so far if no Links"** — the spec's own checkpoint, which
+is worth keeping as an arithmetic check on any parser: 2 (number) + 16 (name) +
+44 (22 global words) + 2 (link count) + 2 (voice count) = 66.
+
+**The multisample marker is `3FFFh` in `E4_GEN_SAMPLE`.** *"If the Sample
+Number is 3FFFh, then it is a multisample voice."* That is the same value the
+editor protocol returns as **−1** on parameter id 38 — the two are one fact
+seen through a u14 and an s14 reading of the same field, which is worth stating
+because they look like different sentinels.
+
+**A zone count of 1 means the voice is not multisample and NO zone blocks
+follow** — the next word begins the next voice. Only a count greater than 1
+produces zone data. A parser that always reads zone blocks will walk off the
+end of every ordinary preset.
+
+**The 13-word zone block** is `E4_GEN_SAMPLE` plus the 12 fields ids 39, 40,
+42, 44, 45-48, 49-52 — exactly `eos/params.py`'s `SAMPLE_ZONE_PARAM_IDS`,
+which was transcribed independently and agrees.
+
+*This is what the spec says, not what the machine was observed to do.* The
+field order below is still the open item; this transcription narrows what has
+to be checked rather than closing it.
+
 `../mpc2emu/docs/E4B_FORMAT.md` documents the on-disk E4B bank/preset/voice/
 zone/sample byte layout, reverse-engineered independently against the E4XT's
 file format. The remote editor protocol's preset-dump field order (Global
