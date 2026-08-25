@@ -6543,13 +6543,35 @@ notes on the previous conversion — 27.17 and 28.21 — the new bank is 1.78× 
 Same rig, same gain, same notes and hold as the pre-erase captures, so the two
 older columns are recorded audio rather than a second resident bank.
 
-**Keep the first column.** The reference preset releases in **0.02–0.20 s** at
-every note while the faithful conversion takes **1.3–2.6 s** — two orders of
-magnitude apart, and both correct for what they are. The reference is a
-hand-built preset from a library, its samples carry loop-in-release clear (§66),
-and it was never trying to imitate the source machine. **It is not ground truth
-for a release and using it as one would condemn a correct conversion.** Worth
-having on record the next time a reference preset is reached for as a target.
+**Keep the first column.** The preset in it releases in **0.02–0.20 s** at every
+note while the faithful conversion takes **1.3–2.6 s** — two orders of magnitude
+apart. **It is not ground truth for a release and using it as one would condemn
+a correct conversion.**
+
+> **Corrected 2026-08-25: it is not a library original either.** This section,
+> §66 and §67 all call it "the reference preset" and §71 called it hand-built
+> from a library. **It is an EARLIER CONVERSION of the same source program**,
+> produced by the same sibling writer. Three things settle it: the E-MU library
+> material for this row is the bass set that reads `Super Sub 2 / Synth Bass
+> 10..34 / DX Bass 1,2 / JP4 Bass / Moog Bass`, read off the machine at PC 0–9;
+> the voice counts 6 / 8 / 7 across the group match three separate builds of the
+> conversion and nothing in the library; and the preset names are that writer's
+> truncation of the source program names.
+>
+> **Which makes the two orders of magnitude a better result, not a worse one.**
+> All three columns are conversions of one program at three stages — before the
+> loop-in-release flag (§64), after it, and after the rate calibration (§71).
+> The first column is not a different instrument that happens to release
+> quickly; it is **this** instrument with the flag missing.
+>
+> And it dissolves a coincidence §66 recorded without explaining: that "the
+> reference bank" and the conversion share all sixteen sample names. Of course
+> they do — **both came out of the same writer.**
+>
+> *Which bank on the card each preset came from is still open*: the load
+> boundaries observed here are PC 0–9, 10–21, 22–33, 34–39 for the four banks in
+> their documented order, which puts the group at 34–39 in the FOURTH bank, not
+> the third. That is a question for whoever holds the files.
 
 ### The two numbers that are not rates, both predicted before the run
 
