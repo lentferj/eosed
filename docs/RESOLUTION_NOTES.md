@@ -4136,6 +4136,17 @@ evidence.
 
 ## §46 — `FEnv+ -> FilFreq` depth: a product, to first order, with real compression (2026-08-22, live)
 
+> **SUPERSEDED IN ITS UNIT BY §56, and the difference is the whole point.**
+> This section states the depth in **octaves**. §56 measured 57 points on a
+> stationary subject with every corner divided by a wide-open reference and
+> found the cord adds a fixed number of **cutoff BYTES** — `delta_byte =
+> 0.02506 × level% × amount`, residual 2.1 bytes across five base cutoffs —
+> **not octaves and not Hz**. Because the corner is exponential in the byte, an
+> octave-based conversion needs a different amount from every different base
+> and a byte-based one does not. **Cite §56 for the depth law.** This section
+> is kept for its method and for the compression it reports, part of which was
+> itself withdrawn (three points on a descending stretch).
+
 **The shift is a product of envelope level and cord amount**, as the AKAI's is
 (s3ked §148) — so mpc2emu's conversion is structurally right and needs a
 constant, not a redesign. But the product holds only to first order, and the
