@@ -4524,15 +4524,40 @@ boundary, so what is confirmed is the *positional* mapping rather than three
 individual names. The rest stay transcription and the same one-line check
 settles any of them.
 
-**Re-confirmed 2026-08-25 on third-party authored content**, because a sibling
-project's file decode now rests on it. A bank loaded read-only from the machine's
-own disc reads parameter id 1 on a voice whose stored filter byte the sibling
-decodes as a 4-pole lowpass; the panel prints **`Filter  4 Pole Low-pass`** for
-that voice, with `Frequency: 20000Hz` at cutoff byte 255 and `Q 0`. So the two
-projects' filter numbering differs only in scale — one is the E4XT parameter id,
-the other a canonical enum — and both name the same filter. **A cross-project
-disagreement about a number is not a disagreement about the thing until both
-scales are stated.**
+> **Superseded by §36, five days earlier than this paragraph reads.** §36
+> confirmed **16 of 16** against the machine's own display — 14 exact, 2
+> abbreviated, 0 disagreements — so "three of twenty-one" understates what is
+> known. Only runtime 17–20, the morphing filters, remain unconfirmed, and
+> runtime 0 stays ambiguous because `2-Pole Lowpass` is both the table's id 0
+> and the documented rendering of a *rejected* byte.
+
+**Spot-checked again 2026-08-25 on third-party authored content.** A bank loaded
+read-only from the machine's own disc: `E4_VOICE_FTYPE` (**parameter id 82**)
+reads **value 1** on a voice the sibling project decodes as a 4-pole lowpass, and
+the panel prints `Filter  4 Pole Low-pass` for that same voice. Its cutoff page
+printed `Frequency: 20000Hz` at cutoff byte 255 — **the panel's nominal figure,
+not the corner**: §52 measured the printed cutoff as 2.0–2.1× off the real corner
+at the dark end, and it must not be lifted as a top-end calibration anchor. It is
+recorded here only as the display accompanying the filter name. One more row
+agreeing with §36's table, on content neither project authored.
+
+**It was reported to the sibling as a disagreement first, and that framing was
+half wrong.** Reporting the raw mismatch was right; calling the two numberings
+"the same scale offset" was not, and **§36 already had the answer.** The E4B
+`vpar[58]` byte is a **grouped code** — family in the high nibble, member in the
+low — not an index into anything: `0x00`→1, `0x02`→2, `0x08`→3, `0x10`→5,
+`0x40`→11. There is no scale relating a stored byte to a runtime id, and §36
+warns specifically that treating it as a sequential filter number yields a
+plausible byte from an unrelated family or one that silently degrades to 2-Pole
+Lowpass.
+
+So the correct statement of the case is: **eosed runtime id 1, E4B stored byte
+`0x00`, both displayed by the machine as `4 Pole Low-pass`** — three names for
+one filter, related by §36's table and by nothing simpler.
+
+*A disagreement about a number is not a disagreement about the thing until both
+sides state which encoding they are quoting* — and a report that omits a mapping
+its own project has already measured is reporting less than it knows.
 
 ### A real defect that was completely inaudible, and the reason matters
 
