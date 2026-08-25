@@ -6782,3 +6782,81 @@ to the device immediately after a dump.**
 
 *A function that leaves the shared resource dirty is not correct, however
 correct its return value.*
+
+## §75 — A four-voice preset with a multisample voice, built entirely by dump send (2026-08-25, live)
+
+The first real use of the send path (§74), and the result is a capability rather
+than a number: **a sibling project's hand-edited preset body was transferred to
+the machine in one operation, and the machine holds exactly what was sent.**
+
+The edit restructured a six-voice preset into four, collapsing three
+single-zone voices into **one multisample voice carrying three key zones**, and
+changed four cutoff bytes and four modulation-cord amounts.
+
+    P100 before: 'Empty Preset'
+    sent 1320 bytes, retargeted from preset 0 to 100
+    P100 after:  'SPACE E', 4 voices, 6 sample zones
+    read back:   1320 bytes, differing in exactly ONE byte -- offset 0, the
+                 retarget itself. 1319 of 1320 identical.
+
+Structure as the machine holds it, and `preset_num_szones` agrees independently
+at 6 = 3+1+1+1, so this is not a parser reading its own assumptions back:
+
+    voice 0: E4_GEN_SAMPLE -1 (multisample)  zone count 3  zone samples 4,5,6
+    voice 1: 1    voice 2: 2    voice 3: 3   zone count 1 each
+
+**No `NEW_VOICE`, no `NEW_SAMPLE_ZONE`, no `COMBINE`** — none of the `20h`/`30h`
+family, which has still never been sent to this machine. And the reason that
+matters is not the commands saved: **the alternative's failure mode was a
+half-built preset**, a state neither project could have described, produced by
+commands never exercised. **A single transfer has no intermediate state to be
+wrong in.**
+
+### The renumbering, and why it ran even though it changed nothing
+
+Sample references in a dump are **numbers**, and a bank's numbering depends on
+what else is resident (§67). So the sibling supplied its zones keyed by sample
+*name* and never sent a number, and the numbers were resolved here against RAM
+at the moment of use.
+
+It resolved to a no-op — the body descended from a dump of the resident bank, so
+its numbers were already RAM numbers, provable without names at all. **It was
+run anyway**, at the sibling's insistence, so that the path carrying the *next*
+body — which will not descend from a resident dump — is one that has been
+proven rather than reasoned about.
+
+### The name match that had to be exact, and nearly was
+
+The names first supplied did not match what the machine reports:
+
+    supplied        machine reports
+    KK DXE          'KK DXE_C2'
+    KK DXE1         'KK DXE1_C3'      ... and four more
+
+**`KK DXE` is a prefix of all six.** One file carries two names per sample — a
+plain one in its table of contents and a display name with the root note
+appended for the machine — and the projects were reading different fields. A
+resolver falling back to "starts with" or "closest" would have **bound every
+zone to the same sample and reported success.**
+
+The resolver refused, because it requires exactly one exact match. That rule was
+written for a different hazard — a sibling had seen two single-byte corruptions
+in resident RAM in thirty hours, and a fuzzy-matched corrupt name binds a zone
+to the wrong sample silently — and it covered this one for free.
+
+**It must also refuse on ambiguity, not only on absence.** Display names are
+built by truncating the base to make room for the root suffix, so two samples
+with different names can collide into one display name while their table-of-
+contents names still differ. **Machine-reported sample names are not guaranteed
+unique.**
+
+### And §47 collected another one
+
+A check of "does a bare program change reach preset 100" was run with the panel
+still in the disk browser after a merge. **All four program changes were
+silently ignored** — PC 0 and PC 100 returned the same screen, indistinguishable
+from each other. Walked back to the preset page, the same test passes and is
+repeatable.
+
+*The trap is not that the page matters. It is that a dropped Program Change
+produces a plausible measurement of the preset that was already selected.*
