@@ -6334,6 +6334,33 @@ have seen the alternative.* Ask what the measurement would have shown if the
 opposite were true, and check the instrument can show it — before reporting
 either an effect or its absence.
 
+### A detector needs TWO negative controls, not one (added 2026-08-25)
+
+A sibling's dead-note audit over 9433 converted programs reported **70 with keys
+that go silent**, and it was a false-positive rate rather than a finding: it used
+an absolute threshold — "no voice decaying slower than 0.25 s" — and one flagged
+program has a source envelope that genuinely decays in 0.17 s. **0.17 s against
+the 0.084 s of the artefact it was hunting is a factor of two, which is not a
+discriminator.**
+
+The fix was to apply the same test to **both sides** and report only the
+difference: flag a key only where the conversion goes silent and the source does
+not. That gave **0 of 9433 with the fix in, and 108 programs losing up to 59
+keys each with it reverted.**
+
+**The control had to be run twice.** The loose version *passed* its
+fix-reverted control — it did report the known-bad programs — and was still
+wrong, because it also reported 70 good ones. So:
+
+> **A detector that reports zero is indistinguishable from one that cannot see.
+> A detector that reports seventy is indistinguishable from one that cannot tell
+> the difference.**
+
+Both failures need a control, they are different controls, and **only the second
+one looks like a result while it is happening.** A zero invites suspicion; a
+large number invites a bug report. Run the negative control on the detector's
+*positives* as well as on its zero.
+
 ## §69 — The rate law measured properly: 1% from byte 60 to 100, and flat in key (2026-08-24, live)
 
 A purpose-built calibration bank — flat looped white noise, zones root-matched
