@@ -6991,3 +6991,41 @@ does what its name says.* Finding the code is evidence about the code's
 existence and nothing more — the same family as a test whose subject sits
 outside the range where the effect exists, which will pass for whatever reason
 happens to be available (§72).
+
+### Confirmed by ear and by meter, with a control nobody planned
+
+The corrected preset was sent back over the path built earlier the same day
+(§74/§75) and measured against two other arms. Note 48, RMS in successive
+windows:
+
+| | | | | | |
+|---|---|---|---|---|---|
+| source machine | −25.9 | −24.0 | −25.0 | −24.0 | −27.0 |
+| original conversion | −44.4 | **−85.9** | −85.8 | −86.0 | −86.1 |
+| split, envelopes untouched | −44.9 | **−86.0** | −85.7 | −86.3 | −86.3 |
+| scoped fix | −11.7 | **−8.7** | −11.1 | −13.3 | −22.7 |
+
+**The middle arm is the control and it matches the original within 0.5 dB.** The
+voice split on its own changes nothing audible; scoping the envelope is what
+fixed it.
+
+**That control existed only because of a mistake.** The sibling's first body
+wrote the decay rate to word 39 — `Dcy2`, which the source leaves at zero — so
+the split happened and the envelopes did not. It was caught here by reading the
+body at `id − 37` and finding 33 dead notes where the author's own check
+reported none, and the discarded build then turned out to be exactly the arm
+that rules out "the split did it". **Nobody would have built it deliberately.**
+
+*The author's verify passed because it read back the word it had just written.*
+A check that reads the field it wrote proves the write happened and nothing
+else — the same error as pointing at the line that implements a check, one
+remove further in.
+
+**And the discriminator that made the disagreement actionable**, rather than two
+parties contradicting each other: the same code, on the same field, had
+reproduced the author's description of the *unmodified* preset exactly minutes
+earlier. **A reading that agrees on one artefact and disagrees on the next is
+more likely to have found a real difference than to have broken in between.**
+The general fix is to pin an offset against a value both sides have
+independently observed — here `[86, 3, 3, 86]` — *before* writing anything,
+which turns an offset from an assumption into a measurement.
