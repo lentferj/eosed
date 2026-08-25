@@ -6912,3 +6912,82 @@ wanted to be.* Fitting a correction to `+10/−2/−2/−2` would encode the cei
 as if it were a choice. The way to recover the unclamped figure is to move all
 four proportionally — 0 and −12 — and ask whether that is still right or whether
 more is wanted, which is another listen rather than another build.
+
+## §77 — The voice parameter block is `word = id − 37`, and column matching is retired (2026-08-25, live)
+
+Every field offset either project had found by searching for a predicted column
+lands on one formula. The spec's group sizes are the reason:
+
+    General(20)   ids  37- 56   ->  words   0- 19
+    Tuning(11)    ids  57- 67   ->  words  20- 30
+    Amp/Filt(37)  ids  68-104   ->  words  31- 67
+    Lfo/Aux(24)   ids 105-128   ->  words  68- 91
+    Cords(54)     ids 129-182   ->  words  92-145
+
+Contiguous, in id order, 146 words — **so the word index of any voice parameter
+is `id − 37`.**
+
+**Tested against the machine rather than asserted.** Fourteen fields read out of
+a live dump at `id − 37` and independently over the editor protocol from the same
+voice of the same preset: 14 of 14 exact, spanning all five groups.
+
+| id | word | | id | word | | id | word |
+|---|---|---|---|---|---|---|---|
+| 38 SAMPLE | 1 | | 70 VENV_SEG0_RATE | 33 | | 83 FMORPH | 46 |
+| 39 VOLUME | 2 | | 74 VENV_SEG2_RATE | 37 | | 146 CORD5_AMT | 109 |
+| 44 ORIG_KEY | 7 | | 78 VENV_SEG4_RATE | 41 | | 149 CORD6_AMT | 112 |
+| 45 KEY_LOW | 8 | | 47 KEY_HIGH | 10 | | … | |
+
+**This retires column matching for this format.** That method — searching the
+block for the one index whose values across all voices match a predicted vector,
+refusing on anything but a unique hit — found words 1, 7, 8, 10, 46, 109 and 112
+correctly and was the right tool when the layout was unknown. It cost a
+predicted vector per field and could only find fields that happened to vary
+between voices. **The rule costs nothing and covers all 146**, including every
+field that is identical across every voice and therefore invisible to a column
+search.
+
+Worth keeping the sequence, though: the rule was *derived* only after the
+matched offsets existed to check it against. **Four independently matched
+offsets agreeing with a formula is what made the formula credible** — proposing
+it first would have been a guess with a plausible shape, which is the thing that
+has cost this bench the most time.
+
+### It also confirmed a defect and two decay times on the way past
+
+The dump was taken so a sibling could locate the amplitude envelope for a
+preset whose four voices carry two distinct envelopes in a 2-2 pattern. With the
+rule, no search was needed and the structure reads straight out:
+
+    v  keys      Dcy1 rate
+    0  24- 38      86
+    1  39- 52       3     <- choked
+    2  45- 76       3     <- choked
+    3  72-127      86
+
+**Note 48 falls inside voices 1 and 2 and nothing else, and both are choked** —
+so that note has no sustaining voice at all, which is the click-then-silence the
+sibling measured at −85 dBFS against a source that rings for seconds.
+
+And §63's rate law reproduces their two decay figures from the bytes on the
+machine, over the ~98 dB span:
+
+    rate 86 -> 10.7 dB/s -> 9.12 s      converter says 9.123 s
+    rate  3 -> 1167 dB/s -> 0.084 s     converter says 0.084 s
+
+Two chains — a converter's own arithmetic, and a rate law measured on white
+noise here — meeting to three figures.
+
+### The defect's shape, which is not about mute groups
+
+The sibling's mute-group model replaced the losing voice's envelope across its
+**whole key range**. A choke can only bite where the two keygroups **overlap**;
+elsewhere the partner is not sounding and nothing chokes. Their code contained
+an overlap test, it was correct, and it decided *whether* to cut rather than
+*where*.
+
+*Pointing at the line that implements a check is not checking that the check
+does what its name says.* Finding the code is evidence about the code's
+existence and nothing more — the same family as a test whose subject sits
+outside the range where the effect exists, which will pass for whatever reason
+happens to be available (§72).
