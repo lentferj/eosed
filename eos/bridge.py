@@ -829,11 +829,57 @@ class EosBridge:
         self.midi_out.send_message(list(frame), write=write)
 
     def _drain(self) -> None:
+        self._pushback = None
         while self.midi_in.get_message() is not None:
             pass
 
+    def _drain_settled(self, quiet: float = 0.25, limit: float = 2.0) -> int:
+        """Drain until nothing has arrived for ``quiet`` seconds.
+
+        :meth:`_drain` is instantaneous, which is right for a request/reply
+        exchange and wrong before starting a transfer: a frame the device sent
+        microseconds ago has not reached us yet, is not drained, and then
+        answers the first question of the next exchange. That is not
+        hypothetical -- see :meth:`_consume_trailing_eof`.
+        """
+        dropped, deadline = 0, time.time() + limit
+        last = time.time()
+        while time.time() < deadline and time.time() - last < quiet:
+            if self.midi_in.get_message() is not None:
+                dropped += 1
+                last = time.time()
+            else:
+                time.sleep(0.005)
+        return dropped
+
+    def _consume_trailing_eof(self, timeout: Optional[float] = 0.5) -> None:
+        """Read the EOF the device sends after the last data packet.
+
+        The spec: EOF "must be sent at end of transfer", and a dump loop that
+        exits on its byte count rather than on the EOF leaves that frame in the
+        input queue. Nothing in a dump notices -- but the NEXT exchange reads it
+        as the answer to its own first question, which is how the first
+        host-initiated send in this project got "unexpected 0x7b while waiting
+        on the dump header" from a device that had not yet been asked anything.
+        """
+        try:
+            frame = self._receive(timeout)
+        except TimeoutError:
+            return                      # some firmware may not send it; fine
+        _, command, _ = m.parse_frame(frame)
+        if command != m.Command.EOF:
+            self._pushback = frame      # not ours: _receive hands it back
+
     def _receive(self, timeout: Optional[float] = None) -> bytes:
-        """Block until one SysEx message arrives; raise TimeoutError otherwise."""
+        """Block until one SysEx message arrives; raise TimeoutError otherwise.
+
+        A single frame may have been pushed back by :meth:`_consume_trailing_eof`
+        when it read something that was not the EOF it went looking for; that
+        frame is returned first rather than dropped."""
+        pushed = getattr(self, "_pushback", None)
+        if pushed is not None:
+            self._pushback = None
+            return pushed
         deadline = time.time() + (self.timeout if timeout is None else timeout)
         while time.time() < deadline:
             message = self.midi_in.get_message()
@@ -1142,6 +1188,7 @@ class EosBridge:
         # "256 Bytes, or LESS" per the spec, but nothing stops a device from
         # padding it out to a full packet, and silently returning the padding
         # would shift every offset a caller computes into the tail.
+        self._consume_trailing_eof(timeout)
         return bytes(data[:header.byte_count])
 
     # -- preset dump (NEW format) -------------------------------------------
@@ -1195,6 +1242,7 @@ class EosBridge:
                                 device_id=self.device_id).encode())
 
         # Trimmed for the same reason as the OLD path above.
+        self._consume_trailing_eof(timeout)
         return header, bytes(data[:header.total_bytes])
 
     # -- preset SEND (OLD format) -------------------------------------------
@@ -1254,7 +1302,7 @@ class EosBridge:
             raise ValueError("dump data is too short to carry a preset number")
         preset = self.dump_target(data)
 
-        self._drain()
+        self._drain_settled()
         self._send(m.OldDumpHeader(byte_count=len(data),
                                    device_id=self.device_id).encode())
         self._await_ack(0, timeout, what="the dump header")

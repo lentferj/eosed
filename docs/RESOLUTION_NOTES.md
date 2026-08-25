@@ -6690,3 +6690,55 @@ Three things were blamed for the top keygroup across one evening — key scaling
 (§65, excluded), the filter (§70, real but not this), and the sample's contour —
 and the residual structure inside the fits was none of them. *A fit's residual
 is data. If it has a shape, something made it.*
+
+## §74 — The preset send path works, and the first attempt failed on a bug in the READ path (2026-08-25, live)
+
+First host-initiated preset dump this project has ever made. Verified the way a
+transport should be: **dump a preset, send it to an empty slot, dump that slot,
+compare byte for byte.**
+
+    source P018 'Sine B3 Organ', 1 voice, 438 bytes
+    retargeted to P100 -- only the first two bytes differ, checked
+    P100 before: 'Empty Preset'
+    send returned in 0.5 s
+    P100 after:  'Sine B3 Organ', 1 voice
+    read back:   438 bytes, IDENTICAL
+
+**A byte-identical return does not depend on the inferred half of the handshake
+being semantically right.** The spec states that a preset may be dumped *to* the
+E4 but not who acknowledges what on a host-initiated transfer; that half mirrors
+the receive direction. If the bytes come back, the transport worked whatever the
+negotiation is doing — which is why this was chosen over a functional test.
+
+**And the inference was right:** the device ACKs the header and each data
+packet, exactly as it expects to be ACKed when sending.
+
+### The first attempt failed, and not where anyone was looking
+
+    ValueError: unexpected 0x7b while waiting on the dump header
+
+`0x7B` is EOF. The device had not answered the header at all — **it was the
+trailing EOF of the preceding dump, still sitting in the input queue.**
+
+`dump_preset_old` loops `while len(data) < header.byte_count`. When the data
+completes exactly on the count, the loop exits **without reading the EOF the
+spec says the sender "must" send at the end of a transfer.** Nothing in a dump
+notices: the caller gets correct bytes, every test passes, and the frame simply
+waits. **The next exchange then reads it as the answer to its own first
+question.**
+
+Fixed in the read path, where the bug is: both dump paths now consume the
+trailing EOF, and anything that is *not* an EOF is pushed back rather than
+swallowed, because dropping a real reply would be worse than the bug. The send
+path additionally drains with a **settling** window rather than an instantaneous
+one — a frame the device sent microseconds ago has not arrived yet and is not
+drained by a loop that returns immediately.
+
+**This is the same shape as §68's four defects, in our own code:** a read path
+that was correct in everything it returned and wrong in what it left behind,
+invisible until something downstream asked the next question. It survived a
+verified live dump (§7) and 489 passing tests because **nothing had ever spoken
+to the device immediately after a dump.**
+
+*A function that leaves the shared resource dirty is not correct, however
+correct its return value.*

@@ -1414,3 +1414,36 @@ def test_dump_target_and_retarget_round_trip():
     assert bridge_mod.EosBridge.dump_target(moved) == 22
     assert moved[2:] == body[2:]      # nothing but the destination changed
     assert len(moved) == len(body)
+
+
+def test_dump_preset_old_consumes_the_trailing_eof():
+    """A dump loop that exits on its byte count leaves the device's EOF in the
+    queue, where the NEXT exchange reads it as its own first reply. That is not
+    hypothetical: it is what the first live preset send hit."""
+    payload = b"P" * 40
+
+    def handler(frame):
+        _, command, _ = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP_REQUEST:
+            return [
+                m.OldDumpHeader(byte_count=len(payload)).encode(),
+                m.OldDumpMessage(packet_number=0, data=payload).encode(),
+                m.EndOfFile().encode(),
+            ]
+        return None
+
+    bridge = _bridge_with(handler)
+    assert bridge.dump_preset_old(5) == payload
+    # nothing of the transfer is left behind for the next command to trip on
+    with pytest.raises(TimeoutError):
+        bridge._receive(0.05)
+
+
+def test_consume_trailing_eof_pushes_back_anything_else():
+    """If what arrives is not the EOF, it must be handed to the next reader
+    rather than swallowed -- dropping a real reply is worse than the bug."""
+    bridge = _bridge_with(lambda frame: None)
+    other = m.Ack(packet_number=3).encode()
+    bridge.midi_in.inbox.append(other)
+    bridge._consume_trailing_eof(0.2)
+    assert bridge._receive(0.2) == other
