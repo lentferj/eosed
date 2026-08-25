@@ -218,6 +218,22 @@ class DemoBridge:
                                  device_id=self.device_id)
         return header, data
 
+    def send_preset_old(self, data: bytes, *, allow_write: bool = False,
+                        timeout: Optional[float] = None, max_retries: int = 3) -> int:
+        """Accept a preset send and remember the name, so ``--demo send`` can be
+        used to rehearse the command without a device in front of you.
+
+        It enforces ``allow_write`` exactly as the real bridge does: a rehearsal
+        that skips the guard is not a rehearsal of the thing being guarded."""
+        if not allow_write:
+            raise PermissionError(
+                "send_preset_old overwrites a whole preset slot; pass "
+                "allow_write=True from an explicit arm-then-fire confirmation")
+        preset = m.decode_u14(data[0], data[1])
+        name = bytes(data[2:18]).decode("ascii", "replace")
+        self.preset_names[preset] = name
+        return preset
+
     def send_program_change(self, preset: int, *, channel: Optional[int] = None) -> None:
         pass  # no MIDI is ever sent in demo mode -- see EosBridge.send_program_change
 

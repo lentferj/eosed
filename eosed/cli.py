@@ -148,6 +148,50 @@ def cmd_dump(args: argparse.Namespace, bridge) -> None:
     print(f"wrote {args.output}")
 
 
+def cmd_send(args: argparse.Namespace, bridge) -> None:
+    """Send a preset file back to the device -- the only whole-slot write here.
+
+    Arm-then-fire, like the Master utilities: ``--allow-write`` arms it and a
+    typed confirmation fires it. And it LOOKS AT THE TARGET first -- an
+    overwrite that does not tell you what it is about to destroy is how a
+    reference preset goes missing without anyone noticing which one it was.
+    """
+    with open(args.file, "rb") as handle:
+        data = handle.read()
+    if len(data) < 2:
+        raise SystemExit(f"{args.file}: too short to be a preset dump")
+
+    came_from = bridge_mod.EosBridge.dump_target(data)
+    preset = came_from if args.preset is None else args.preset
+    if preset != came_from:
+        data = bridge_mod.EosBridge.retarget_dump(data, preset)
+
+    print(f"  file           : {args.file} ({len(data)} bytes)")
+    print(f"  dump was for   : preset {came_from}")
+    print(f"  will overwrite : preset {preset}")
+    try:
+        print(f"  that slot now  : {bridge.get_preset_name(preset)!r}")
+    except Exception as exc:                     # noqa: BLE001 - advisory only
+        print(f"  that slot now  : unreadable ({exc.__class__.__name__}) -- "
+              f"proceed only if you know what is there")
+
+    if not args.allow_write:
+        raise SystemExit(
+            "refusing: this overwrites the whole preset slot. Re-run with "
+            "--allow-write once you have checked the target above.")
+    if not args.yes:
+        typed = input(f"  type the preset number {preset} to confirm: ").strip()
+        if typed != str(preset):
+            raise SystemExit("not confirmed; nothing sent")
+
+    written = bridge.send_preset_old(data, allow_write=True)
+    print(f"  sent           : preset {written}, {len(data)} bytes")
+    try:
+        print(f"  slot now reads : {bridge.get_preset_name(written)!r}")
+    except Exception:                            # noqa: BLE001
+        print("  slot now reads : (name read-back failed)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eoscli", description=__doc__)
     parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
@@ -184,6 +228,15 @@ def build_parser() -> argparse.ArgumentParser:
     dump.add_argument("output", help="output file path")
     dump.add_argument("--new-format", action="store_true", help="use the NEW dump format")
 
+    send = sub.add_parser("send", help="send a preset file to the device (OVERWRITES a slot)")
+    send.add_argument("file", help="preset dump file, as written by `dump`")
+    send.add_argument("--preset", type=int, default=None,
+                      help="destination preset (default: the one the dump came from)")
+    send.add_argument("--allow-write", action="store_true",
+                      help="arm the write; without it the command only reports the target")
+    send.add_argument("--yes", action="store_true",
+                      help="skip the typed confirmation (for scripts that have already asked)")
+
     return parser
 
 
@@ -194,6 +247,7 @@ _COMMANDS = {
     "catalog": cmd_catalog,
     "get": cmd_get,
     "dump": cmd_dump,
+    "send": cmd_send,
 }
 
 

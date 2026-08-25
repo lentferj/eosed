@@ -1197,6 +1197,119 @@ class EosBridge:
         # Trimmed for the same reason as the OLD path above.
         return header, bytes(data[:header.total_bytes])
 
+    # -- preset SEND (OLD format) -------------------------------------------
+    #
+    # The spec is explicit that this direction exists, in four places:
+    #
+    #   "the ability to send a Dump of parameters to the E4."
+    #   "Preset Dumps of the Old format may still be Requested from and
+    #    Dumped to the E4."
+    #   "When a Dump is requested or initiated, ..."   (initiated = by us)
+    #   "*WARNING!  Only 1 Preset may be Dumped to or from the E4 at a time!"
+    #
+    # and that the transfer ends with EOF: "No more packets follow, no response
+    # required. Must be sent at end of transfer."
+    #
+    # What the spec does NOT state per-packet is who acknowledges what -- it
+    # says only "Generic handshaking messages will be used to negotiate the
+    # transfer". The receive direction was confirmed live (§7): the device
+    # waits for an ACK of the header before sending data, and ACKs are per
+    # packet. This implements the mirror of that, and says so rather than
+    # implying the spec dictated it.
+
+    @staticmethod
+    def dump_target(data: bytes) -> int:
+        """The preset number an OLD-format dump will land in.
+
+        It is the dump's own first field -- ``PresetDump :== PresetNumber Name
+        GlobalParms ...`` -- not something the transfer negotiates. **A dump
+        sent unmodified overwrites the preset it came from.**
+        """
+        return m.decode_u14(data[0], data[1])
+
+    @staticmethod
+    def retarget_dump(data: bytes, preset: int) -> bytes:
+        """Return ``data`` with its destination preset number replaced."""
+        return bytes(m.encode_u14(preset)) + bytes(data[2:])
+
+    def send_preset_old(self, data: bytes, *, allow_write: bool = False,
+                        timeout: Optional[float] = None,
+                        max_retries: int = 3) -> int:
+        """OLD-format single-preset send. Returns the preset number written.
+
+        **This overwrites a preset slot outright** -- it is the one write in
+        this class that destroys a whole preset rather than one parameter, so
+        it refuses unless ``allow_write=True`` and callers must put it behind
+        an explicit arm-then-fire confirmation, as with the Master utilities.
+
+        ``data`` is the raw dump body in the same layout :meth:`dump_preset_old`
+        returns, so a dump can be sent straight back. Use :meth:`retarget_dump`
+        to send it somewhere other than where it came from.
+        """
+        if not allow_write:
+            raise PermissionError(
+                "send_preset_old overwrites a whole preset slot; pass "
+                "allow_write=True from an explicit arm-then-fire confirmation")
+        if len(data) < 2:
+            raise ValueError("dump data is too short to carry a preset number")
+        preset = self.dump_target(data)
+
+        self._drain()
+        self._send(m.OldDumpHeader(byte_count=len(data),
+                                   device_id=self.device_id).encode())
+        self._await_ack(0, timeout, what="the dump header")
+
+        chunks = [data[i:i + m.OldDumpMessage.MAX_DATA]
+                  for i in range(0, len(data), m.OldDumpMessage.MAX_DATA)]
+        for index, chunk in enumerate(chunks, start=1):
+            packet = index & 0x7F
+            frame = m.OldDumpMessage(packet_number=packet, data=chunk,
+                                     device_id=self.device_id).encode()
+            self._send(frame)
+            for attempt in range(max_retries + 1):
+                try:
+                    self._await_ack(packet, timeout, what=f"packet {packet}")
+                    break
+                except DumpChecksumError:
+                    if attempt == max_retries:
+                        raise DumpChecksumError(
+                            f"device NAKed packet {packet} {max_retries} times")
+                    self._send(frame)
+
+        # "no response required" -- nothing is read back for this one.
+        self._send(m.EndOfFile(device_id=self.device_id).encode(), write=True)
+        return preset
+
+    def _await_ack(self, packet_number: int, timeout: Optional[float],
+                   *, what: str) -> None:
+        """Block for the device's verdict on one packet we just sent.
+
+        WAIT means "stop sending packets until an ACK is received", so it is
+        not an error and not an ACK -- it restarts the wait. CANCEL aborts.
+        NAK is raised as a checksum error for the caller to resend on.
+        """
+        while True:
+            try:
+                frame = self._receive(timeout)
+            except TimeoutError:
+                raise TimeoutError(
+                    f"no ACK/NAK for {what}. The spec does not state per-packet "
+                    f"acknowledgement for a host-initiated dump; this mirrors "
+                    f"the receive direction confirmed live in §7") from None
+            _, command, payload = m.parse_frame(frame)
+            if command == m.Command.ACK:
+                if payload and payload[0] != (packet_number & 0x7F):
+                    raise DumpChecksumError(
+                        f"ACK for packet {payload[0]}, expected {packet_number & 0x7F}")
+                return
+            if command == m.Command.NAK:
+                raise DumpChecksumError(f"device NAKed {what}")
+            if command == m.Command.CANCEL:
+                raise DeviceCancelled(f"device cancelled the transfer at {what}")
+            if command == m.Command.WAIT:
+                continue          # keep waiting; the device will ACK when ready
+            raise ValueError(f"unexpected {command:#x} while waiting on {what}")
+
     # -- destructive utilities (fire-and-forget; see DESTRUCTIVE_COMMANDS) --
     # The spec defines no acknowledgement format for any of these four
     # commands (unlike e.g. Preset Copy, which documents a NAK-on-failure).

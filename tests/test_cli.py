@@ -198,3 +198,46 @@ def test_demo_bridges_do_not_share_device_state():
 
     # ... and a bridge built after the damage still starts from the defaults.
     assert DemoBridge().preset_names == second.preset_names
+
+
+# --- send: the only whole-slot write, so the guard is the thing under test ---
+
+def test_send_without_allow_write_reports_target_and_refuses(tmp_path, capsys):
+    blob = tmp_path / "p.bin"
+    cli.main(["--demo", "dump", "0", str(blob)])
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        cli.main(["--demo", "send", str(blob)])
+    out = capsys.readouterr().out
+    assert "will overwrite : preset 0" in out
+    assert "that slot now" in out          # it looked at the target first
+
+
+def test_send_reports_when_retargeted(tmp_path, capsys):
+    blob = tmp_path / "p.bin"
+    cli.main(["--demo", "dump", "0", str(blob)])
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        cli.main(["--demo", "send", str(blob), "--preset", "22"])
+    out = capsys.readouterr().out
+    assert "dump was for   : preset 0" in out
+    assert "will overwrite : preset 22" in out
+
+
+def test_send_armed_and_confirmed_writes(tmp_path, capsys):
+    blob = tmp_path / "p.bin"
+    cli.main(["--demo", "dump", "0", str(blob)])
+    capsys.readouterr()
+    cli.main(["--demo", "send", str(blob), "--allow-write", "--yes"])
+    out = capsys.readouterr().out
+    assert "sent           : preset 0" in out
+
+
+def test_send_refuses_when_confirmation_does_not_match(tmp_path, capsys, monkeypatch):
+    blob = tmp_path / "p.bin"
+    cli.main(["--demo", "dump", "0", str(blob)])
+    capsys.readouterr()
+    monkeypatch.setattr("builtins.input", lambda *_: "not the number")
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--demo", "send", str(blob), "--allow-write"])
+    assert "not confirmed" in str(excinfo.value)

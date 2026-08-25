@@ -1282,3 +1282,135 @@ def test_the_read_reports_why_it_returned_nothing(tmp_path):
     good = tmp_path / "good.toml"
     good.write_text('compact_view = true\n', encoding="utf-8")
     assert bridge_mod._read_config(str(good)) == ({"compact_view": True}, "ok")
+
+
+# --- preset SEND: OLD format -------------------------------------------
+
+def _fake_device_acking_everything(seen):
+    """A device that ACKs the header and every data packet it is sent."""
+    def handler(frame):
+        _, command, payload = m.parse_frame(frame)
+        seen.append((command, bytes(payload)))
+        if command == m.Command.PRESET_DUMP:
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_HEADER:
+                return [m.Ack(packet_number=payload[1]).encode()]
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE:
+                return [m.Ack(packet_number=payload[1]).encode()]
+        return None
+    return handler
+
+
+def test_send_preset_old_refuses_without_allow_write():
+    bridge = _bridge_with(lambda frame: None)
+    with pytest.raises(PermissionError):
+        bridge.send_preset_old(bytes(m.encode_u14(3)) + b"x" * 40)
+    assert bridge.midi_out.sent == []      # nothing reached the wire
+
+
+def test_send_preset_old_happy_path_and_packet_sequence():
+    body = bytes(m.encode_u14(22)) + b"Test Preset     " + bytes(range(100)) * 6
+    assert len(body) > m.OldDumpMessage.MAX_DATA * 2   # forces three packets
+    seen = []
+    bridge = _bridge_with(_fake_device_acking_everything(seen))
+
+    preset = bridge.send_preset_old(body, allow_write=True)
+
+    assert preset == 22
+    header = [p for c, p in seen
+              if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_HEADER]
+    packets = [p for c, p in seen
+               if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
+    assert len(header) == 1
+    assert m.decode_lsb_bytes(header[0][2:6]) == len(body)
+    # packet numbers run from 1, and the data reassembles to exactly the input
+    assert [p[1] for p in packets] == [1, 2, 3]
+    assert b"".join(bytes(p[2:-1]) for p in packets) == body
+    # and the transfer is closed, because the spec says EOF "must be sent"
+    assert any(c == m.Command.EOF for c, _ in seen)
+
+
+def test_send_preset_old_resends_on_nak_then_succeeds():
+    naked = {"count": 0}
+
+    def handler(frame):
+        _, command, payload = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP:
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_HEADER:
+                return [m.Ack(packet_number=payload[1]).encode()]
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE:
+                if naked["count"] == 0:
+                    naked["count"] += 1
+                    return [m.Nak(packet_number=payload[1]).encode()]
+                return [m.Ack(packet_number=payload[1]).encode()]
+        return None
+
+    bridge = _bridge_with(handler)
+    body = bytes(m.encode_u14(7)) + b"x" * 60
+    bridge.send_preset_old(body, allow_write=True)
+
+    packets = [f for f in bridge.midi_out.sent
+               if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
+               and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
+    assert len(packets) == 2          # sent once, NAKed, sent again
+    assert packets[0] == packets[1]   # the resend is byte-identical
+
+
+def test_send_preset_old_gives_up_after_max_retries():
+    def handler(frame):
+        _, command, payload = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP:
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_HEADER:
+                return [m.Ack(packet_number=payload[1]).encode()]
+            return [m.Nak(packet_number=payload[1]).encode()]
+        return None
+
+    bridge = _bridge_with(handler)
+    with pytest.raises(bridge_mod.DumpChecksumError):
+        bridge.send_preset_old(bytes(m.encode_u14(1)) + b"y" * 30,
+                               allow_write=True, max_retries=2)
+
+
+def test_send_preset_old_raises_when_device_cancels():
+    def handler(frame):
+        _, command, payload = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP:
+            return [m.Cancel().encode()]
+        return None
+
+    bridge = _bridge_with(handler)
+    with pytest.raises(bridge_mod.DeviceCancelled):
+        bridge.send_preset_old(bytes(m.encode_u14(1)) + b"z" * 30, allow_write=True)
+
+
+def test_send_preset_old_treats_wait_as_pause_not_failure():
+    """WAIT is "stop sending packets until an ACK is received" -- not an error
+    and not an acknowledgement. It must restart the wait, not end it."""
+    state = {"waited": False}
+
+    def handler(frame):
+        _, command, payload = m.parse_frame(frame)
+        if command == m.Command.PRESET_DUMP:
+            if payload[0] == m.DumpSubCommand.OLD_DUMP_HEADER:
+                return [m.Ack(packet_number=payload[1]).encode()]
+            if not state["waited"]:
+                state["waited"] = True
+                return [m.Wait().encode(), m.Ack(packet_number=payload[1]).encode()]
+            return [m.Ack(packet_number=payload[1]).encode()]
+        return None
+
+    bridge = _bridge_with(handler)
+    bridge.send_preset_old(bytes(m.encode_u14(4)) + b"w" * 30, allow_write=True)
+    assert state["waited"]
+    packets = [f for f in bridge.midi_out.sent
+               if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
+               and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
+    assert len(packets) == 1          # WAIT must NOT have triggered a resend
+
+
+def test_dump_target_and_retarget_round_trip():
+    body = bytes(m.encode_u14(999)) + b"Name            " + b"body"
+    assert bridge_mod.EosBridge.dump_target(body) == 999
+    moved = bridge_mod.EosBridge.retarget_dump(body, 22)
+    assert bridge_mod.EosBridge.dump_target(moved) == 22
+    assert moved[2:] == body[2:]      # nothing but the destination changed
+    assert len(moved) == len(body)

@@ -929,10 +929,17 @@ designator" byte in every frame) implemented by this project's
 
 Not every command above has a corresponding high-level method in
 `eos.bridge.EosBridge` yet — voice/link/sample-zone list editing
-(`NEW_VOICE`/`DELETE_VOICE`/…) and the destructive Master utilities
-beyond what the TUI exposes are implemented at the message-codec level
+(`NEW_VOICE`/`DELETE_VOICE`/…) is implemented at the message-codec level
 in `eos/messages.py` but not yet wired into a convenience API. See
 [TODO.md](TODO.md).
+
+**Preset send (OLD format) exists as of 2026-08-25** — `eoscli send` and
+`EosBridge.send_preset_old`. It is the one write here that overwrites a whole
+preset slot, so it is armed with `--allow-write`, reports the name currently in
+the destination before doing anything, and requires the preset number typed
+back. **It has not yet been sent to hardware**: the spec states the direction
+exists but not who acknowledges what on a host-initiated dump, so the handshake
+mirrors the receive direction and the first live send is a probe.
 
 ### The "Number Of X" trap
 

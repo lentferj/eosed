@@ -102,9 +102,50 @@ erased-but-referenced sample, then repeat with the erase done from the
 stale-cache fix: nothing this app does can produce a genuinely out-of-band
 change to the device.
 
-## Preset restore — the missing half of "editor/librarian" (OPEN, 2026-08-14)
+## Preset restore — the missing half of "editor/librarian" (OLD format BUILT 2026-08-25)
 
-**Status: not built, in either dump format.** `eoscli dump` reads a preset off
+**Status: OLD format built, never sent to hardware. NEW format still not built.**
+
+`EosBridge.send_preset_old` and `eoscli send` exist as of 2026-08-25, with
+`dump_target` / `retarget_dump` for choosing the destination slot. Built on
+Jan's sign-off, relayed through mpc2emu, who declined to authorise a write path
+themselves and put it to him.
+
+**The spec says this direction exists, in its own words** — the transcription
+matters because the send handshake was otherwise going to be inferred from the
+receive one:
+
+* *"the ability to send a Dump of parameters to the E4."*
+* *"Preset Dumps of the Old format may still be Requested from and Dumped to
+  the E4."*
+* *"When a Dump is requested or initiated..."* — initiated, i.e. by the host.
+* *"Only 1 Preset may be Dumped to or from the E4 at a time!"*
+* EOF: *"No more packets follow, no response required. Must be sent at end of
+  transfer."*
+* WAIT: *"Stop sending packets until an ACK is received."*
+
+**What is still inferred, and is marked as such in the code:** the spec says
+only that *"generic handshaking messages will be used to negotiate the
+transfer"* — it does not state who ACKs what on a host-initiated dump. The
+implementation mirrors the receive direction, which §7 confirmed live (the
+device waits for a header ACK, then ACKs per packet). **The first live send is
+therefore a probe.** Its timeout message says so rather than reporting a bare
+`TimeoutError`.
+
+**Guards, because this is the one write that destroys a whole preset:**
+`send_preset_old` refuses without `allow_write=True`; `eoscli send` reports the
+destination and **reads back the name currently in that slot** before doing
+anything, refuses without `--allow-write`, and then requires the preset number
+typed back. `--yes` exists for callers that have already asked.
+
+**Suggested first live use, and the reason:** dump a scratch preset, send it
+straight back to a *different* scratch slot, dump that slot, compare bytes. A
+byte-identical round trip validates the path without depending on the inferred
+handshake being semantically right — if the bytes return, it worked.
+
+### Original entry (2026-08-14)
+
+**Status at the time: not built, in either dump format.** `eoscli dump` reads a preset off
 the device; nothing sends one back. `eos/messages.py` already encodes the
 frames (`PRESET_DUMP` `0Dh` with its OLD/NEW sub-commands, ACK/NAK/WAIT/EOF
 handshake), so this is a missing *send path* — a bridge method and a CLI
