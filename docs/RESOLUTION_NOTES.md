@@ -7056,3 +7056,87 @@ more likely to have found a real difference than to have broken in between.**
 The general fix is to pin an offset against a value both sides have
 independently observed — here `[86, 3, 3, 86]` — *before* writing anything,
 which turns an offset from an assumption into a measurement.
+
+## §78 — A one-second window averages a moving transient, and a static filter model is looking in the wrong place (2026-08-27, live)
+
+Measured while running a cord sweep for mpc2emu on the AKAI key-follow question
+(their §AKAIKEYFOLLOWHW). The conversion-side conclusion belongs in their tree;
+what is recorded here is the measurement lesson, which is ours and applies to
+every filter number this project has produced.
+
+The subject was one voice of a four-voice conversion — the voice covering keys
+72–127 — with a single parameter swept: the Key→FilterFreq cord amount, at
+0/−10/−20/−29/−40/−46 percent. Six preset bodies, each differing from the
+zero arm in **exactly one word** (verified by byte-diff before sending), all six
+captured in one process at one gain.
+
+### The window is not neutral when the filter is moving
+
+Every metric this rig uses reads a **1-second window from onset + 0.05 s**:
+`spectral_ab`'s third-octave profile, the level error, `octave_check`. An
+average over that window is only safe if the thing being averaged holds still.
+
+It does not hold still when the voice carries a filter envelope. Resolving the
+same window into 50 ms steps, on the band that carries essentially all of the
+top note's energy:
+
+    t/ms      0     -10    -20    -29    -40    -46
+      50    0.0     1.0    4.4   11.8   -5.0  -10.5
+     500   -4.9    -3.3    1.9    0.9  -13.5  -19.1
+    1150   -7.7    -4.1    2.3  -12.5  -22.8  -27.2
+
+At −29 that band swings **24 dB inside a single note** (+11.8 at 50 ms to −12.5
+at 1150 ms), against 8 dB at cord 0. The one-second number is an average across
+that swing, and where the swing sits moves with the parameter being swept. So a
+sweep of a filter parameter partly measures *how much of a moving transient
+happened to fall inside the window* — which reads back as a mysterious
+non-monotonicity in the parameter.
+
+**Any law fitted to a windowed level or a windowed spectrum, on a voice with a
+filter envelope, carries this.** That includes §43's filter-envelope law and
+§63's rate law; §63 is safe because it fits a slope within the window rather
+than a single average, but the distinction was never stated and is stated here.
+
+### The static corner is not where the filter is
+
+The static model put the corner at 427–673 Hz across the sweep. The ratio
+spectrum against the zero arm — each arm's fine spectrum divided by the zero
+arm's, which cancels the source, the other voices and the rig, and cannot have
+its peak moved by a gain offset — puts the moving transition at **2–4 kHz**.
+
+The gap is the filter envelope, at 50% on this voice: the corner during the note
+sits far above its base value, and the swept parameter only sets where the
+excursion *starts*. A model of base cutoff plus resonance predicts none of this
+and cannot be corrected into predicting it, because the term that decides
+whether the resonance ever crosses a given partial is the envelope amount.
+
+### Two things that made the result readable
+
+- **A ratio against a controlled zero arm, not an absolute spectrum.** The five
+  swept arms differ from the zero arm in one word, so everything else divides
+  out exactly. This is what let a 2–4 kHz transition be asserted against a
+  427–673 Hz prediction: the alternative — reading a corner off an absolute
+  spectrum — would have been reading it off the source's own harmonic
+  structure.
+- **Checking where the energy actually is before trusting a peak.** The first
+  pass masked bands at −60 dB of peak and reported a boost peak walking from
+  7184 Hz down to 1068 Hz, which looked like a beautifully clean moving
+  resonance. It was noise: the top note's energy is concentrated in ONE
+  1/12-octave band about 80 dB above every other band, and the "peak" was
+  wandering around in the floor. At a −40 dB mask the effect is real but sits
+  somewhere else entirely. **A monotonic-looking result across five points is
+  not evidence of anything if the bands it moves through hold no signal.**
+
+### Also confirmed here
+
+- RAM does not survive a power cycle (already recorded), but **the sample
+  numbering after a fresh load of the same bank does**: the reloaded preset 0
+  dump was byte-identical to the dump taken from the previous load, so bodies
+  holding sample numbers from an earlier session remained correct without a
+  name-resolver pass. Checked rather than assumed, and it is a check worth
+  repeating rather than a rule worth trusting.
+- The `F4` compact LOAD dialog (§ above) drove a bank load with the LCD read at
+  every step and the machine back on its main preset page afterwards. Six
+  Program Changes across the sweep, six distinct screen hashes — §47's trap
+  cannot be ruled out by intent, only by a check that distinguishes the arms,
+  and identical preset names mean the hash of the preset page is that check.
