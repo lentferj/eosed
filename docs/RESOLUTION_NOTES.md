@@ -4442,8 +4442,8 @@ spot-checked slots matched 2026-08-22's recorded values byte for byte.
 
 ### A merged bank keeps the first-loaded bank's name, over all of it
 
-The title line at the top of the preset page shows **the name of the bank
-loaded *first*** — above all 34 presets, including the 24 that came from
+The title line at the top of the preset page shows **`MXORIGE4`** — the name of
+the bank loaded *first* — above all 34 presets, including the 24 that came from
 the three banks merged in after it. There is no per-preset indication of which
 bank a preset arrived from.
 
