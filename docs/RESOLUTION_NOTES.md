@@ -4442,8 +4442,8 @@ spot-checked slots matched 2026-08-22's recorded values byte for byte.
 
 ### A merged bank keeps the first-loaded bank's name, over all of it
 
-The title line at the top of the preset page shows **`MXORIGE4`** — the name of
-the bank loaded *first* — above all 34 presets, including the 24 that came from
+The title line at the top of the preset page shows **the name of the bank
+loaded *first*** — above all 34 presets, including the 24 that came from
 the three banks merged in after it. There is no per-preset indication of which
 bank a preset arrived from.
 
@@ -6822,7 +6822,7 @@ changed four cutoff bytes and four modulation-cord amounts.
 
     P100 before: 'Empty Preset'
     sent 1320 bytes, retargeted from preset 0 to 100
-    P100 after:  'SPACE E', 4 voices, 6 sample zones
+    P100 after:  the sent name, 4 voices, 6 sample zones
     read back:   1320 bytes, differing in exactly ONE byte -- offset 0, the
                  retarget itself. 1319 of 1320 identical.
 
@@ -6857,10 +6857,10 @@ proven rather than reasoned about.
 The names first supplied did not match what the machine reports:
 
     supplied        machine reports
-    KK DXE          'KK DXE_C2'
-    KK DXE1         'KK DXE1_C3'      ... and four more
+    <base>          '<base>_C2'
+    <base>1         '<base>1_C3'      ... and four more
 
-**`KK DXE` is a prefix of all six.** One file carries two names per sample — a
+**The supplied name is a prefix of all six.** One file carries two names per sample — a
 plain one in its table of contents and a display name with the root note
 appended for the machine — and the projects were reading different fields. A
 resolver falling back to "starts with" or "closest" would have **bound every
