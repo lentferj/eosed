@@ -7182,3 +7182,50 @@ arms differ in LEVEL as well as in decay, by about 17 dB at the top note, and a
 quieter note stops being audible sooner. It reads as shorter whatever its decay
 rate is, so a preference between two arms is not evidence about decay until
 they are level-matched.
+
+## §79 — A layer that is nominally in range and contributes nothing, caught by a positive control (2026-08-28, live)
+
+A sibling session proposed that one voice of a four-voice conversion was masking
+another and so damping a filter effect we were trying to measure. Testing it
+needed a preset with that voice removed — easy — and then a way to know the
+removal had actually happened, which is the part worth recording.
+
+**The measurement and its control in one table.** Level of the note, the full
+preset minus the same preset with only the top-of-keyboard voice kept:
+
+    note      36      43      48      55      65      80      96
+    dB     +47.0   +47.4   +46.8   +46.8   +52.3   -0.05   -0.05
+
+The two right-hand columns are the result: at the notes under test the removed
+voices change the level by five hundredths of a dB, so they were contributing
+nothing and could not have been masking anything. The five left-hand columns are
+the control that makes that readable — below key 72 the removed voices are 47–52
+dB of real signal, which proves the edit removed what it claimed to.
+
+Without those five columns, "no difference at notes 80 and 96" has two
+explanations that look identical: the voices are inaudible there, or the build
+did not drop them. **A null needs a column where the same manipulation produces
+a large effect, in the same file, from the same run.** Here it came free,
+because the voice being kept has a limited key range and the sweep already
+spanned it — which is worth designing for rather than noticing afterwards.
+
+The same 2x2 (stacked/solo at two parameter values) put the release rate within
+0.4 dB/s across every cell, on two notes and two bands, so the difference under
+investigation belongs to the remaining voice alone.
+
+### Two of my own conclusions this retracted
+
+- I had warned that comparisons against the source were contaminated by the
+  extra layer. At these notes they are not; the layer is silent and the earlier
+  numbers stand. The caution was reasonable and it was wrong, and it was cheaper
+  to test than to keep carrying.
+- I had proposed that a two-day-old reference capture was stale across a power
+  cycle. An independent measurement on the live source came back at 15.1 dB/s
+  against that file's 15.2/15.2/15.8, so the reference was sound. **A reference
+  is not stale because it is old; it is stale if it disagrees with the thing it
+  represents, which is a question with an answer.**
+
+Both were hypotheses raised to explain a disagreement, and both dissolved under
+a measurement that took minutes. Worth the habit: when a disagreement invites
+several explanations, the cheap discriminating measurement beats ranking them by
+plausibility.
