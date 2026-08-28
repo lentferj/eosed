@@ -7140,3 +7140,45 @@ whether the resonance ever crosses a given partial is the envelope amount.
   Program Changes across the sweep, six distinct screen hashes — §47's trap
   cannot be ruled out by intent, only by a check that distinguishes the arms,
   and identical preset names mean the hash of the preset page is that check.
+
+### §78 corrected — the moving transient was the finding, not the flaw
+
+§78 above says the one-second window averages a transient whose position moves
+with the swept parameter, and treats that as a reason to distrust the windowed
+numbers. The observation is right and the conclusion drawn from it was wrong.
+
+**When the thing being averaged is moving, the movement is a result. Measure
+it.** What the window was averaging away was how long the note lasts, and note
+duration is a property of the instrument, not an artefact of the analysis. The
+correct response was a second metric, not less confidence in the first.
+
+This was caught by a listener, not by a number. Told that one arm sounded
+shorter and that the shorter one matched the source, a decay measurement was
+built — dB per second between two FIXED times inside the held note, so that
+unlike a peak-anchored fall time it cannot be moved by where the peak lands
+(on one arm the peak lands on note-off, which made a fall-time metric rank it
+best when the raw envelope shows it never decays at all). On that measure the
+swept parameter has a clear optimum, and it is NOT at the value the spectral
+metric prefers:
+
+    parameter        third-octave distance      decay error
+       0                    4.72                 +2.9 dB/s
+     -20%                   7.96                 -1.1 dB/s
+
+So the two metrics disagree, both are sound, and the earlier conclusion that
+one end was simply optimal held only because a whole axis was unmeasured.
+
+Two things worth keeping from how it went wrong:
+
+- **The data was already in hand.** A band-envelope table taken for a different
+  purpose showed one arm collapsing 24 dB inside a single note against another's
+  8 dB. That is the entire finding, and it was read as evidence about the
+  measurement rather than about the instrument.
+- **A single-axis "optimum" needs the axis named.** Stating it without the
+  qualifier is what made a partial result read as a settled one.
+
+Also recorded because it will confound the listening test that follows: the
+arms differ in LEVEL as well as in decay, by about 17 dB at the top note, and a
+quieter note stops being audible sooner. It reads as shorter whatever its decay
+rate is, so a preference between two arms is not evidence about decay until
+they are level-matched.
