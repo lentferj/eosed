@@ -7229,3 +7229,39 @@ Both were hypotheses raised to explain a disagreement, and both dissolved under
 a measurement that took minutes. Worth the habit: when a disagreement invites
 several explanations, the cheap discriminating measurement beats ranking them by
 plausibility.
+
+### §79 addendum — the state that nobody verified was the source machine's
+
+The disagreement that produced the measurements above was a listening test:
+the source was reported to sustain longer than our conversion, while four
+independent metrics said our conversion was the shorter one. It was resolved
+by the listener discovering he had been auditioning **the wrong program on the
+source machine.**
+
+The asymmetry is what is worth recording. Over the same hours this session:
+
+- verified our own device state by dumping all eight slots and comparing them
+  byte for byte against the files sent;
+- verified the two-day-old reference capture against an independent live
+  measurement on the source, agreeing to 0.7 dB/s;
+- verified every Program Change had landed by requiring distinct screen hashes;
+- verified a null result with a positive control in the same table.
+
+**Nobody verified what was loaded on the machine being compared against.** It
+was the one piece of state in the chain with no check on it, and it was the one
+that was wrong. Four correct measurements were then spent explaining a
+difference that did not exist — the level-matching confound, the monitoring
+chain sitting downstream of the capture tap, the stacked-layer contamination.
+Every one of those was a reasonable hypothesis and none of them was the answer.
+
+The rule this suggests is narrow and cheap: **when a comparison spans two
+machines, the far machine's state needs the same verification as the near
+one's.** "Which program is resident, confirmed by reading it back" costs
+seconds and is not harder to do on the other end of the bench.
+
+The investigation was still worth running. It produced §79's control, the
+retraction of two of my own hypotheses, and an isolated finding — the converted
+voice's release is roughly 1.6-1.8x too fast against a source figure measured
+independently — which is real, is unrelated to the false alarm, and would not
+have been found without chasing it. Ruling out a contradiction is not the same
+as wasting the effort on it.
