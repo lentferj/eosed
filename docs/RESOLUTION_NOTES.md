@@ -7265,3 +7265,64 @@ voice's release is roughly 1.6-1.8x too fast against a source figure measured
 independently — which is real, is unrelated to the false alarm, and would not
 have been found without chasing it. Ruling out a contradiction is not the same
 as wasting the effort on it.
+
+## §80 — A median is only readable if the values agree, and two baseline numbers were not (2026-08-29, live)
+
+Re-running the conversion matrix against a freshly built bank meant comparing
+twelve patches against numbers recorded a week earlier. Two of those baseline
+numbers turned out to mean nothing, and the thing that exposed both was a
+column the harness does not compute: **the spread of the per-note values the
+median was taken over.**
+
+The pitch feature is a median of `cents_err` across the notes played. The
+summariser already refuses to report an octave unless a majority of notes
+tracked AND all agree — a good rule, written after a median of two disagreeing
+octaves invented a fault. But `cents` has no equivalent guard: once the octave
+test passes, the median is taken and reported however far apart the values are.
+
+    slot   old cents   new cents   old spread   new spread
+      A       1.5         1.4         46.1        49.7
+      B      41.2        21.5          0.7        51.0
+
+Slot A sat in the report's "everything else — within 3.4 cents" tier on a
+number whose four notes disagreed by 46 cents. Slot B's baseline was tight and
+trustworthy; its fresh measurement is not, and reading the pair as "improved
+from 16.4 to −3.3" would have been reporting a change in the tracker's failure
+mode as a change in the conversion.
+
+**The values behind a summary statistic are evidence about whether the summary
+should be believed, and they are already in the file.** Nothing had to be
+re-measured to find this — the per-note features were sitting in both JSON
+files the whole time. Printing the spread alongside the median costs one line
+and converts a confident wrong number into a visible refusal.
+
+### What the spread is diagnosing
+
+Both bad cases are the same shape: values clustered at two points about 50
+cents apart. That is a source sitting near a semitone boundary, with the
+tracker rounding to whichever side each note lands on — so the "error" is an
+artefact of where the boundary falls, and the median lands in the empty middle
+where no note actually was. A bimodal set has no meaningful median, and a
+spread of ~50 cents is its signature.
+
+### The check that did work
+
+The octave question on slot B was answerable, and not by the tracker's own
+octave field. The SOURCE recording was put through the identical feature
+extractor: it reads an octave above the written note on every note, so the
+conversion now reading an octave above written **agrees with it**, and what
+looked like a new fault is the old one fixed. Confirmed independently by the
+ratio of the two f0 estimates, 0.967–1.029 across four notes — same octave, no
+octave field involved.
+
+**Measure the reference the same way as the subject, with the same code, before
+concluding the subject is wrong.** The written pitch is not the reference here;
+the source recording is.
+
+### Unrelated, found in the same pass and worth keeping
+
+Two presets in the untouched reference bank peak at −0.8 and −0.7 dBFS. Nothing
+clipped, because this pass plays one velocity — but the reference is what every
+conversion is scored against, and a reference that clips at a higher velocity
+would push every comparison against it in the same direction while looking like
+a conversion error. Recorded now rather than after a louder pass finds it.
