@@ -7326,3 +7326,46 @@ clipped, because this pass plays one velocity — but the reference is what ever
 conversion is scored against, and a reference that clips at a higher velocity
 would push every comparison against it in the same direction while looking like
 a conversion error. Recorded now rather than after a louder pass finds it.
+
+### §80 extended — on one route it is nine of twelve, and five of them answered
+
+The two cases above were found while comparing one route. Checking the next
+route's baseline *before* measuring against it — the point of the exercise —
+gave a much worse picture. Per-note spread behind each baseline tuning number,
+twelve patches, one route:
+
+    spread ≤ 2 cents ....... 3 patches   usable
+    spread 115-487 cents ... 9 patches   of which:
+        4 the tracker DECLINED and reported nothing   (honest)
+        5 the tracker ANSWERED, and the answer was reported to one decimal
+
+487 cents is four semitones of disagreement between notes of the same patch.
+Two of the five answering patches were quoted at +0.2 and +0.5 cents and filed
+in the report's "everything else — within 3.4 cents" tier, on values whose
+notes disagreed by 314.
+
+**The four that declined are the system working.** The summariser's octave
+guard caught those. The five that answered passed the octave test — unanimous
+octave across notes — and then had a median taken over cents values spanning
+three semitones, because there is no equivalent guard on cents. **Passing a
+guard on one field is not evidence about another field.**
+
+This material is organs and twelve-strings, where several partials compete, so
+it is the case the original report's "tuning could not be measured" tier was
+written for. The tier exists. These patches did not land in it, because landing
+there requires the tracker to refuse, and it did not refuse — it produced a
+number. **A tier for "unmeasurable" only protects the cases the instrument is
+honest about.**
+
+Consequence, recorded because it changes what a comparison can claim rather
+than just how confident it is: on that route, nine of twelve patches have **no
+tuning baseline at all**, so "did it improve" is unanswerable there by this
+method and no delta should be printed for them. One patch carries a real
++44.2 cent error at 1.6 cents of spread, and that one is worth acting on. The
+envelope measures are unaffected throughout — a sustain ratio is not a pitch
+estimate — which is why the same comparison still says something useful about
+nine tenths of what these conversions do.
+
+The check is now in `cmp_route.py` alongside the captures rather than in a
+person's memory: every median prints its spread, and a spread over 10 cents
+refuses to produce a difference instead of producing a wrong one.
