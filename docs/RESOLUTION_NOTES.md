@@ -6579,8 +6579,8 @@ a correct conversion.**
 > §66 and §67 all call it "the reference preset" and §71 called it hand-built
 > from a library. **It is an EARLIER CONVERSION of the same source program**,
 > produced by the same sibling writer. Three things settle it: the E-MU library
-> material for this row is the bass set that reads `Super Sub 2 / Synth Bass
-> 10..34 / DX Bass 1,2 / JP4 Bass / Moog Bass`, read off the machine at PC 0–9;
+> material for this row is the ten-preset synth-bass set at PC 0–9, whose
+> names were read off the machine and share nothing with this preset's;
 > the voice counts 6 / 8 / 7 across the group match three separate builds of the
 > conversion and nothing in the library; and the preset names are that writer's
 > truncation of the source program names.
