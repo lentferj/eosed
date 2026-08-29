@@ -6764,11 +6764,11 @@ First host-initiated preset dump this project has ever made. Verified the way a
 transport should be: **dump a preset, send it to an empty slot, dump that slot,
 compare byte for byte.**
 
-    source P018 'Sine B3 Organ', 1 voice, 438 bytes
+    source P018, a single-voice organ preset, 438 bytes
     retargeted to P100 -- only the first two bytes differ, checked
     P100 before: 'Empty Preset'
     send returned in 0.5 s
-    P100 after:  'Sine B3 Organ', 1 voice
+    P100 after:  the same name, 1 voice
     read back:   438 bytes, IDENTICAL
 
 **A byte-identical return does not depend on the inferred half of the handshake
