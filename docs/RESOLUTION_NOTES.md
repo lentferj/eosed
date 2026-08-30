@@ -7427,3 +7427,47 @@ costs one extra capture pass over material already on hand, it needs no
 hardware change, and it converts "this improved by 0.07" from a result into a
 question. Nothing else in this project's history establishes the noise floor of
 any of its metrics, which means every threshold used so far has been assumed.
+
+### §81 addendum — a tool that refuses must be tested on what it should refuse
+
+`cmp_route.py` was written for §80: print every median with its spread and
+refuse to produce a difference when the spread is too wide. It was validated by
+re-running a route whose answers were already known and confirming they came
+back identical. That is a real check and it is the wrong one — it only exercises
+the path where the tool *accepts*.
+
+A sibling session asked whether a patch with an untracked note could produce a
+confident wrong answer. Two bugs, both in the refusal path, neither reachable by
+the validation that had been run:
+
+- The delta was computed as `a and b and (b - a) or 0`. **When either median was
+  `None` the chain collapsed to `0`, printing `old -> old`** — a patch whose new
+  capture could not be tracked at all read as UNCHANGED, formatted identically
+  to a real measurement.
+- `spread()` dropped `None` entries and returned the spread of the survivors, so
+  two notes out of four that happened to agree passed the width test and printed
+  a two-note claim looking exactly like a four-note one.
+
+Fixed by replacing the `and/or` with ordered explicit refusals and by returning
+`(spread, n_tracked, n_notes)` so the count is printed alongside. The sibling
+re-ran their own route against the fix: every previous verdict unchanged, and
+several rows they had read as ordinary refusals turned out to rest on 2 of 4
+notes — thin evidence that had been invisible.
+
+**The general form: a guard is a branch, and an untested branch is an
+assumption.** Validating a refusing tool on data it accepts tests everything
+except the reason it exists. Feed it the shapes it is supposed to reject —
+a missing value, one sample, all samples missing, a value that is exactly zero.
+
+### And the same silent-no-op, twice in one session
+
+The first attempt at the above fix used a string replacement whose pattern did
+not match, with no assertion. It wrote the file unchanged and reported success,
+and the verification printed evidence of the failure that was read past. The
+same shape had already cost a commit message earlier in this project's history,
+describing corrections it did not contain.
+
+**Every scripted edit gets an assertion that the pattern matched**, and the
+verification afterwards gets read rather than glanced at. It is two extra lines
+and it converts a silent wrong result into a loud failure, which is the trade
+this whole section keeps arriving at.
