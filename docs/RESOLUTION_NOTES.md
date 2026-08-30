@@ -7369,3 +7369,61 @@ nine tenths of what these conversions do.
 The check is now in `cmp_route.py` alongside the captures rather than in a
 person's memory: every median prints its spread, and a spread over 10 cents
 refuses to produce a difference instead of producing a wrong one.
+
+## §81 — Re-capturing unchanged material is how you learn what a metric's numbers are worth (2026-08-29/30, live)
+
+A conversion metric was reporting differences of 0.07 to 0.23. Nobody had ever
+asked what the metric does when **nothing changes at all**. Re-capturing six
+unchanged presets answered it, and the answer rewrote part of the result.
+
+    preset   capture 1   capture 2    shift
+      A        0.058       0.060      +0.003
+      B        0.051       0.022      -0.029
+      C        0.134       0.077      -0.058
+      D        0.092       0.055      -0.037
+      E        0.085       0.068      -0.017
+      F        0.093       0.073      -0.020
+
+Same presets, same rig, same notes, same schedule. **Up to 0.058 of movement on
+material that did not change**, five of six in the same direction. So a reported
+difference of 0.069 is not a finding; it is inside the instrument's own scatter.
+
+### What it cost, and what survived
+
+Of ten conversions compared that evening, eight had been reported as improved.
+Two of those eight — the two smallest, at 0.069 and 0.090 — are inside this
+scatter and were withdrawn as established. The other six, from 0.10 to 0.23,
+survive comfortably, as do both of the two that moved the wrong way (0.19 and
+0.23). The headline held; the tail did not.
+
+### The cause is the same fragility twice in one evening
+
+The metric is `env[s_i] / peak` where `s_i = ipk + 0.8 * (hold_n - ipk)` — **the
+sampling position is anchored to where the envelope peak lands.** On a patch
+with a flat-ish envelope a small change in `ipk` moves `s_i` a long way, and the
+ratio jumps without anything about the sound having changed.
+
+That is the same defect as the peak-anchored fall time in §78's correction,
+where one arm's peak landed on note-off and the fall-time metric ranked it best
+while its raw envelope showed it never decayed at all. **A statistic anchored to
+an extremum of the data is only as stable as the extremum**, and on held notes
+with slow attacks the extremum is not stable at all. Two fixed times, or an
+anchor at note-on, do not have this problem.
+
+### The hypothesis this killed, which is why the control mattered
+
+The obvious explanation was analogue compression: the first captures ran within
+0.2 dB of full scale, the second set 9 dB lower, so the hot ones should have
+been squashed and the cool ones untouched. **The data refuses it.** The shift is
+not monotonic in level — the two hottest captures move LEAST among those that
+move, the largest shift is a mid-level patch, and the coolest patch does not
+move at all. A plausible mechanism that predicts a gradient, tested against six
+points, was wrong.
+
+### The general rule
+
+**Before trusting a difference, measure the metric against no difference.** It
+costs one extra capture pass over material already on hand, it needs no
+hardware change, and it converts "this improved by 0.07" from a result into a
+question. Nothing else in this project's history establishes the noise floor of
+any of its metrics, which means every threshold used so far has been assumed.
