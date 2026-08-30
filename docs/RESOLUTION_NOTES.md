@@ -7391,10 +7391,28 @@ difference of 0.069 is not a finding; it is inside the instrument's own scatter.
 ### What it cost, and what survived
 
 Of ten conversions compared that evening, eight had been reported as improved.
-Two of those eight — the two smallest, at 0.069 and 0.090 — are inside this
-scatter and were withdrawn as established. The other six, from 0.10 to 0.23,
-survive comfortably, as do both of the two that moved the wrong way (0.19 and
-0.23). The headline held; the tail did not.
+The two smallest improvements were withdrawn on those grounds, and **that
+withdrawal was itself wrong** — corrected below. Recomputed against the noise
+floor, with each row taken from its own correct note set, the improvements are
+0.069, 0.101, 0.108, 0.133, 0.142, 0.169, 0.195, 0.208 and the two regressions
+are 0.191 and 0.227. **All ten exceed the 0.058 scatter**, one of them (0.069)
+only just. Two further patches are percussive with zero sustain on both sides
+and carry no information either way. So the tally is eight closer, two further,
+two with nothing to say.
+
+**Where the bad withdrawal came from, because the mechanism matters more than
+the number.** One of the two figures, 0.090, was read off an earlier table that
+mixed two different note sets — a table already corrected an hour before, for
+that exact fault. Its real value is 0.133. **A superseded number was used to
+withdraw a valid finding**, so a correct principle (measure the noise floor,
+refuse what falls inside it) produced a wrong result because the input to it
+came from a retracted source.
+
+Applying a newly-learned rule is itself an operation that can be done wrong,
+and it feels like diligence while it happens, which is what makes it hard to
+catch. The guard against it is unglamorous: **recompute from the raw features
+when applying a new threshold, rather than from any table you have already
+written** — including your own, and especially one you have already corrected.
 
 ### The cause is the same fragility twice in one evening
 
