@@ -7471,3 +7471,48 @@ describing corrections it did not contain.
 verification afterwards gets read rather than glanced at. It is two extra lines
 and it converts a silent wrong result into a loud failure, which is the trade
 this whole section keeps arriving at.
+
+### §80 second corollary — agreement is necessary, not sufficient
+
+§80 says a median is only readable if the values behind it agree, and gives the
+spread as the test. That rule caught two bad baselines and it is incomplete in a
+way that cost a claim on the same evening it was written.
+
+Six bass-family conversions were reported as a clean tuning null: deltas of 0.0
+to 0.9 cents, per-note spread about 5 cents, tight enough to pass §80's test
+comfortably. A sibling session then established on native ground truth — the
+source machine playing its own material, verified by spectrum — that the pitch
+tracker reads bass **two octaves flat**. Checking the same thing in the local
+captures:
+
+    note   expected f0     tracked f0     error
+     46      116.5 Hz      not tracked
+     59      246.9 Hz        62.2 Hz     -2387 cents
+     64      329.6 Hz        82.8 Hz     -2392 cents
+     71      493.9 Hz       124.0 Hz     -2393 cents
+     86     1174.7 Hz       295.2 Hz     -2391 cents
+
+A ratio of 0.251 on every note it tracks, and the lowest note not tracked at
+all. The sibling measured −2390 cents on a different machine and a different
+route; this is −2387 to −2393 on ours. Same constant, so it is the instrument.
+
+**Four notes agreeing tightly about the wrong partial are exactly as tight as
+four agreeing about the right one.** The spread test cannot tell them apart,
+because it only compares the values to each other and never to anything
+external. So it is a test for *precision* and it was being read as a test for
+*correctness*.
+
+What the spread test still does: it catches a tracker that is unstable. What it
+cannot do: catch a tracker that is confidently and consistently wrong. The
+second failure mode needs an external reference — the source recording through
+the same extractor, or the written pitch, or a spectrum — and §80's own worked
+example used exactly that to settle an octave question, without noticing that
+the technique was answering a different question than the spread was.
+
+Practical form: **when a whole class of material reads the same unusual value,
+suspect the instrument before the material.** Six unrelated presets all reading
+exactly two octaves flat is not six patches with the same defect.
+
+The claims that survived this were the ones involving no pitch estimate at all
+— the envelope ratios. That is the second time in two days that the
+pitch-independent measures were the ones left standing.
