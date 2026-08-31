@@ -7534,3 +7534,58 @@ exactly two octaves flat is not six patches with the same defect.
 The claims that survived this were the ones involving no pitch estimate at all
 — the envelope ratios. That is the second time in two days that the
 pitch-independent measures were the ones left standing.
+
+## §82 — A refusal message that named the wrong quantity cost three sessions hours (2026-08-31)
+
+The vibrato tool refuses when the integration band it needs would be too wide
+for the carrier. Its message read:
+
+    the band needed (X Hz) would reach the neighbouring harmonic at Y Hz
+
+**Y was the carrier frequency, not any harmonic's.** The message named a
+quantity it was not printing. Three sessions — this one included — spent hours
+on a harmonic-collision theory: ruling out the calibration table, layer
+contamination, a tuning clamp, the filter envelope, an analysis-window artefact
+that produced a false positive and had to be retracted, and finally a
+loop-boundary click that turned out mathematically incapable of producing a
+separate spectral line. All of it chasing a collision the message had invented.
+
+**The real limit is arithmetic and has nothing to do with harmonics.** The first
+band tried is `14 * mod` and the guard is `0.40 * carrier`, so it refuses
+whenever
+
+    mod >= carrier / 35
+
+which for a 92 Hz carrier is any modulation above 2.6 Hz. Ordinary vibrato is
+4-7 Hz, so that note was unmeasurable at any depth or rate anyone would use —
+and the same voice an octave higher measures cleanly, which is exactly the
+pattern that looked so mysterious.
+
+### Why it survived so long
+
+The refusal was **correct**. It refused when it should refuse, every time, and
+returned no number. The whole file exists to avoid "a plausible number from an
+instrument that could not see", and on that count it worked perfectly. Only the
+*explanation* was wrong — and an explanation is not covered by the tests that
+cover a return value.
+
+**A diagnostic message is an interface, and a wrong one is worse than none.**
+"Cannot measure" would have sent people to the tool's limits in minutes. Naming
+a specific physical cause sent them to the instrument for hours, because it
+sounded like the tool had already done the diagnosis.
+
+### Fixed
+
+The message now names the carrier, the limit, the ratio and the remedy, and the
+docstring carries the ceiling as a table so nobody has to read the guard to find
+it. Two further hazards are documented alongside, both found while answering the
+question rather than by testing:
+
+- `carrier_lo` defaults to 150 Hz, so a lower carrier is not in the search band
+  at all and the tool locks onto a HARMONIC and reports it as the carrier.
+- The 0.40 factor assumes the measured carrier is the fundamental. If it ever
+  locks onto the second harmonic the true spacing is half what the guard
+  assumes, and 0.40 becomes too permissive — **that failure is silent**, unlike
+  the one that caused all the trouble.
+
+The loud wrong explanation cost hours. The quiet wrong one is still there.
