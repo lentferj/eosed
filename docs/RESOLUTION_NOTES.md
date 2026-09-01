@@ -8037,7 +8037,9 @@ actually needs: `Vel~` gives 0.9456 dB per 1 % of cord amount against `Vel<`'s
 therefore needs *one* law plus a per-source pivot, not three laws. Combined with
 §83's velocity-linearity, the whole family is:
 
-    attenuation_dB(v) = 0.947 x amount_percent x (v - pivot) / 127
+    attenuation_dB(v) = 0.7510 x amount_percent/100 x (v - pivot)
+                                       [dB per velocity unit -- see the
+                                        correction below on /126 vs /127]
 
     pivot:  Vel+ = 0     Vel~ = 89.7 (measured; manual says 63)     Vel< = 127
 
@@ -8056,3 +8058,45 @@ Deriving the operating point from a nominal conversion table instead of from
 the response actually measured on the voice in front of you is the same
 substitution as §84's assumed state, one level up: a plausible number standing
 in for an observed one.
+
+### §85 correction — two normalisations of one law, and which quantity each is
+
+§83 stated the law as `0.9470 × amount_percent × (127 − v) / 126` and §85's
+addendum restated it as `… × (v − pivot) / 127`. Those differ by 0.79 %, and
+mpc2emu caught it. Neither is a typo: **they are two different quantities and
+the mistake was writing them as though they were the same one.**
+
+Their suggested resolution was the right one — refit rather than redivide —
+because a denominator picked to reconcile two numbers is exactly the kind of
+plausible-standing-in-for-observed substitution §84 is about. So all seventeen
+slope measurements taken tonight were pooled, across three sources, five cord
+amounts and three headroom settings, each divided by its own *true* amount
+(stored byte / 127) rather than the value asked for:
+
+    dB per velocity unit at 100 % cord amount
+        mean 0.75097   sd 0.02288   95 % CI ±0.01088   n = 17
+
+**That is the primitive, and it has no denominator to argue about.** It is what
+a straight-line fit to level against velocity actually returns. The two swings
+are both derived from it, and both are correct about different things:
+
+    over v1..v127   (126 steps)  =  94.62 dB     what a player can reach
+    over v0..v127   (127 units)  =  95.37 dB     the machine's applied range
+
+The manual's polarity figure defines each source over the control range 0..127,
+so **127 is right about the machine**. But MIDI has no note-on at velocity 0 —
+it is a note-off — so **126 is right about anything playable**, and it is also
+the interval the constant was fitted over. `velocity_to_volume_db` is defined as
+a v1..v127 swing, so mpc2emu's `/126` is correct for that field.
+
+This is the same nominal-versus-realised distinction s3ked raised about swing
+clipping against a machine's ceiling, arriving from a different direction: the
+nominal span is 127 units, the realisable one is 126 steps, and the gap is
+0.75 dB. Inaudible, inside the residuals, and worth pinning down anyway —
+**two normalisations that diverge silently are how a predicted number and a
+measured one come to disagree months later with nobody able to say why.**
+
+The rule this leaves: **state a measured law in the units it was measured in.**
+Per velocity unit is what the fit returns; a "full swing" is a derived summary
+and cannot be quoted without saying across what. Both §83's and §85's
+statements are individually defensible and neither said which.
