@@ -7903,3 +7903,119 @@ evening. One further instance was found and fixed: a byte-127 control asserting
 that a plateau should sit AT the peak tested only `ratio < 0.80`, so a control
 reading high — equally strong evidence that the metric was broken — would have
 passed silently.
+
+## §85 — `Vel~` pivots at velocity ~89, and the manual says 63 (2026-09-01, live)
+
+§83 measured the three velocity sources' pivots on `AmpVol` and found `Vel+`
+at velocity 0, `Vel<` at 127, and `Vel~` at **89.4** — the last against an
+inferred midpoint of 64, with no mechanism offered.
+
+Jan then produced the **EOS 4.0 manual's polarity figure (p.351)**, relayed via
+mpc2emu, which maps each source's 0..127 control onto its applied range:
+
+    +   0..127  ->    0 .. +127     zero at control   0
+    ~   0..127  ->  -63 ..  +64     zero at control  63
+    <   0..127  -> -127 ..    0     zero at control 127
+
+The figure is **exact on two of the three sources** and it also *corroborates*
+the one thing §83 could not explain: all three ranges are 127 units wide, which
+is why `Vel~`'s span came out equal to the unipolar sources' rather than double
+it. So the document agrees with everything measured except one number, and
+mpc2emu's reading was that the measurement was the likelier of the two to be
+wrong — 63 being the structurally sensible value, and the manual having earned
+credit on the other two rows.
+
+**It is not wrong. Twelve measurements now put it at 87–94.**
+
+### What was varied, and why those things
+
+Re-running the same measurement would have reproduced a systematic error
+faithfully. So the re-check varied the two things that can produce "endpoints
+right, midpoint displaced" without the source being unusual.
+
+**Cord amount.** A pivot is a property of the source and cannot depend on the
+amount. A *fixed insertion loss* when the cord is active would look identical
+at one amount and separate immediately at another — halve the amount and the
+apparent displacement doubles.
+
+**Headroom.** If the gain half of a bipolar source were clipping against a
+ceiling, the crossing would move as the voice is attenuated.
+
+    vol  amount   crossing   dB/vel      r²      dB@v1    dB@v127    span
+    -20      +5      88.86   +0.03904  0.99163    -3.19     +1.57     4.76
+    -20      -5      91.07   -0.03575  0.99272    +3.15     -1.39     4.53
+    -20     +10      88.77   +0.07799  0.99610    -6.93     +2.89     9.82
+    -20     -10      90.11   -0.07633  0.99813    +6.86     -2.85     9.70
+    -20     +25      90.64   +0.18900  0.99868   -16.60     +7.23    23.83
+    -20     -25      89.62   -0.18666  0.99967   +16.32     -6.94    23.26
+    -40     +10      87.39   +0.07783  0.99864    -6.69     +3.17     9.87
+    -40     -10      93.95   -0.07367  0.99615    +6.64     -2.40     9.04
+
+Nothing clipped in any capture. **Invariant to a 5× change in amount and to a
+further ~15 dB of headroom.** A fixed insertion loss would have put the ±5
+crossing near velocity 117; it is at 88.86. The spans scale 1:2:5 exactly with
+the amount, and 23.83 dB at a true 25.20 % is 0.9456 dB/%, matching §83's
+0.9470 from `Vel<` — so `Vel~` carries the same constant, as the figure says.
+
+The original §83 data also rules out a *sign-independent* offset on its own,
+which should have been checked at the time: a constant loss of the same sign at
+both amounts would have put the −10 crossing at velocity 36, not 88.9. The
+displacement tracks the amount in both magnitude and sign, which is what a
+pivot is.
+
+### It belongs to the source, not to `AmpVol`
+
+The last route to an artefact was for the displacement to be a property of the
+amplifier rather than the source. Measured again on **`FilFreq`** — a different
+destination, a different preset (P000, not P008) and a different observable
+(spectral centroid, not level), sharing nothing with the first measurement but
+the source itself:
+
+    velocity                  1     16     32     48     64     80     96    112    127
+    Fc 40, no cord         1120   1020    952    897    862    836    820    806    797
+    Fc 40, Vel~ +8         1010    924    873    839    827    822    830    842    859
+    Fc 40, Vel~ -8         1234   1116   1035    959    903    852    811    775    740
+
+    Vel~ +8 difference:    -110    -95    -79    -59    -35    -14    +10    +36    +62
+    Vel~ -8 difference:    +115    +97    +83    +62    +40    +16    -10    -31    -57
+
+Crossings **87.1 / 87.9** and **89.6 / 90.1** (whole range, and the six points
+nearest the crossing). The control separated 242 Hz between wide open and
+Fc 40, so the filter was demonstrably in circuit.
+
+**Twelve measurements, two destinations, two presets, two observables, three
+headroom settings, three amount magnitudes: 87.1 to 94.0, mean ≈ 89.6.** The
+prediction was 63.
+
+### What is ruled out, and what is not
+
+- **A curved velocity map is ruled out.** It would be the natural explanation —
+  endpoints are fixed under any monotonic curve and only the interior can move,
+  which is exactly this signature. But `Vel<`'s attenuation is linear in MIDI
+  velocity at r² 0.9997 over nine points and 0.99997 over a 95 dB range (§83).
+  A map with no curvature cannot displace a midpoint by 26 units. (This was
+  mpc2emu's argument; it holds up independently here.)
+- **A mis-set source is ruled out** — the source id is read back from the device
+  before every capture and asserted.
+- **A global velocity curve is ruled out** — `MIDIGLO_VEL_CURVE` (id 216) reads
+  0, linear, and was read in both runs.
+- **NOT ruled out: a firmware difference.** The figure is from the **EOS 4.0**
+  manual; this machine runs **EOS 4.70**. A source's zero point moving between
+  revisions is the one explanation consistent with everything here, and it is
+  not testable on a single machine. Anyone with EOS hardware on a different
+  revision can settle it in one capture.
+
+No mechanism is offered for 89.6. It is 0.70 of full scale, which is recorded
+only so that a 0.70 later found in a scaling table has something to match
+against — **that ratio is numerology until something else supports it**, and it
+is not evidence for anything on its own.
+
+### Practical effect: none today, which is why it was worth doing carefully
+
+Nothing depends on this. The factory template and every voice in the resident
+bank route `Vel<`, mpc2emu reports no local E4B routing `Vel~` into `AmpVol`,
+and the writer does not emit it. The value of settling it is that **a source
+named for the middle that does not sit in the middle is exactly the kind of
+thing that gets assumed once and never re-checked** — and the assumption would
+have been made from a document that is correct about everything else on the
+page.
