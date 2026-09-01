@@ -7842,3 +7842,64 @@ shape is a derived quantity that cannot fail loudly: an assumed offset, an
 assumed onset, an assumed starting state. What broke all three was printing the
 intermediate — the anchor it found, the state it set, the separation it got —
 so the summary can be disbelieved.
+
+## §84 — Assumed state does not fail loudly, and three sessions found that out separately (2026-09-01)
+
+Four faults in one evening's work, none of which corrupted a measurement and
+all of which produced confident numbers on top of sound data:
+
+1. **An assumed offset.** The note onset was computed from the capture
+   schedule; the schedule was not the file layout (§83).
+2. **An assumed onset.** The fix anchored on the first *detected* note, which
+   presumes the first note sounds — and the first notes are the quiet ones, so
+   at full cord amount the anchor slid by exactly three notes (§83).
+3. **An assumed starting state.** A control captured its "wide open" reference
+   at whatever cutoff the preset happened to carry, on a preset that ships
+   fully closed (§83 addendum).
+4. **A one-sided test on a two-sided claim.** That same control compared a
+   *signed* separation against a threshold that meant a magnitude.
+
+Faults 3 and 4 sat in one line and **cancelled into a stop rather than into a
+plausible number**. That was luck. Had the sign fallen the other way the run
+would have returned a confident null on a control that had never established
+anything — and a null was the expected result, so nothing would have looked
+wrong. A guard that fires for the wrong reason is not a guard.
+
+**The common shape is not "derived summaries fail".** The inputs were sound in
+every case; what failed was a quantity the code *assumed* and never displayed —
+an offset, an onset, a starting condition, a sign convention. Such a quantity
+has no failure mode that looks like a failure: it produces a number in the
+right units, in a plausible range, with no error.
+
+**The fix is the same in all four: print the intermediate the derivation
+assumes, so it can be disbelieved.** The anchor search now reports the offset
+it found (0.76–0.79 s across every capture in two separate runs, which is what
+makes it checkable); the filter control now reports the cutoff it *set* rather
+than the one it hoped for, and its separation in magnitude.
+
+Two sibling projects reached the same rule from different directions the same
+evening — relayed via mpc2emu, not verified here: s3ked arrived at "always
+report the residuals", after a bad fit *looking* bad was what caught a
+ceiling-limited run; and mpc2emu had it as "derived summaries fail while their
+inputs are sound", which is the same observation one level up. Three
+independent arrivals at *make the assumption observable* is worth more than any
+of the constants measured that evening, all of which are replaceable by a
+better measurement and none of which would have been trustworthy without it.
+
+**Concrete rules this leaves behind**, all cheap:
+
+- A control **sets** the state it is named after. It never reads the state a
+  preset happens to be in and calls it the reference.
+- A threshold on a deviation is applied to `abs(deviation)` unless the claim
+  really is one-sided. "The ratio should be 1.0" is falsified by 1.4 exactly as
+  much as by 0.6.
+- Anything derived from a schedule, a layout or a starting condition is
+  **printed alongside the result**, not just used.
+- A guard that stops a run must say *which* condition stopped it, so that a
+  stop for the wrong reason is distinguishable from a stop for the right one.
+
+The measurement rig in `~/temp/e4xt_ref` was swept for the second rule the same
+evening. One further instance was found and fixed: a byte-127 control asserting
+that a plateau should sit AT the peak tested only `ratio < 0.80`, so a control
+reading high — equally strong evidence that the metric was broken — would have
+passed silently.
