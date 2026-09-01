@@ -7589,3 +7589,186 @@ question rather than by testing:
   the one that caused all the trouble.
 
 The loud wrong explanation cost hours. The quiet wrong one is still there.
+
+## §83 — The velocity→volume law, and a field that was never dropped but silently constant (2026-09-01, live)
+
+mpc2emu's cross-format field-coverage audit reported `velocity_to_volume_db`
+as a gap on the E4B side: "the E4XT has no law and neither reads nor writes
+it". The first half is now measured. The second half was wrong, and wrong in
+the direction that hides a defect rather than the one that invents one.
+
+### The premise: not dropped, but written as a constant
+
+Cord slot 0 of every voice of all 22 presets resident in the machine:
+
+    P000–P009  original E4B    Vel< → AmpVol  24
+    P010–P015  S3000 → E4B     Vel< → AmpVol  24   (every voice)
+    P016–P021  S1000 → E4B     Vel< → AmpVol  24   (every voice)
+
+and mpc2emu's `_MOD_TMPL` opens `0x0C, 0x40, 0x1E, 0x00` — source `0x0C`
+(Vel<), destination `0x40` (AmpVol), amount byte `0x1E` = 30, which is
+30/127 = **23.62 %** and is exactly what the editor protocol reports as 24.
+Template and hardware agree to the byte.
+
+So the E4B writer emits a velocity→volume cord on every voice for which
+`needs_mod` is true, always the same one, inherited from the factory template
+and never chosen. A source program whose velocity→volume is genuinely neutral
+arrives carrying a swing it never asked for. **A field that is written as a
+constant is worse than a field that is dropped**, because a dropped field is
+silent and audibly absent, while a constant one is audible, plausible, and
+attributed to the source.
+
+It is also inconsistent rather than merely constant: `needs_mod` gates whether
+the template is written at all, so a voice with no filter envelope, no
+key-track, no velocity→filter and no LFO receives no mod table and therefore
+no velocity→volume cord. The velocity response of a converted program then
+depends on whether some unrelated cord happened to be non-zero. That is a
+code-path reading and on this sample it never fired — all twelve converted
+presets here carry the table — so it is recorded as latent, not observed.
+
+### The law
+
+Measured on a single-voice, single-zone preset (P008, the flattest sustain of
+the ten single-voice presets at a body-ratio of 1.001), note 48, nine
+velocities from 1 to 127, cord amount swept over 0 / 24 / 50 / 100:
+
+| set amount | stored byte | true % | dB per velocity unit | swing v1→v127 | r² |
+|---|---|---|---|---|---|
+| 0   | 0   | 0.00   | 0.00011 | 0.01 dB  | — |
+| 24  | 30  | 23.62  | 0.17754 | 22.37 dB | 0.999715 |
+| 50  | 64  | 50.39  | 0.37901 | 47.76 dB | 0.999997 |
+| 100 | 127 | 100.00 | 0.75108 | 94.64 dB | 0.999968 |
+
+Per 1 % of cord amount that is **0.9470, 0.9477 and 0.9464 dB** — three
+independent amounts agreeing to ±0.07 %. So:
+
+    swing_dB(v1 → v127)  =  0.9470 × amount_percent          (94.7 dB at 100 %)
+    attenuation_dB(v)    =  0.9470 × amount_percent × (127 − v) / 126
+
+Linear in velocity and linear in the setting, which is two of the four
+questions this family of measurements always asks. The third — **is 0 genuinely
+neutral** — is answered by the control row: at amount 0 the level moves 0.01 dB
+across the whole velocity range, so this cord is the only velocity→volume path
+in the voice and zero really is zero.
+
+The shipping default of 23.62 % is therefore a **22.4 dB** velocity→volume
+swing, imposed on every voice the writer produces.
+
+### The pivots, and the one that is not where its name says
+
+The three velocity sources are named as a unipolar / bipolar / inverted triad
+(`Vel+` 0x0A, `Vel~` 0x0B, `Vel<` 0x0C) and only `Vel+` had ever been measured.
+Each was run at amount +10 and −10 against an amount-0 control, and the pivot
+read off as the velocity whose level does not move:
+
+| source | pivot from +10 | pivot from −10 | pivot |
+|---|---|---|---|
+| `Vel+` | −2.90 | −0.36 | **velocity 0** |
+| `Vel~` | 89.92 | 88.88 | **velocity 89.4** |
+| `Vel<` | 128.92 | 127.25 | **velocity 127** |
+
+`Vel+` and `Vel<` are where the naming predicts. **`Vel~` is not.** It does not
+pivot mid-scale at 64; it pivots at 89.4, and its total span at a given amount
+is the same ~9.5 dB as the unipolar sources rather than twice it — so it is not
+`2 × Vel+ − 1` either. No mechanism is offered here for why 89.4; the number is
+reported because it is measured and because building on the inferred 64 would
+be building on nothing.
+
+**The two signs are the check that this is real.** A ceiling compressing the
+gain half would move the +10 crossing later and the −10 crossing earlier, so
+the two would diverge. They agree to one velocity unit on all three sources.
+
+### The consequence for the writer
+
+**No E4XT velocity source pivots at velocity 64**, so the AKAI's convention —
+a swing rotating about 64, measured by s3ked as `swing_dB = 1.19557 × V_LOUD`
+— cannot be carried by choosing a source. It has to be *constructed*:
+
+    Vel+ at amount A                gives  swing S = 0.9470 × A, pivoting at v0
+    plus a static volume trim of     −S/2  dB      moves the pivot to v64
+
+The K2000's convention (neutral at 127, attenuating downward) needs no
+construction at all — that is `Vel<`, which is also what the factory template
+already uses. A unipolar source that scales from silence is `Vel+` directly.
+
+Two hazards in that construction, both real rather than theoretical:
+
+- **The static trim does not go in as dB** — see below. It must be converted
+  through the volume curve, not written as a dB number.
+- **A large swing runs out of trim.** A 43 dB AKAI swing needs −21.5 dB of
+  static trim, and mpc2emu's own `E4XT_VOL_MEASURED_FLOOR_DB` is −22.90 dB.
+  The trim required by the loudest real source values sits at the edge of the
+  calibrated range, which is exactly the "nominal vs realised" problem their
+  model docstring already anticipated, arriving from the other direction.
+
+### `E4_GEN_VOLUME` is labelled dB and is not dB
+
+Written as a positive control — a field specified in dB should move the capture
+by the dB it is given — and it did not. Asking for −12 delivered **−8.86 dB**,
+with 0.03 dB of spread across nine velocities, so the edit path is live and
+repeatable and the *label* is what is wrong.
+
+This independently confirms a law mpc2emu had already measured from the file
+format: their `e4xt_byte_to_volume_db` predicts −9.172 dB for byte −12 against
+the −8.858 dB measured here — **0.31 dB apart, from two entirely different
+paths** (editor SysEx on a resident third-party preset, versus their
+calibration against written banks). Their note that writing the dB value
+straight in "delivered only half to three-quarters of the requested
+attenuation" is confirmed at a new point.
+
+The velocity→volume numbers above are unaffected: they are measured in dB from
+the captures, not read off a field's label.
+
+### Headroom, and why the sweep never needed the trim it was designed around
+
+The plan was to pull the static volume down before sweeping, because a
+ceiling-clipped point manufactures a compressive knee — the exact artefact a
+"nominal vs realised" story predicts, so the one most likely to be believed.
+It turned out to be unnecessary for the main sweep and the reason is worth
+keeping: **`Vel<` only ever attenuates below velocity 127**, so the sweep runs
+*downward* from the untouched baseline and never approaches the ceiling at all.
+
+Baseline at velocity 127, nothing edited, all ten single-voice presets: peaks
+−4.67 to −6.58 dBFS, **zero clipped samples**, note body 70–74 dB above each
+file's own pre-roll. Every capture in the whole run was checked for clipping
+as `max(abs(sample)) >= 32767` on raw frames — never on `peak_db`, which is a
+5 ms moving average of |signal| and structurally cannot see a short clip
+(§81). None clipped.
+
+The trim was needed only for the pivot sweep, where a bipolar source adds gain
+at one end whichever sign is used, and there it doubled as the positive control
+that produced the dB-label finding above.
+
+**Where the measurement actually ran out was the bottom, not the top.** At
+amount 100 the three lowest velocities fall below the bench noise floor
+(−88 dBFS): the nominal swing is 94.7 dB and the bench can only witness about
+75 dB of it. Those points are reported as unmeasurable here, not as silence —
+the machine may well be producing them.
+
+### Two analysis faults, both of the same family
+
+Neither corrupted a capture; both would have produced confident numbers.
+
+1. **The note onset was computed from the schedule and the schedule was not the
+   file layout.** The first analysis put the note at the `PRE` offset when it
+   actually begins at arm + settle + PRE = 1.30 s, which placed the "head"
+   window in the pre-roll silence and returned sustain ratios in the
+   *thousands*. Visible only because the number was absurd; a smaller error
+   would have passed.
+
+2. **The fix then failed the other way.** Anchoring on the first detected onset
+   presumes the first note sounds — and the first notes are the quiet ones. At
+   cord amount 100 the three lowest velocities were below the detection line,
+   the anchor latched onto note 4, and every window slid by exactly three notes
+   (8.7 s = 3 × 2.9 s), reporting nine confident and wrong levels.
+
+The anchor is now a **grid search**: score a whole comb of windows against the
+envelope and take the offset that maximises in-window energy. The loud notes
+are always present, so the comb locks on even when several notes are silent,
+and it reports the anchor it found (0.78–0.79 s on every capture in this run,
+across two separate processes) so a drift is visible rather than absorbed.
+
+The general lesson is the one §78 and §81 already paid for from other
+directions: **an assumed layout does not fail loudly.** A detector that can be
+defeated by the very effect being measured is worse than no detector, because
+it fails exactly when the experiment is working.
