@@ -7772,3 +7772,73 @@ The general lesson is the one §78 and §81 already paid for from other
 directions: **an assumed layout does not fail loudly.** A detector that can be
 defeated by the very effect being measured is worse than no detector, because
 it fails exactly when the experiment is working.
+
+### §83 addendum — `Vel+` anchors at velocity 0 on the FILTER destination too (2026-09-01, live)
+
+The pivots above were measured on `AmpVol`. mpc2emu's gap-2 floor scheme rests
+on the same property holding for `FilFreq` — write the floor corner into
+`vpar[60]` and the span into the cord, because `Vel+` adds from the base so
+`corner(0) = base`. `FilFreq` is a different destination with its own
+base-dependent conversion (§56), so it was measured rather than assumed.
+
+**The observable is the spectral centroid of the note body, not the level.**
+Opening a filter raises loudness as well as brightness, so a level measurement
+cannot separate "the corner moved" from "the voice got louder", and the corner
+is the whole question.
+
+P000 voice 0, cord slot 4 (`Vel+` → `FilFreq`, which is the slot the writer
+uses), base Fc byte 40 ≈ 205 Hz, amount +20 ≈ a 2653-cent sweep:
+
+    velocity                        1     16     32     48     64     80     96    112    127
+    Fc wide open, no cord        1333   1239   1186   1137   1110   1088   1078   1068   1063
+    Fc 40, no cord               1122   1020    952    897    865    837    820    808    799
+    Fc 40, Vel+ -> FilFreq 20    1126   1073   1066   1062   1070   1072   1072   1067   1063
+    difference                      3     53    114    165    206    235    253    259    264   Hz
+
+**At velocity 1 the cord moves the centroid by 3 Hz out of a 264 Hz sweep —
+1.2 %.** Fitting the low-velocity end (where the response is still linear) puts
+the zero crossing at velocity +0.5, +0.2 or −0.8 depending on whether three,
+four or five points are used: within one velocity unit of zero on every
+reading. `Vel+` anchors at velocity 0 on `FilFreq`, and the floor scheme's
+premise holds.
+
+**Two things not to misread in that table.**
+
+- **The flattening at high velocity is the centroid saturating, not the cord.**
+  Hz gained per velocity unit falls monotonically from 3.33 to 0.33 as the
+  corner rises past the voice's content: once the filter is above everything
+  the sample contains, opening it further changes nothing measurable. That is a
+  property of the observable, not a nonlinearity in the cord.
+- **The centroid falls with velocity even with no cord at all** (1122 → 799).
+  That is the factory `Vel<`→`AmpVol` cord still doing its 22.4 dB: at velocity
+  1 the note is ~22 dB down, so broadband noise makes up more of the spectrum
+  and lifts the centroid. It cancels in the difference column, which is why the
+  difference is what the conclusion is read from — but it does mean velocity 1
+  is the noisiest point in the table, so a *small* non-zero effect there could
+  be masked. A pivot at velocity −10 would show ~21 Hz at v1; 3 Hz was measured.
+
+### The control that refused first, and why that was the run working
+
+The first attempt used P008 — the voice §83's level work was done on — and
+stopped itself: closing the filter from byte 255 to 140 moved the centroid by
+41 Hz, so the filter was barely in circuit and a null would have meant nothing.
+Screening all ten single-voice presets showed why: they are dark, centroids
+149–430 Hz with 0.8–3.2 % of energy above 2 kHz, and byte 140 is ~895 Hz —
+above essentially all of their content. P000 is the brightest, and byte 40
+(205 Hz) sits inside its content rather than above it.
+
+**The control then failed a second way, which is the more useful one.** It
+captured the "wide open" reference at whatever Fc the preset happened to carry
+and called it open — and P000 ships with **Fc 0**, fully closed. So the control
+compared closed against less-closed, and returned a *negative* separation that
+the `sep < 200` guard read as "blind" and aborted on. Two faults in one line: a
+control that assumed a state instead of setting it, and a threshold applied to
+a signed value. The control now sets Fc 255 explicitly and tests `abs(sep)`,
+and it separates by 243 Hz.
+
+This is the third time in one day that the measurement was sound and the layer
+summarising it was not (§83's two anchor faults being the others). The common
+shape is a derived quantity that cannot fail loudly: an assumed offset, an
+assumed onset, an assumed starting state. What broke all three was printing the
+intermediate — the anchor it found, the state it set, the separation it got —
+so the summary can be disbelieved.
