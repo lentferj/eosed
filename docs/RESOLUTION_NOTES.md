@@ -8019,3 +8019,40 @@ named for the middle that does not sit in the middle is exactly the kind of
 thing that gets assumed once and never re-checked** — and the assumption would
 have been made from a document that is correct about everything else on the
 page.
+
+### §85 addendum — the pooled number, and the two things worth carrying forward
+
+**Pooled across all twelve measurements:** mean **89.66**, sd 1.79, range
+87.1–94.0, 95 % CI of the mean ±1.01. The two destinations agree within the
+scatter — `AmpVol` 89.92 over ten measurements, `FilFreq` 88.35 over two, 1.6
+velocity units apart. The manual's 63 is **26.7 units away, about 51 standard
+errors**. This is not a close call and no further measurement will make it one;
+what would settle it is EOS hardware on a different firmware revision, which is
+the test recorded above.
+
+**One law, three pivots — the useful shape for a writer.** The span result was
+a by-product of a run aimed at the pivot, and it is the part a converter
+actually needs: `Vel~` gives 0.9456 dB per 1 % of cord amount against `Vel<`'s
+0.9470, so **the dB-per-percent constant is shared across sources**. A writer
+therefore needs *one* law plus a per-source pivot, not three laws. Combined with
+§83's velocity-linearity, the whole family is:
+
+    attenuation_dB(v) = 0.947 x amount_percent x (v - pivot) / 127
+
+    pivot:  Vel+ = 0     Vel~ = 89.7 (measured; manual says 63)     Vel< = 127
+
+**Measure the response curve before choosing an operating point for a bipolar
+probe.** Two `FilFreq` controls refused in a row because the base cutoff was
+chosen from the byte→Hz table — byte 80 ≈ 396 Hz "sits inside the content" —
+and moved the centroid by 2 Hz. The voice's *measured* sensitivity is
+**+10.6 Hz per byte over bytes 20–60, flattening above 80 and then reversing**
+(428 Hz at Fc 0, peaking 1036 Hz at Fc 80, back to 737 Hz at Fc 255). Both
+bases sat in the dead region.
+
+The general rule this leaves: **a bipolar source needs an operating point with
+room in both directions, which is a strictly stronger requirement than "the
+manipulation does something"** — the usual control only establishes the latter.
+Deriving the operating point from a nominal conversion table instead of from
+the response actually measured on the voice in front of you is the same
+substitution as §84's assumed state, one level up: a plausible number standing
+in for an observed one.
