@@ -8316,3 +8316,33 @@ on the PID:**
 
 and kill those, having looked at them. A pattern is a claim about a string; a
 PID is a claim about a process, and only one of those is what you meant.
+
+### §84 addendum, second part — the class is about addressing, not about measurement
+
+The wrong-subject failure has now turned up three times in one day, in three
+domains that share no code and no concepts:
+
+| where | the address | the wrong subject it resolved to |
+|---|---|---|
+| MIDI program select | bank-select convention | a **real program on another bank** — sounds, measures, passes every gate |
+| JACK port connection | a cached recorder's ports | a **different instrument's inputs** — clean, analysable audio of the wrong machine |
+| process matching (§87) | `pkill -f <pattern>` | **the shell issuing the command**, whose command line contains the pattern |
+
+Two of those are mpc2emu's and the third is recorded here. The point mpc2emu
+drew from the third is the one worth keeping: **this is not a measurement fault
+at all.** Every instance is an *addressing* fault — a name, a pattern or a
+cached handle that resolves to something other than what was meant, after which
+every check downstream is satisfied by the substitute. Measurement is simply
+where it becomes visible, because measurement is where a wrong subject still
+produces a plausible number.
+
+Which gives the general form: **a pattern is a claim about a string; a PID is a
+claim about a process** — and the same asymmetry holds for a program number
+against a dumped program, a port name against a verified signal path, a preset
+selector against a read-back. In each pair the cheap side is satisfiable by the
+wrong subject and the expensive side is not.
+
+The repair is always the same shape and it is never a better pattern: **resolve
+the address to the thing itself, then verify the thing.** Kill by PID after
+inspecting it. Dump the program back. Track an edit through the signal. It costs
+one extra step and it is the only step that can fail for the right reason.
