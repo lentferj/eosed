@@ -8215,3 +8215,64 @@ than "the filter does something" and is what the usual control fails to check.
 "in the repo". The test is not whether a file exists but whether it survives
 a cleanup nobody consults you about — and both projects spent an evening
 treating a scratch directory as though it were storage.
+
+## §87 — Two harness disciplines that exist only in untracked files (2026-09-02)
+
+Applying §86's test to the rest of the rig leaves almost everything correctly
+scratch, and two things that are not scratch at all. Both are **hardware**
+properties rather than measurement ones, and losing them does not cost a
+re-derivation — it costs a note ringing on an instrument somebody else plays,
+or a preset left silently modified on their machine.
+
+Neither is recorded here. CLAUDE.md carries the one specific instance (the
+panel-divert opcode must send its counterpart on every exit path, including on
+exception) but not the general practice, and CLAUDE.md is untracked by design.
+
+### A script that sounds a note guarantees the note-off
+
+On every exit path, not just the happy one. `try/finally` around the note is
+not enough on its own: the paths that actually occur are **SIGTERM** — a
+capture given too short a timeout and killed mid-run, which happened twice in
+one day on 2026-08-30 — and SIGINT from an operator. A note-on whose process
+dies leaves the voice sounding until someone finds the instrument, and the
+instrument is shared.
+
+    import atexit, signal
+    atexit.register(all_notes_off)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: sys.exit(1))   # -> runs atexit handlers
+
+`sys.exit` from the handler is what matters: the default SIGTERM disposition
+terminates without running `atexit`, so registering the cleanup is not enough
+unless the signal is also converted into a normal exit.
+
+### A script that edits a parameter restores it, and reads the restore back
+
+Every live measurement here works by editing RAM parameters on a machine whose
+resident bank is somebody's working state. The restore belongs in the same
+`atexit` handler as the note-off, and it must **print the value it read back**
+rather than the value it wrote — §84's rule applied to the one quantity the
+handler is responsible for. On 2026-09-01 roughly twenty parameter edits across
+two presets were made and restored this way, and the read-backs are what makes
+"restored" a fact rather than an intention.
+
+    @atexit.register
+    def restore():
+        try:
+            select(preset, voice)                    # re-select: it may have moved
+            for pid, val in ORIGINALS.items():
+                set_parameter(pid, val & 0x3FFF)
+            print("restored: " + ", ".join(
+                f"{pid}={get_parameter(pid)}" for pid in ORIGINALS))
+        except Exception as e:
+            print(f"*** RESTORE FAILED: {e} -- reload the bank from media ***")
+
+**Re-select inside the handler.** `PRESET_SELECT`/`VOICE_SELECT` are device
+state and the edit target may not be where the handler assumes — writing the
+original values to the wrong voice is worse than not restoring, because it
+corrupts a second voice while reporting success.
+
+**The failure path is recoverable and should say so.** These edits are RAM-only,
+so a failed restore costs a bank reload from media, not data. That is the whole
+reason RAM work is delegable at all, and a handler that names the recovery turns
+a scary message into an instruction.
