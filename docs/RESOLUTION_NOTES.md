@@ -8100,3 +8100,48 @@ The rule this leaves: **state a measured law in the units it was measured in.**
 Per velocity unit is what the fit returns; a "full swing" is a derived summary
 and cannot be quoted without saying across what. Both §83's and §85's
 statements are individually defensible and neither said which.
+
+### §84 addendum — gates that can be satisfied by the wrong subject
+
+§84 is about assumed state: a quantity the code never displays, which has no
+failure mode that looks like a failure. A second class turned up the same day
+and is worth separating from it, because the repair is different.
+
+**A gate can be fully satisfied by the wrong subject.** mpc2emu's K2000 captures
+(2026-09-02) used a bank-select convention that landed on program 318 — *a real
+program on another bank*. That capture sounds, has a plausible envelope, passes
+a level check, passes an SNR check, and passes a "did the manipulation do
+something" control — because the manipulation genuinely did something, to the
+wrong program. Every internal gate is satisfied. Silence at least announces
+itself; this does not.
+
+Their `_PersistentRecorder` bug is the same class: a cached client kept the
+first instrument's inputs while MIDI port, channel and program change all
+followed a switch correctly, so an "MPC capture" was really the K2000's inputs —
+clean, analysable, entirely wrong.
+
+**The distinction, which is mpc2emu's and is worth more than either bug: some
+gates can only be satisfied by the right subject, and some cannot.** A signal
+check, a level check, an SNR check and a liveness control are all satisfiable by
+the wrong subject. So is a connection readback — it proves a path exists, not
+what is on the far end of it.
+
+**What does discriminate is a manipulation that shows up in the signal.** A
+−12 dB parameter edit moving the capture 8.86 dB with 0.03 dB of spread across
+nine velocities, or three cord amounts returning the same dB-per-percent
+constant to ±0.07 %, is proof that the recording is *of the machine that was
+edited* — because a recording of a different machine cannot track edits made to
+this one. That is what verifies the 09-01 captures here, and it costs nothing
+whenever a run already sweeps a parameter, which most of these do.
+
+A connection readback is still worth having as the cheap early failure: it stops
+a run before it wastes captures rather than after. But it belongs *below*
+verify-by-effect, not in place of it.
+
+**The structural point, and the reason this is written down rather than left in
+a session:** every fault across three sessions on 2026-09-01/02 was visible in
+data somebody already held, and each needed a comparison nobody had made — a
+second statistic, a prior measurement, a manual, another reader. None was
+hidden. And nobody was going to make that comparison unprompted against their
+own work. That is an argument for building the comparison into the method, not
+for being more careful.
