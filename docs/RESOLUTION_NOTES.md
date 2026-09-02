@@ -8276,3 +8276,43 @@ corrupts a second voice while reporting success.
 so a failed restore costs a bank reload from media, not data. That is the whole
 reason RAM work is delegable at all, and a handler that names the recovery turns
 a scary message into an instruction.
+
+### §87 addendum — verify the world, and the pattern that matches its own shell
+
+Two additions, one from mpc2emu and one hit twice here without being written
+down — which is the worse of the two states, since a fault that has been solved
+and not recorded gets re-solved by re-hitting it.
+
+**"The handler ran" is a claim about the code; "the instrument is silent" is a
+claim about the world.** (mpc2emu, 2026-09-02.) After killing a held tone they
+captured a second of audio and read −93 dBFS. The whole point of the exit-path
+discipline above is a physical outcome, and the only check that speaks to it is
+a measurement of the physical outcome. An `atexit` handler that provably ran
+still tells you nothing about whether the note-off reached the instrument —
+the MIDI port may have been closed first, the message may have been swallowed
+by a filtering route, the machine may have been mid-load. One capture settles
+it, and every rig here already has a recorder open.
+
+**A process pattern matches the shell that contains it.** `pkill -f 'foo.py
+--flag'` run from a shell whose own command line contains that string kills the
+shell. Encountered here on 2026-08-31: exit 144, and a compound command stopped
+halfway — including an edit that silently did not happen and was found only
+later, which is the part that makes this a data-integrity fault and not just an
+annoyance.
+
+**The `[f]oo` bracket trick does not fix this**, and believing it does is how
+the second encounter happened. It stops `grep` from matching *its own* entry in
+the process table; it does nothing about the enclosing shell, whose command
+line contains the pattern as literal text. On 2026-09-01 a check for "is another
+session driving the hardware?" returned two matches, both of them this session's
+own wrapper shells. Harmless in that direction — a false positive says *busy*
+when the machine is free, which is the conservative failure — but it is the same
+self-match whose other direction takes out the shell mid-operation.
+
+The rule is not a better pattern. **Resolve to real PIDs, inspect them, and act
+on the PID:**
+
+    ps -eo pid,args | awk '$1 != PID && /pattern/ {print $1}' PID=$$
+
+and kill those, having looked at them. A pattern is a claim about a string; a
+PID is a claim about a process, and only one of those is what you meant.
