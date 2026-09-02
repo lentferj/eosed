@@ -8145,3 +8145,73 @@ second statistic, a prior measurement, a manual, another reader. None was
 hidden. And nobody was going to make that comparison unprompted against their
 own work. That is an argument for building the comparison into the method, not
 for being more careful.
+
+## §86 — Committed is not durable: the rig that produced §83–§85 is not in any repo (2026-09-02)
+
+mpc2emu made this point about their own tree and it lands harder here. Every
+measurement in §83, §85 and §86 was taken by scripts in `~/temp/e4xt_ref/`,
+which is **untracked, in the directory that gets periodically cleaned, with a
+standing instruction to prefer deleting anything older than a week.** The prose
+above is durable; the thing that produced it is on a deletion path.
+
+Most of that is correctly scratch — 166 MB of captures, one-shot probes. Two
+pieces are not, because they are fixes for faults documented above and would
+otherwise be re-derived by re-hitting the same faults. CLAUDE.md puts
+"ready-to-apply code" in this file, so they go here.
+
+### The comb anchor (fixes both faults in §83)
+
+Anchoring a multi-note capture on the first *detected* onset presumes the first
+note sounds. When the quiet notes come first — any velocity ladder — a
+sufficiently strong effect silences them and the anchor latches onto note 4,
+sliding every window by an exact multiple of the note period and reporting a
+full set of confident, wrong levels. Scoring a whole comb of windows against
+the envelope locks on from the loud notes, which are always present:
+
+```python
+win  = max(1, int(0.005 * sr))                 # 5 ms envelope grid
+m    = len(mono) // win
+env  = np.abs(mono[: m * win].reshape(m, win)).mean(axis=1)
+step = int(round(period * sr / win))           # period = pre + hold + gap
+span = int(round((hold - body_lead - body_tail) * sr / win))
+best, first = None, None
+for off in range(int(0.20 * sr / win), int(2.50 * sr / win)):
+    idx = [off + k * step for k in range(n_notes)]
+    if idx[-1] + span >= len(env):
+        break
+    score = sum(float(env[i:i + span].sum()) for i in idx)
+    if best is None or score > best:
+        best, first = score, off * win         # first = sample index of note 0
+```
+
+**Report `first`.** It came out 0.76–0.79 s on every capture across five
+separate processes on 2026-09-01, and printing it is what makes the anchor
+checkable rather than assumed — §84's rule applied to the one quantity this
+function invents.
+
+### The reference bank's filter response (why two controls refused)
+
+A filter operating point cannot be derived from the nominal byte→Hz table. On
+P000 voice 0 at note 48, spectral centroid against `E4_VOICE_FMORPH` (id 83,
+the file format's `vpar[60]`):
+
+    Fc byte     0    20    40    60    80   100   120   160   255
+    centroid  428   563   775   994  1036   970   882   823   737   Hz
+
+**Sensitive over bytes 20–60 at +10.6 Hz/byte, flat by 80, and reversing above
+it.** Byte 80 is ~396 Hz by the nominal table and looks like it sits inside the
+content; it moves the centroid by 2 Hz. Two controls refused on operating
+points chosen that way before the curve was measured.
+
+All ten single-voice presets in this bank are dark — centroids 149–430 Hz with
+0.8–3.2 % of energy above 2 kHz — so this is a property of the material, not of
+one preset, and any filter probe on this bank needs a base in the 20–60 region.
+A **bipolar** source needs room in both directions, which is strictly stronger
+than "the filter does something" and is what the usual control fails to check.
+
+### The general point
+
+"Committed" and "durable" are not the same, and neither is "written down" and
+"in the repo". The test is not whether a file exists but whether it survives
+a cleanup nobody consults you about — and both projects spent an evening
+treating a scratch directory as though it were storage.
