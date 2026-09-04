@@ -8346,3 +8346,67 @@ The repair is always the same shape and it is never a better pattern: **resolve
 the address to the thing itself, then verify the thing.** Kill by PID after
 inspecting it. Dump the program back. Track an edit through the signal. It costs
 one extra step and it is the only step that can fail for the right reason.
+
+### §83 addendum — the volume law above zero, and a static offset that leaves a swing alone (2026-09-02/04, live)
+
+Two results that fell out of getting a test bank out of the noise floor, both
+measured rather than reasoned, and both extending the "`E4_GEN_VOLUME` is
+labelled dB and is not dB" finding above.
+
+**1. The law holds through POSITIVE settings, and the 1:1 branch is wrong.**
+mpc2emu's `e4xt_byte_to_volume_db` fits a quadratic `0.76732b + 0.000246b²` for
+`b < 0` and returns `b` unchanged for `b >= 0` — a 1:1 positive branch that was
+assumed alongside the fitted attenuation rather than measured with it. Moving
+one voice from −4 to +7, an 11-unit step:
+
+    the 1:1 positive branch predicts     10.07 dB
+    the negative quadratic, extended      8.45 dB
+    MEASURED                              8.53 dB
+
+**The single quadratic holds across zero, to 0.08 dB.** The 1:1 branch is
+1.5 dB optimistic at +7 and diverges further up. This is the same shape as the
+−12 asked / −8.86 delivered result above, in the half of the range that had no
+measurement in it — and the reason it went unnoticed is that a plausible
+identity function in the untested half of a fitted curve looks like part of the
+fit.
+
+**The device's own ceiling is +10** (`get_parameter_range`, not the transcribed
+table), so the usable span above a typical setting is small: a voice sitting at
+−7 can gain at most 15.4 dB realised, which was not enough to lift one test
+preset out of the noise at all.
+
+**2. A static level offset does not change a velocity swing — now measured
+where it was previously only inferred.** §85's evidence for this covered static
+levels of 0, −12, −20 and −40 dB, **all at or below zero.** Lifting a preset
+into measurable range required going *positive*, where an amplifier near unity
+could compress the top of the swing and flatten the very quantity being
+measured. Captured at two static settings 11 dB apart:
+
+    static -4   swing 14.94 dB over 3 clear cells   r² 0.99997
+    static +7   swing 15.27 dB over 5 clear cells   r² 0.99917
+
+**0.32 dB apart.** The offset is neutral, and the +7 case is a five-point fit
+across the full v1..v127 span rather than an extrapolation from the top of the
+range — so the dB-linearity of the response is measured over the whole span,
+not assumed from its loud end.
+
+**Why the control was worth its capture.** Without it the 15.27 dB number rests
+on "a static offset should not matter", which is exactly the kind of
+should-not-matter that §84 is about: it would not have errored, it would have
+returned a well-formed swing that was quietly about a saturating amplifier. Two
+settings cost one extra capture and turn the assumption into a measurement.
+
+**Floor-limiting is the mirror of clipping, and it compresses rather than
+knees.** The same bank measured before the lift gave 3.37 dB where the file
+held 14.9, because the quiet cells were at the noise floor and a swing measured
+from a floored bottom is bounded by the top cell's height above the floor. **A
+ceiling manufactures a fake knee; a floor manufactures fake compression.** Both
+produce a clean, analysable, entirely wrong number.
+
+**And the survival test must compare like with like.** A cell whose PEAK clears
+an RMS noise floor by 10 dB can be pure noise: measured on these captures,
+broadband noise peaks run **15–16 dB above their own RMS**, so a peak-vs-RMS
+threshold at +10 dB admits noise on the noise alone. One preset presented five
+cells that each looked 15–18 dB "above the floor" and every one was noise
+(early-window RMS SNR −0.5 to +0.4 dB). Compare RMS against RMS, and print the
+noise crest so the gap between the two criteria is visible rather than assumed.
