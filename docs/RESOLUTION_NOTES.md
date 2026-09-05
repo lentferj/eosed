@@ -8410,3 +8410,45 @@ threshold at +10 dB admits noise on the noise alone. One preset presented five
 cells that each looked 15–18 dB "above the floor" and every one was noise
 (early-window RMS SNR −0.5 to +0.4 dB). Compare RMS against RMS, and print the
 noise crest so the gap between the two criteria is visible rather than assumed.
+
+### §87 addendum, second part — I recorded the pattern-matches-its-own-shell rule and then walked into it (2026-09-05)
+
+The addendum above states the trap and gives the fix: a process pattern matches
+the shell that contains it, the `[f]oo` bracket trick does not help because it
+protects `grep` from its own process-table entry and not from the enclosing
+shell, and the remedy is to resolve to real PIDs and act on those. It was
+written a few hours before this.
+
+Then a wait-loop for a 26-minute unattended capture was written as:
+
+    until ! pgrep -f matrix_mpc.py >/dev/null; do sleep 15; done
+
+`pgrep -f` matched the waiter's own command line, so the condition was never
+true, and the loop ran until it was killed — exit 144. Checked afterwards:
+`ps -eo pid,args | grep -c "[m]atrix_mpc.py"` returns **2** while zero capture
+processes exist. Both matches are shell wrappers carrying the pattern as text.
+
+**Nothing was lost, and the reason is worth more than the fault.** A second
+waiter on the same run tested a different condition — whether the results file
+had reached 61 entries — and that one fired correctly, because a row count is
+not a process pattern and cannot match the thing asking about it. The run
+completed, all 61 captures and four derived files are intact.
+
+**Two things this adds to the rule as previously stated.**
+
+1. **Writing a rule down does not install it.** The failure here was not
+   ignorance of the trap; the trap was documented, by me, with the fix, in this
+   file. What actually prevents it is not knowing better but never typing the
+   shape at all — which argues for the habit (`ps` + explicit PID) rather than
+   for the knowledge.
+2. **The self-match makes a kill OVER-BROAD, not merely self-destructive.**
+   The addendum framed the danger as `pkill` taking out the shell issuing it.
+   Worse is available: `pkill -f matrix_mpc.py` here would have matched the
+   shell *and* the real capture process, so a "clean up my stray watcher"
+   gesture would have killed a 26-minute unattended hardware run at the same
+   time. The harmless direction announces itself with a hung loop; that one
+   would not have.
+
+**Prefer a condition that cannot refer to the asker.** A file's contents, a row
+count, an exit status — none of these can match the process testing them. A
+process-name pattern always can.
