@@ -8452,3 +8452,75 @@ completed, all 61 captures and four derived files are intact.
 **Prefer a condition that cannot refer to the asker.** A file's contents, a row
 count, an exit status — none of these can match the process testing them. A
 process-name pattern always can.
+
+## §88 — A summary loses its qualifier when it crosses a session boundary (2026-09-05)
+
+The costliest fault of this exercise was not a wrong number. It was a **true**
+statement that stopped being true when it travelled.
+
+Four keys of a converted drum kit were reported as **silent**. They were not
+silent — they peak 57–61 dB above the noise floor and read 42–46 dB of SNR in
+an attack window. They vanish only in an *early* window opening at 100 ms,
+because the samples behind them are 55–80 ms long and have finished before that
+window starts. What was measured, and true, was "silent in the window I scored".
+What was sent was "silent".
+
+**The receiving session then found a mechanism that fitted the summary.** Sorting
+the kit's sixteen samples by duration produced perfect separation — everything
+under 80 ms silent, everything from 234 ms up sounding, nothing in the gap —
+which reads as proof of a minimum-length limit in either the machine or the
+converter. **The gap contained 100 ms.** The boundary was the analysis window's
+opening time. A writer investigation followed, for a defect that does not exist.
+
+### Both halves, because it took two mistakes
+
+- **Mine:** a claim shipped without the condition under which it held. "Silent"
+  is not a property of a sound; it is a property of a sound *and a window*.
+- **Theirs, self-reported:** their own scorer had already run over the same
+  captures on **peak**, which is immune to the window, and returned all sixteen
+  keys measurable at 50–64 dB SNR with zero dropped notes — computed and printed
+  *before* the finding was filed. The failure was not believing a peer; it was
+  **believing a peer's summary over one's own measurement of the same data
+  without noticing the two disagreed.**
+
+The fix is the same shape on both sides and it is already in use elsewhere in
+this project: `slot_map.json` ships beside the captures carrying how the mapping
+was established and what it contradicted. **A silence claim must likewise carry
+the window it was silent in.** A summary that cannot be checked at the far end is
+the thing that turns one session's artefact into another session's bug hunt.
+
+### A clean pattern is not evidence of a cause
+
+Sixteen samples sorting by duration with an empty gap is the shape that feels
+like proof, and it made the wrong conclusion *more* believable rather than less.
+The pattern was real. Its cause was in the observer. **Perfect separation
+constrains the boundary; it says nothing about which side of the apparatus the
+boundary lives on.**
+
+### Why several windows had to be emitted, in its strongest form
+
+k2kremote and mpc2emu asked for four windows plus peak instead of one, so the
+window could be chosen after the fact rather than baked into hundreds of
+captures. That argument understated the case.
+
+**The attack window is the only one in which these keys sound, and nobody would
+choose it as the single window for a drum kit.** Had one window been emitted —
+as it was before that request — the artefact would have been *undiscoverable*
+without a recapture, and the writer hunt would have run until something
+unrelated contradicted it. Emitting several windows did not merely permit a
+better choice later; **it is the only reason the artefact was visible at all.**
+
+That generalises past windows: **when an analysis parameter is a free choice,
+emitting several values of it is not a convenience, it is the difference between
+a wrong answer that can be caught and one that cannot.**
+
+### Postscript: report a probe as refuted, not as inconclusive
+
+The follow-up experiment — walking `E4_VOICE_START_OFFSET` up a sample that does
+sound, to find a playback-duration floor — failed, and the honest description is
+not "inconclusive". A 234 ms sample is clearly audible at offset 0 while a
+622 ms sample is inaudible at offset 32; if that parameter were a fraction of
+sample length, 466 ms would remain, nearly twice a duration that demonstrably
+sounds. **That is a refutation of the assumed units**, and filing it as "the
+probe was inconclusive" would have left the assumption standing for the next
+person to build on.
