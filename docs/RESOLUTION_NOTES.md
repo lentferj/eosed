@@ -8524,3 +8524,72 @@ sample length, 466 ms would remain, nearly twice a duration that demonstrably
 sounds. **That is a refutation of the assumed units**, and filing it as "the
 probe was inconclusive" would have left the assumption standing for the next
 person to build on.
+
+## §89 — A check built on a signal featureless after its onset cannot detect a late anchor (2026-09-05, live)
+
+A measurement procedure for amplitude-attack curves proposed this sanity check:
+*measure the instant-attack preset; it must come out instant; if it does not,
+the time anchor is wrong and every other curve is shifted with it.* It sounds
+sufficient and it is blind in one direction.
+
+**Measured, by deliberately moving the anchor on a real instant-attack capture
+and asking the check's own question at each offset — first 100 ms bin relative
+to that note's asymptote:**
+
+    anchor error    bin1    bin2    bin3    the check says
+      -0.30 s      -39.2   -38.6   -38.7   caught
+      -0.10 s      -38.7     0.0    -0.1   caught
+       0.00          0.0    -0.1    -0.4   instant
+      +0.10         -0.1    -0.4    -1.0   instant
+      +0.30         -1.0    -1.3    -1.8   instant
+      +0.60         -2.0    -2.3    -2.7   instant
+      +1.00         -3.5    -4.1    -4.3   caught
+
+**An early anchor is caught at 0.10 s. A late anchor passes to about 0.6 s.**
+That is structural rather than incidental: after an instant onset the signal is
+flat, so starting the window late simply lands on more of the same. The check
+can only see the direction that exposes the pre-onset silence.
+
+**Late is the direction that damages the measurement**, and it damages it worst
+where the check is least able to see it. A late anchor skips the first Δ of
+every ramp, so every attack is measured *faster* than it is — the window opens
+partway up the ramp. The error scales against each subject's own attack time:
+0.3 s is 1.7 % of an 18-second attack and **essentially all of a 0.3-second
+one.** So the fast subjects are corrupted most, and the instant subject —
+the one being used as the validator — shows nothing at all.
+
+### What to check instead
+
+- **Validate on a moderate KNOWN attack, not on the instant one.** An attack of
+  the same order as the tolerable error is sensitive to it, and a known nominal
+  value gives a prediction that can fail. An instant attack is shape-insensitive
+  to a late anchor by construction and can only ever catch the early direction.
+- **Use both edges.** A note-off is a sharp falling edge and an independent time
+  reference owing nothing to the attack: `last_energy − first_energy` must equal
+  the commanded hold. Measured here as **14.00 s against a commanded 14.0** on
+  the reference capture. Two edges constrain the anchor; one does not.
+- **Carry the reference in every capture, not once per set.** The rig offset
+  here is stable at 1.200 s and still carries **40 ms of scatter across 52
+  captures**; one reference capture does not validate the others. Where only one
+  preset sounds at a time this forces a bank design change — an anchor zone on
+  a key no subject uses — rather than a procedure change.
+- **Bin finer than the error you intend to catch.** At 250 ms bins a 100 ms late
+  anchor is invisible even on a fast subject.
+
+### The general form
+
+**A validator must be sensitive to the failure it is validating against.** An
+instant attack is the most obvious thing to test an anchor with and one of the
+worst, because the property it demonstrates — flatness after onset — is exactly
+the property that hides a late anchor. §84's rule was that a gate can be
+satisfied by the wrong subject; this is the sibling: **a gate can be satisfied
+by the right subject in a state that carries no information about the thing
+being gated.**
+
+Worth pairing with the other half, from the same afternoon: on a slow-attack
+sound the audio's first energy is **not** the note-on. Onset detection on the
+subject gave 4.36 s and 5.62 s for notes commanded at 1.70 s, because it finds
+where the ramp crosses the threshold. So "take the anchor from the audio rather
+than the schedule" needs the qualifier **"from a fast-attack reference in the
+same capture geometry"** — the schedule can lie, and so can the subject's own
+onset.
