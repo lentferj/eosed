@@ -8593,3 +8593,45 @@ where the ramp crosses the threshold. So "take the anchor from the audio rather
 than the schedule" needs the qualifier **"from a fast-attack reference in the
 same capture geometry"** — the schedule can lie, and so can the subject's own
 onset.
+
+## §90 — A clamp boundary cannot be located by reading the clamped value (2026-09-05)
+
+Three of the day's faults were plausible numbers that measured the wrong thing.
+This one is different and worth naming separately: **a correct measurement, read
+wrong off its own output.**
+
+A pitch-ceiling sweep reported a sample capping one semitone early. The cause,
+relayed from k2kremote: the **last tracking key's partials equal the frozen
+value**, because the frozen value *is* that key's rate and everything above
+clamps to it. Reading the boundary out of the value column therefore puts it one
+row early — the first clamped row and the last unclamped row are numerically
+identical.
+
+**That is general and it has nothing to do with pitch.** Wherever a quantity
+saturates, the last unclamped sample and the first clamped one carry the same
+value by construction. So:
+
+> A clamp boundary is invisible in the clamped quantity. It is only visible in
+> the RELATIONSHIP the clamp destroys — the ratio, the slope, the increment —
+> which is flat on one side and not on the other.
+
+Re-derived from the ratios rather than the column, all four points fitted a
+96 kHz ceiling with no residual: no offset, no second framing, nothing left
+over. The discrepancy that prompted a mapping hypothesis did not exist.
+
+**This is directly relevant to work in this file.** Several findings here turn on
+detecting saturation — `e4xt_cord_saturates` re-saturating a cord at the end of
+the cutoff byte (§56), floor-limited velocity cells compressing a swing (§83
+addendum), converter clipping manufacturing a knee (§81). In every one of those
+the boundary was found by watching a *slope* go flat, not by reading a level,
+and §90 is the reason that was the right instrument rather than a stylistic
+choice.
+
+**The cost of the underlying bug, for scale.** The same investigation found one
+function serving two callers with different needs — writing a stored authoring
+field, and deciding how far a zone may extend. The authoring convention was
+correct for the first and wrong for the second. Split: **78 zones that were
+dropped entirely now place, and 519 more stop being clipped**, across 69 banks.
+And a dropped zone was never silence — hole-filling put a neighbour across those
+keys, so they sounded **the wrong sample**, which is the wrong-subject class of
+§84 arriving as an audible defect rather than a measurement one.
