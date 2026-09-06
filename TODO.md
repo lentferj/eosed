@@ -1544,3 +1544,37 @@ post-fix capture shows the organ step moving, or the strings acquiring one, the
 change did something beyond removing a constant and the diff missed it. This is
 free: the same captures answer it, and it checks a class of failure the level
 comparison cannot see.
+
+## The capture harness measures amplitude only — no pitch check (OPEN, 2026-09-06)
+
+**Status:** open, and it has already cost a missed defect. **Blocked on:**
+nothing. This is a gap in our own tooling, not in any bank or machine.
+
+Every statistic the E4XT capture chain produces is an amplitude — four windows,
+peak, SNR, floor, velocity swing, key slope. A conversion can put the right
+loudness on the wrong note at every key and none of it will show, which is
+exactly what happened: a Non-Transpose flag flipped by a converter left one
+program playing a single pitch across four octaves, and it surfaced as +6.04 dB
+in one cell (§95 addendum). It would have passed a 1 dB screen at three keys
+of five.
+
+**The fix is small and the data already exists.** Every capture is a wav on
+disk; a fundamental estimate per note costs no hardware time and can be run
+over all 273 existing captures retrospectively. The measurement used for the
+diagnosis was a harmonic product spectrum over 50–550 ms of the v127 note,
+compared against the played key's frequency.
+
+**Two things to get right when it is built:**
+
+- **Report the build-to-build difference, not the absolute.** The estimator
+  returns nonsense on quiet material (a program at −84 dBFS yields a spectrum of
+  its own noise floor) and locks to the second harmonic on some sources, giving
+  a constant octave error. Those failures cancel in a difference taken with the
+  same estimator on the same material.
+- **Octave error, not Hz.** The failure modes here are octave-scale — fixed
+  pitch, a repointed sample, a wrong root — and `log2(measured / expected)`
+  makes the whole class legible in one number, where Hz does not.
+
+A per-note pitch column added to the existing analysis would also have caught
+the repointed-zone case independently, which is currently confirmed only by
+level.
