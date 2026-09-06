@@ -9203,3 +9203,54 @@ fixed-pitch signature, and one other changes in the direction of better tracking
 
 The habit: **when an estimator is unreliable but consistent, a difference can be
 sound where neither of its terms is.** State which one is being offered.
+
+### §95 addendum 2 — a confirmation withdrawn, an estimator's failure signature named
+
+The confirmation reported above — that the repointed-zone prediction was borne
+out by the largest non-drum move in every window, arrived at from audio without
+knowledge of which programs the fix touched — **has been withdrawn.**
+
+The sibling project then established that a *second* variable changed between
+the two builds: the two generations read different copies of the same audio, one
+carrying a `smpl` chunk and one not. The layer fix and the source switch **both**
+predict a change at that key, and metadata-only differences are demonstrably
+capable of large effects — a missing `smpl` chunk is precisely what pinned P010's
+pitch. So "it is only metadata" is not available as grounds to dismiss it.
+
+The measurement stands; the attribution does not. **Second underdetermined
+confirmation offered in one day** (§92 records the first), and both times the
+number was real and the causal claim was borrowed from whoever needed it.
+
+The spectra do show a genuine change at that key:
+
+    build A  top peaks   260.0 Hz (0.0 dB)   50.5 (-4.4)   74.7 (-5.9)
+    build B  top peaks  2055.5 Hz (0.0 dB)  2030.3 (-0.7)  537.6 (-2.4)
+    expected for that key: 65.4 Hz -- neither build produces it
+
+### The f0 estimator's two failure modes, both now identified
+
+**A constant at 93.8 Hz whenever the note is weak.** It appears at every key of
+the program sitting at −84 dBFS, at three keys of another at −60, and at exactly
+the one key of a healthy program that is quiet (−61 and −66 dB). It is a stable
+feature of the noise floor, not a pitch. Every nonsense row in the sweep is made
+of it.
+
+**Subharmonic locking.** One program read two octaves flat at one key in *both*
+builds — which would have been a fault present in both generations, and was
+nearly reported as one. The raw spectrum shows the expected 520.8 Hz fundamental
+present at −2.5 dB, with the estimator having latched onto a 128.5 Hz peak at
+−2.8 dB. A harmonic product spectrum errs downward; **an octave-up reading is
+therefore worth more than an octave-down one**, and the fixed-pitch result that
+started this — a constant reading two octaves *sharp* at the bottom key — is in
+the direction the estimator does not fail.
+
+**Always confirm an HPS result against the raw spectrum before reporting it.**
+
+### An unplanned control worth keeping
+
+At the key where nothing changed, the top six spectral peaks are **identical
+between the two builds to the last decimal** — 2101.3, 2076.0, 520.8, 128.5,
+145.4, 537.6 Hz, same relative levels — across two separate captures made on
+separate days. That is a stronger statement about the repeatability of this
+capture chain than any amplitude work in §83–§95 has produced, and it arrived as
+a by-product of checking something else.
