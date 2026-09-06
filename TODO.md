@@ -1520,10 +1520,24 @@ bytes. S3-E4 splits, and can fail in two directions (§92 addendum 2).
 
     S3-E4    30 of 36 trimmed voices UNCHANGED   (single-zone: no zone byte,
                                                   so the trim must stay)
-              6 of 36 RISEN ~29 dB               (multi-zone: zone copy carries it)
+              6 of 36 RISEN                      (multi-zone: zone copy carries it)
 
     If 30 come back RISEN, the single-zone classification is wrong and the
     conditional is doing something other than what both projects believe.
+
+**CORRECTED before the capture was read: the "~29 dB" first written here was
+wrong.** That is the KRZ row's trim size (−39/−43). This row's trims are −16,
+−20 and −29, which the volume law puts at **12.3 / 15.4 / 22.5 dB** — per
+preset, not one figure. The structure of the prediction was right and the
+magnitude was imported from another row.
+
+**RESULT (§96): both directions pass.** Where the affected voice sounds the rise
+matches that preset's own trim byte to 0.14–0.61 dB; the most negative change
+anywhere is −0.05 dB, so nothing overshot; the byte-identical control moved
+0.06 dB. **The "30 unchanged" half is still open** — this grid measures keys and
+the claim is about voices, and a trimmed voice sounding at none of the five
+sampled keys reads the same as one correctly left alone. Closing it needs the
+voice key ranges, against captures already taken.
 
 Same grid and same session gain as the pre-fix sets or the comparison is not a
 comparison. The pre-fix captures (`krE4/ s3E4/ s1E4/ matrix6/`) are **kept, not
@@ -1544,6 +1558,13 @@ post-fix capture shows the organ step moving, or the strings acquiring one, the
 change did something beyond removing a constant and the diff missed it. This is
 free: the same captures answer it, and it checks a class of failure the level
 comparison cannot see.
+
+**WITHDRAWN (§96): the reasoning above is wrong.** A static per-voice offset is
+uniform in the key dimension only across *that voice's own span*. Where a trimmed
+voice covers part of the keyboard, the preset's key response legitimately changes
+shape — observed on two S3-E4 presets, flat at the bottom and up 14.8 dB at the
+top. The check is valid only for a preset whose trimmed voice spans the whole
+measured range.
 
 ## The capture harness measures amplitude only — no pitch check (OPEN, 2026-09-06)
 
