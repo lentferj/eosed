@@ -9740,3 +9740,45 @@ was disproved on the same evening.
 
 **A null costs more to establish than a positive result, and is worth less if
 the cost is not paid.**
+
+### §95 addendum 3 — the fixed-pitch flag proved causally, and a signature that has a twin
+
+The Non-Transpose regression (§95 addendum) survives a rebuild of the affected
+bank: the two builds' spectra are identical to the decimal — 262.6, 525.5,
+788.1, 1051.0 Hz at every key across four octaves. Then, on the machine:
+
+    voice 0: E4_VOICE_NON_TRANSPOSE (id 57) = 1, keys 0-127
+    voices 1-3: = 0, keys 0-62
+
+    as found        k36  262.6   k60  262.6   k84  262.6      fixed
+    set 57 = 0      k36   65.2   k60  262.6   k84 1050.3      tracks to 0.4%
+    restored to {0:1, 1:0, 2:0, 3:0}, verified by readback
+
+**One parameter on one voice, flipped and restored, turns the whole program from
+fixed-pitch to tracking.** That is the cause demonstrated rather than inferred,
+and it also confirms id 57 on hardware — until now a transcription from the spec,
+which §98 is the standing reminder not to trust.
+
+**Only that one preset is affected.** Measured fundamental per key, where a
+perfect tracker over k36–k84 gives a ratio of 16:
+
+    P010    262.6  262.6  262.6  262.6  262.6    ratio  1.00   FIXED
+    P007    130.7  261.8  524.4 1050.7 2102.8    ratio 16.08   tracks
+    P004     49.1   65.6  130.7  261.5  522.9    ratio 10.66   tracks
+    P008     65.2   65.6  130.7  262.2  523.7    ratio  8.03   tracks
+
+Sub-16 ratios are the harmonic-product estimator locking to different harmonics
+at different keys, not pitch faults — every one rises with the key.
+
+### The signature has a twin, and only the level check separates them
+
+One preset reads **93.8 Hz at every key, ratio 1.00 — the identical signature to
+the genuine fault — at −86 dBFS.** That is the estimator's noise-floor constant
+(§95 addendum 2), not a fixed-pitch program.
+
+**So "constant frequency across keys" is necessary and not sufficient for
+fixed-pitch; it needs the level beside it.** Exactly the shape of §100's
+never-fails-cleanly reads, and of the sibling project's listing rule that needed
+name-byte validation rather than listing comparison. **A diagnostic signature is
+only as good as the null it can be told apart from**, and here the null produces
+the signature exactly.
