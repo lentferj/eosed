@@ -9582,3 +9582,55 @@ things that can produce "no modulation here" are properties of the measurement.
 for, and state the rate you can resolve.** For anything faster than a few Hz,
 10 ms. The pan result above stands because 3 Hz against a 10 Hz limit has margin
 to spare, not because 50 ms is a reasonable default — it is not one.
+
+## §99 — A 20 ms lead-in trim clipped a slap transient, and it looked like session drift (2026-09-06)
+
+The third cross-session control looked worse than the first two: 29 of 30 cells
+agreeing to **0.07 dB**, and one cell — a slap-bass preset at one key and one
+velocity — differing by **2.50 dB**. Anchors matched to 5 ms, SNR was ~41 dB in
+both, every other velocity at that key matched to 0.08 dB.
+
+**A repeat-trigger test killed the obvious explanation.** Ten identical notes in
+one capture gave a full-window level constant to **0.01 dB**, so the machine is
+not varying per note — no round-robin, no random crossfade. The instrument was
+reproducible; the measurement was not.
+
+**The cause is the `full` window's 0.02 s lead-in trim.**
+
+    the v127 note, same preset/key/velocity, two sessions
+                    0-0.02 s          0.02-1.15 s        0-1.20 s
+      morning    rms -84.80 pk    8   -44.69 pk 2413    -44.95
+      tonight    rms -31.78 pk 2412   -47.19 pk  820    -45.37
+
+**In one capture the attack transient sits inside the first 20 ms; in the other
+it sits just after.** A 5 ms difference in anchor moved a slap-bass transient
+across the window's opening edge. The transient carries most of the note's
+energy — peak 2413 against 820 for the body — so excluding it costs 1.8 dB.
+
+Removing the lead-in trim across the whole set:
+
+    window            n    mean     sd     max |diff|   cells over 1 dB
+    0.02-1.15 s      30   -0.077   0.450      2.50            1
+    0.00-1.15 s      30   -0.012   0.076      0.42            0
+
+**The cross-session bound then holds on all three banks with nothing over 1 dB**,
+and this row tightens from 2.50 dB to 0.42.
+
+### The same class as §95, at the other end of the note
+
+§95 recorded a window edge falling inside a percussive sound's **decay**, where
+±50 ms of anchor jitter manufactured 31 dB. This is a window edge at the
+**onset**, where 5 ms of anchor difference costs 1.8 dB. The lead-in trim exists
+to skip the note-on edge; on percussive material the first 20 ms *is* the sound.
+
+**A window is an assumption about where the energy is, at both ends.** Neither
+edge is safe by default, and the trim that protects one signal type damages
+another.
+
+### What it does and does not change
+
+The trim result for this row is unaffected in substance: **+12.06 dB with the
+lead trim, +12.00 dB without**, against 12.34 predicted. What the trim inflates
+is the *scatter* — per-cell sd 0.47 against 0.12, and one cell reading +14.57
+where the corrected figure is +12.50. **A comparison between two arms measured
+the same way survives it; a bound on reproducibility does not.**
