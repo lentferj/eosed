@@ -1599,3 +1599,19 @@ compared against the played key's frequency.
 A per-note pitch column added to the existing analysis would also have caught
 the repointed-zone case independently, which is currently confirmed only by
 level.
+
+**A second blind spot in the same harness: the measurement is a mono sum.**
+Every stage averages the two channels (`raw.reshape(-1, 2).mean(axis=1)`), so a
+true-stereo capture is measured as one channel. For centred material that is
+exact; for decorrelated material it is a −3 dB convention applied identically
+everywhere, cancelling in any comparison and surviving only in absolute levels.
+Nothing in the corpus is anti-phase (most negative L/R correlation found: −0.07)
+so there is no cancellation risk. **It is lossy for anything pan-dependent**,
+which matters for the calibrated pan law.
+
+The corpus splits by source format, and it is the material rather than the rig:
+S3000-sourced presets are mono (R equals L within a constant 0.37–0.42 dB),
+KRZ-sourced presets are decorrelated stereo (0 of 12 mono-like). That contrast
+is itself the proof that neither the rig nor the instrument sums to mono —
+worth keeping, because "is it recording mono?" was asked and answered from the
+files without touching the machine.
