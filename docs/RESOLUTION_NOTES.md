@@ -8977,3 +8977,70 @@ instead**: "within 1.5 dB" invites "no difference" in a way "3.4–7.2, bimodal"
 does not. The correction was cheap here because it went out before the number
 reached a write-up; §88's version cost a peer an investigation into a defect
 that did not exist.
+
+## §94 — The corrected file was one filename away (2026-09-06)
+
+A shape was reported to two sibling projects — "the organs sit flat across three
+octaves, then step 4.37 dB at k60→k72, then nothing" — and one of them called it
+the strongest single argument in their investigation. **It does not exist.**
+
+    organs, as reported (free-anchor analysis)
+      k36 -23.18  k48 -22.75  k60 -23.30  k72 -27.67  k84 -26.86
+    organs, corrected (refit analysis, same captures)
+      k36 -21.60  k48 -22.75  k60 -23.30  k72 -25.92  k84 -26.83
+      steps +1.14 +0.55 +2.62 +0.91 -- monotonic, no step, no flat region
+    organs, measured directly at whole-tone resolution
+      k58 -23.23 ... k74 -25.81   2.58 dB spread over eight steps,
+      largest single step 0.90 dB. No knee anywhere.
+
+**The comb anchor mis-locked by ~0.4 s on 15 of 60 captures**, including every
+organ k36 and every organ k72, sliding the 0.02–1.15 s window past the note-off
+into the release and reading the level ~2 dB low. The refit pass had already
+detected all fifteen and corrected them. Its output was in the same directory,
+under a filename differing by one word, and each of the fifteen records carries
+the verdict string `free fit was WRONG`. **The uncorrected file was the one read.**
+
+### Why none of the existing safeguards fired
+
+The anchors themselves were the tell and were visible in the file that was read:
+every mis-locked capture anchored at 1.61–1.69 s where its own siblings sat at
+1.26–1.42, and — the part that matters — **the fifteen bad ones are exactly the
+ones carrying a finite `anchor_margin` where all forty-five good ones carry
+`inf`.** §87's addendum already records that `anchor_margin` does not detect
+"locked hard onto the wrong offset"; what it turns out to do here is mark the
+mis-locks by the *shape* of its own value rather than its magnitude, which no
+threshold would have caught and no one was reading.
+
+The result also had a non-monotonic dip — k72 lower than k84 — of exactly the
+kind that caught the first volume calibration ("a volume control cannot be
+non-monotonic", §83). Applied to a key sweep it was not recognised, because
+nothing says a key response must be monotonic. **A sanity rule attached to one
+quantity does not transfer to another on its own.**
+
+### What actually caught it
+
+Not review. The table had been quoted, questioned, corrected once already for a
+different reason, and had survived all of it. **A new capture at finer
+resolution disagreed with it in the first thirty seconds** — 2.02 dB across a
+span where the table said 4.37, on the same presets, the same bank and the same
+machine.
+
+That is the fourth time in one day: every arithmetic argument underdetermined or
+wrong, every change-one-thing-and-look decisive (§92). Here the rule had already
+been written down and was not applied to the one step that is invisible from
+inside the analysis — **which file the numbers came from.**
+
+### The habit
+
+**When an analysis chain produces a corrected artefact, the uncorrected one must
+not remain readable under a similar name.** Either the corrected output
+overwrites the input, or the input is renamed to say so. A directory holding
+`X_windows.json` and `X_refit.json`, where the second exists precisely because
+the first is known wrong on 25% of its rows, is a trap with a one-word margin —
+and the failure is silent, because both files are well-formed, complete, and
+carry the same schema.
+
+**And when reporting a derived number across a project boundary, name the file
+it came from.** The class of the statistic was given, the caveats were given, the
+contamination was declared — and the number was still wrong, because provenance
+within one's own tree was the thing never stated.
