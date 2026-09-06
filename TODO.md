@@ -1534,3 +1534,13 @@ state, and they are its only recording.
 anywhere. Across all four rows every changed byte goes *to* zero and none lands
 on a non-zero value, so a mis-scoped edit in the other direction is excluded by
 the diff.
+
+**A second prediction, from the shape rather than the level.** The pre-fix KR-E4
+organs step 3.11–4.84 dB between k60 and k72 and are otherwise flat across three
+octaves; the strings show no step at all and slope near-linearly at 0.9–1.75 dB
+per octave. **Both must survive the fix unchanged.** The trim is a static
+per-voice offset — it cannot bend a curve, move a step or create one — so if the
+post-fix capture shows the organ step moving, or the strings acquiring one, the
+change did something beyond removing a constant and the diff missed it. This is
+free: the same captures answer it, and it checks a class of failure the level
+comparison cannot see.
