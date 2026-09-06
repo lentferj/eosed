@@ -8870,3 +8870,78 @@ This is the third time in one investigation that the material at hand could not
 tell two hypotheses apart (see §92's model-fit example, and the conditional
 form's invisibility on the KRZ row). Each time the fix was the same: find or
 build a subject on which they disagree.
+
+## §93 — A control can reproduce the confound it was borrowed to break (2026-09-06)
+
+A sibling project measuring a KRZ→AKAI conversion found the row dark and
+sloping — 17.29 dB fall from key 36 to key 84 where a different source row on
+the same machine is flat to 0.84 dB — and had a candidate cause in its writer:
+a filter-envelope depth written as 0 whenever the source's filter sustain is 0.
+**Perfectly confounded**: the six programs getting depth 0 are exactly the six
+string/pad programs, and the six getting depth 33 are exactly the six organs.
+Same split by depth, by instrument family, and by sample set.
+
+The proposed way out is the right instinct — **take the same source material
+through a different target**, where the suspect code path does not exist. That
+is what this project's KRZ→E4B row is. The question asked was: are the strings
+already darker than the organs on the E4XT?
+
+**They are, by 36.08 dB, and the answer is worthless.**
+
+    E4XT, KRZ source, loudest cell (v127, full window), mean of 6 programs
+                    k36     k48     k60     k72     k84     36->84
+    corded six   -58.15  -59.43  -61.18  -62.08  -63.31     5.16
+    flat six     -23.18  -22.75  -23.30  -27.67  -26.86     3.68
+
+The E4B writer that built this row is the one from §92, which applied the
+velocity-pivot trim twice and restored one copy — worth ~30 dB, and landing on
+exactly the corded programs. **So the borrowed control splits four ways: dark =
+strings = depth-0 over there = trimmed by the writer over here.** A control is
+only a control if the suspect split does not exist in it, and *whether it exists
+is a fact about the control's own build*, which the borrower cannot see and the
+lender may not have looked for.
+
+Reported as such rather than sent. Had the 36 dB gone across as an answer it
+would have read as strong confirmation that the darkness is inherited from the
+source material, and **it would have stopped a correct fix in another project on
+the strength of a defect in this one.** The near-miss is the point: the number
+was real, the measurement sound, the reasoning that requested it sound, and the
+conclusion would have been backwards.
+
+### What survived, and why that part was safe
+
+The trim is a **static per-voice offset**, so it cannot tilt a key slope. The
+slope therefore transfers even though the level does not:
+
+    all 12 programs   slope mean 4.42 dB   sd 1.34   range 3.40 .. 7.16
+    worst v127 cell sits 16.9 dB over its floor -- nothing floor-compressed
+
+So the source material slopes ~4 dB on a target with no filter-depth path, and
+~13 dB of the other project's 17.29 is not inherited from its source. **The
+useful answer came from the statistic the defect could not reach**, not from the
+one that was asked for.
+
+Generalising, because this keeps recurring: **when a measurement set is known to
+be contaminated, do not discard it and do not correct it — ask which statistics
+the contamination cannot touch.** A static offset destroys absolute level across
+subjects and leaves slopes, ratios within a subject, and shapes intact. Say
+which class a number belongs to when handing it over, and hand over the class,
+not just the number.
+
+### Two smaller cautions from the same exchange
+
+**Do not join two projects' tables on slot index.** Bank slot N is not source
+position N; on the MPC row the asserted order turned out scrambled (§ slot map).
+Here the two groups were separated from the data instead — the organs show a
+velocity ramp of 0.02 dB, having no velocity cord at all, the strings 18–27 dB —
+which identifies group membership without either project's slot map or any
+preset name.
+
+**An estimate offered as a repair must be labelled as an estimate.** Adding the
+trim back through the volume law (byte −39 → 30.30 dB, −43 → 33.45, measured
+removal 29.50 on one preset) puts the two groups within a few dB of each other
+rather than 36 apart — but the trim byte differs per voice and no mapping from
+preset to byte was made, so that is an order-of-magnitude statement. §92's
+addendum already says this column cannot be repaired by subtracting a constant;
+a correction offered across a project boundary is exactly where that caveat gets
+dropped.
