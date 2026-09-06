@@ -9634,3 +9634,60 @@ lead trim, +12.00 dB without**, against 12.34 predicted. What the trim inflates
 is the *scatter* — per-cell sd 0.47 against 0.12, and one cell reading +14.57
 where the corrected figure is +12.50. **A comparison between two arms measured
 the same way survives it; a bound on reproducibility does not.**
+
+## §100 — The context-dependent byte, read uniformly (2026-09-06)
+
+Three independent instances turned up in one day, across two projects, in three
+different file formats. All three are the same bug:
+
+**A byte whose meaning depends on context, read as though it always means the
+same thing.**
+
+1. **`vpar[54]`, the E4B voice-level volume (§92).** The field is real, but the
+   velocity-pivot trim written into it is *only* correct where a zone-level copy
+   also exists to be cancelled. Written unconditionally, it left every affected
+   preset ~29 dB low. The conditional fix restores it.
+2. **A zone byte's high nibble in the KRZ reader** (sibling project's
+   §KRZPANNIBBLE). It carries a PANNER wire's pan, not the zone's, and only in
+   four of the algorithms; read uniformly it made **all 58 zones of a bank parse
+   as pan −1.0**, and the converted bank played hard left — which is what
+   silenced one capture channel for half of today (§97).
+3. **A segment byte in the K2000 F3 block** (sibling project) that is a block
+   *type*, and therefore changes what every following byte means.
+
+### Why all three survived review
+
+**The uniform read produced plausible values, not obvious nonsense.** Pan −1.0
+is a legal pan. A volume trim is a legal trim. A block parses. Nothing threw,
+nothing was out of range, and no assertion could have fired — the output was
+well-formed and wrong, which is the same property that made §94's uncorrected
+file and §97's dead channel survive.
+
+**And two of the three were only caught from the far end of a long chain**: the
+pan bug surfaced as a dead capture channel that looked like broken hardware, and
+the volume bug as a 37 dB level discrepancy chased for hours. Neither was found
+by reading the writer.
+
+### The tell that would have caught the second one, and generalises
+
+**A field that is uniform across an entire corpus is suspicious in proportion to
+how expressive it is meant to be.** All 58 zones reading exactly −1.0 is not what
+real material looks like — the sibling's own corpus notes record 68% of layers
+carrying varied non-zero pans. **A parser that returns a constant for a field
+that should vary has usually found a different field.**
+
+That check costs one histogram per field and needs no hardware. It would not
+have caught the first instance, where the value legitimately varies; for that
+one the tell was structural — the same value appearing at both a voice-level and
+a zone-level offset, which §92 found by elimination.
+
+### The layout fact that came out of the third check
+
+Diffing a pre-pan against a post-pan build of the same bank located the E4B zone
+**pan** fields at **+2 bytes from the zone volume fields** — volumes at
+362/388/414/440 and 760/786/812/838 in that preset, pan at each +2, all eight
+moving `(96,127) → (0,0)`, i.e. −32 (full left) → 0 (centre), with the voice-level
+trim fields at 70 and 468 unchanged on both sides.
+
+**Derived from a diff, not from a spec**, and it establishes where the bytes are
+rather than their full range — worth stating that way wherever it is recorded.
