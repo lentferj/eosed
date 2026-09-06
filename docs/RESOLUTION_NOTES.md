@@ -9159,3 +9159,47 @@ window, and has been handed back to the project that built both banks.
 recomputation.** The confirmation is worth little on its own — it was one cell
 out of 66 and could have been chance — but it was made before either side knew
 the other's answer, which is the only thing that made it evidence at all.
+
+### §95 addendum — the harness measures level, and a whole program was playing one note
+
+The unexplained program from §95 was diagnosed by the sibling project as a
+single byte — a Non-Transpose flag flipping 0→1, so the program plays its root
+pitch at every key instead of tracking the keyboard. Confirmed here from the
+audio, independently of their file analysis:
+
+    P010, fundamental of the v127 note (harmonic product spectrum, 50-550 ms)
+              expected     build A      build B
+      k36       65.4      65.2         262.6      two octaves sharp
+      k48      130.8     131.1         262.6      one octave sharp
+      k60      261.6     262.6         262.6      the root, correct in both
+      k72      523.3     525.9         262.6      one octave flat
+      k84     1046.5    1050.3         262.6      two octaves flat
+
+Build A tracks to within 0.5% at every key; build B is pinned at the root to
+0.0% across four octaves.
+
+**The number that flagged it was +6.04 dB in the attack window at one key, and
+under 3.2 dB everywhere else** — it would have passed a 1 dB screen at three of
+the five keys. A program playing a single pitch across the whole keyboard is a
+total conversion failure, and the level statistic barely registered it.
+
+**Level and pitch are independent failure modes, and this entire analysis chain
+measures only the first.** Four windows, peak, SNR, floor, swing, slope — every
+statistic in it is an amplitude. A conversion can put the right loudness on the
+wrong note, at every key, and no amount of care with windows or anchors will
+show it. That is a gap in the harness, not in the bank; the anchor work of
+§86–§95 made the amplitude measurements trustworthy and did nothing whatever
+about this.
+
+**Reporting the change, not the state.** The same f0 estimator across all ten
+pitched programs gives nonsense on the quiet ones — a program at −84 dBFS
+returns a harmonic-product-spectrum of its noise floor, and another returns a
+flat spread with a full octave of constant error because the estimator locked to
+the second harmonic. None of those absolutes are usable. **The build-to-build
+difference is, because the same estimator meets the same material on both sides
+and its failure modes cancel.** On that basis exactly one program acquires the
+fixed-pitch signature, and one other changes in the direction of better tracking
+— which is the program whose zone was independently known to have been repointed.
+
+The habit: **when an estimator is unreliable but consistent, a difference can be
+sound where neither of its terms is.** State which one is being offered.
