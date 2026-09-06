@@ -9044,3 +9044,54 @@ carry the same schema.
 it came from.** The class of the statistic was given, the caveats were given, the
 contamination was declared — and the number was still wrong, because provenance
 within one's own tree was the thing never stated.
+
+### §94 addendum — the trap was in all six sets, and two scripts had it hardcoded
+
+The file pair that produced the wrong shape exists in **every** capture set, and
+the free anchor is wrong on a substantial minority of rows in four of the six:
+
+    set        captures   corrected by the refit pass
+    krE4             60     15   (25.0%)   <- every organ k36 and k72
+    matrix           61     11   (18.0%)
+    matrix5          66     12   (18.2%)
+    matrix6          66     11   (16.7%)
+    s3E4             30      1   ( 3.3%)
+    s1E4             30      0   ( 0.0%)
+
+**A 0% set is what makes the trap survivable.** `s1E4` gives identical answers
+from either file, so reading the wrong one there teaches nothing and confirms
+the habit. The habit then fails on `krE4`, where a quarter of the rows move.
+
+`column_summary.py` takes its path as an argument and was always called with the
+refit file, so the E4B column's absolute tables are clean. **`matrix_summary.py`
+and `matrix_summary5.py` had the uncorrected path hardcoded** — a default that
+cannot be corrected at the call site, and that no reader of the output can see.
+
+**The fix, applied:** all six superseded files renamed to
+`*_windows_FREEANCHOR_SUPERSEDED.json`; every `*_refit.py` repointed to the new
+input name; the two summaries repointed to the *corrected* file rather than to a
+merely-renamed one; and `~/temp/e4xt_ref/ANALYSIS_FILES.md` added, stating which
+file to read, the correction rate per set, and why the names are shaped that way.
+A rename is a weak fix in general — but it is the right one here, because the
+failure was that two well-formed files with the same schema were
+indistinguishable at the point of reading.
+
+### What the recomputation then found, and did not settle
+
+Re-deriving the MATRIX5→MATRIX6 comparison from the corrected files leaves the
+per-program result standing, marginally: max delta 1.07 dB where it had been
+reported as "nothing over 1 dB". Per cell, nine of 66 exceed 1 dB and four are
+on the drum probe, one of them by **31.47 dB**.
+
+That single number is either the sibling project's sparse-layer fix repointing a
+layer — which is exactly what it would look like — **or a wrong-subject
+comparison**, because it assumes the two banks share a slot order. The MATRIX5
+map was verified on the machine; MATRIX6's was assumed to inherit it. It is not
+resolvable from this side and has been put back to the project that built both
+banks.
+
+**Which is the same fault twice in one afternoon, in two different disguises:**
+reading the wrong file, and joining on an unverified index. Both are addressing
+faults (§84), both produced well-formed numbers, and neither was visible in the
+output. The rule that catches them is the same one: **name the provenance of a
+number when you state it** — which file, which slot map, verified how.
