@@ -9559,3 +9559,26 @@ The rule this earns: **an RE probe for "does X do anything" must include a
 control that is already known to do something, driven through the same path.**
 A null result from an unproven path is not evidence about X; it is evidence
 about the path. Two of the three runs here produced exactly that null.
+
+### §98 addendum — the envelope frame rate is a measurement choice, not a detail
+
+The pan probe above sampled stereo balance in **50 ms frames** and resolved a
+~3 Hz LFO cleanly — 22 sign changes over 3.6 s, a smooth sweep. That worked
+because 3 Hz is well inside the frame rate's reach, and for no other reason.
+
+**50 ms frames sample at 20 Hz, so the Nyquist limit is 10 Hz.** A sibling
+project measuring MPC material found a pan LFO at **11.47 Hz**, which is *above*
+that limit: sampled at 20 Hz it aliases to ~8.5 Hz, and depending on the phase
+relationship it can also read as a slow wander or as **almost no swing at all**.
+Their capture used 10 ms frames (100 Hz, Nyquist 50 Hz) and measured 3.65 dB of
+swing where a 50 ms grid could plausibly have reported a null.
+
+**A null from an under-sampled envelope looks exactly like a null from a
+destination that does nothing** — which is the same failure §98 already records
+for an unproven signal path, arriving by a different route. Two of the three
+things that can produce "no modulation here" are properties of the measurement.
+
+**The rule: choose the envelope frame from the modulation rate you are looking
+for, and state the rate you can resolve.** For anything faster than a few Hz,
+10 ms. The pan result above stands because 3 Hz against a 10 Hz limit has margin
+to spare, not because 50 ms is a reasonable default — it is not one.
