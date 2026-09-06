@@ -8635,3 +8635,80 @@ dropped entirely now place, and 519 more stop being clipped**, across 69 banks.
 And a dropped zone was never silence — hole-filling put a neighbour across those
 keys, so they sounded **the wrong sample**, which is the wrong-subject class of
 §84 arriving as an audible defect rather than a measurement one.
+
+## §91 — A warning can be correct, specific, and about the wrong thing (2026-09-06, live)
+
+A converted bank measured 20 dB below its neighbour bank. Two explanations were
+proposed and **both were refuted by measurement**, and the more persuasive one
+was persuasive because it named the right presets for the wrong reason.
+
+### The measurement that settles the constant
+
+mpc2emu's `e4xt_byte_to_volume_db` is a quadratic fitted only to byte −30, with
+`E4XT_VOL_MEASURED_FLOOR_DB = -22.90` marking where the fit ends; below that it
+extrapolates. A writer feature deliberately writes bytes past that point, so
+the question was whether the extrapolation holds. **Swept on hardware, every
+voice of one preset set together, one capture per byte:**
+
+    byte    measured Δ    curve says    error
+     -10        -7.33        -7.65      +0.32
+     -20       -14.78       -15.25      +0.46
+     -30       -22.58       -22.80      +0.22
+     -39       -29.64       -29.55      -0.09
+     -43       -32.23       -32.54      +0.31
+     -50       -37.46       -37.75      +0.29
+     -60       -45.00       -45.15      +0.15
+
+**The extrapolation is good to byte −60 at ±0.46 dB. `-22.9` is a conservative
+label for where the fit was taken, not a boundary where it stops working.**
+That is worth having independently of the investigation that prompted it.
+
+**And the mechanism under suspicion works.** A voice-level trim of −29.6 dB plus
+a velocity cord of +29.4 dB, measured on one preset against *itself* — trim in
+versus trim out, no cross-preset comparison — lands at **−0.33 dB** against a
+predicted −0.2, while carrying the full 24.5 dB velocity ramp it exists to
+produce.
+
+### The warning that named the right presets for the wrong reason
+
+The converter's own build log had flagged, by name, the exact three presets that
+measured low: *"the velocity-pivot trim puts N levels below the measured volume
+floor, written by extrapolation."* It named the worst one, and that was the
+preset independently measured worst. Every part of it was true.
+
+**It was not the cause.** The extrapolation is accurate there, and the cord
+cancels the trim to a third of a dB. The warning correlates with the symptom
+because the trim is written for sources with a large velocity swing, and those
+sources are plucked instruments — which is also what measures low in a fixed
+window, for reasons of envelope and spectral content that have nothing to do
+with the trim. **The warning and the symptom share a cause without either being
+the other.**
+
+**That made it more convincing, not less.** A diagnostic that names the right
+subjects reads as confirmation. The general form:
+
+> A warning can be correct, specific, and about the wrong thing — and naming
+> the right subjects is exactly what makes it persuasive. Correlation between a
+> diagnostic and a symptom is not evidence of mechanism, however precisely the
+> diagnostic is worded.
+
+Separating them needed a measurement neither the log nor the file could supply:
+the constant the warning was about, checked against the machine.
+
+### Two instrument faults, caught by physical implausibility
+
+The first calibration attempt returned a "volume law" that moved 4 dB across 39
+bytes, went **non-monotonic**, then fell off a cliff. Both faults were mine:
+
+1. **The preset has two voices and only one was attenuated.** The other held the
+   level, so the parameter appeared nearly inert.
+2. **A blocking parameter read-back sat inside a timed note loop**, so each
+   note's spacing grew by one MIDI round trip and the later notes — the deepest
+   bytes — were progressively mis-windowed by a comb assuming a fixed period.
+
+Neither was caught by a guard. What caught them was that **a volume control
+cannot be non-monotonic**: the result was not merely surprising, it was
+impossible, and impossibility is the cheapest error detector available. The fix
+for the second was to stop assuming the schedule and capture one note per
+arm — the same lesson as §89 arriving from the writing side rather than the
+reading side.
