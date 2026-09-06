@@ -8712,3 +8712,77 @@ impossible, and impossibility is the cheapest error detector available. The fix
 for the second was to stop assuming the schedule and capture one note per
 arm — the same lesson as §89 arriving from the writing side rather than the
 reading side.
+
+## §92 — A trim written twice and restored once, and how to find a byte the editor protocol cannot reach (2026-09-06, live)
+
+A converted bank rendered its plucked presets ~37 dB below its organ presets.
+Every named parameter on both sides was checked and cleared over several hours.
+**The cause was the velocity-pivot trim being written to two places and
+cancelled in one:** the voice-level volume *and* every zone volume carry it,
+while the velocity cord restores a single copy. Net **−29.50 dB**, measured.
+
+### The measurement
+
+Four bytes changed on the resident preset, nothing else:
+
+    A  as dumped          v1 -82.81   v64 -70.92   v127 -56.55
+    B  voice copy zeroed  v1 -56.31   v64 -41.54   v127 -27.04
+
+    v127 change   +29.50 dB
+    velocity ramp  26.26 dB -> 29.27 dB   preserved (and fuller: A's v1 was floored)
+
+Dump → edit → `send_preset_old` → read back (exactly the four bytes differ) →
+measure → re-send the original dump, **verified byte-identical**. RAM only.
+
+### Locating a field the editor protocol cannot address
+
+`E4_GEN_VOLUME` (id 39) is `SAMPLE_ZONE` scope: with a zone selected it writes
+that zone, and there is no voice-scope route to it. Setting
+`SAMPLE_ZONE_SELECT` past the last zone is a no-op — checked, 0.02 dB. So the
+voice copy is unreachable from the parameter interface, and every attempt to
+"remove the trim" through id 39 removed only half of it. **That is why three
+separate ablations reported the trim as cancelling correctly: they were all
+zeroing the copy that the cord already cancels.**
+
+**The method that found it uses the scope limitation as the instrument:**
+
+1. Dump the preset.
+2. Zero everything the editor route *can* reach — every zone volume.
+3. Dump again and diff: the changed byte pairs are the reachable fields.
+4. Search the dump for any remaining field decoding to the same value.
+   **What is left is what the editor cannot reach.**
+
+Here that gave zone fields at 362/388/414/440 and 760/786/812/838, and two
+further pairs decoding to −39 at **70 and 468** — where `468 − 70 = 398` is
+exactly the voice-block stride (`760 − 362`). The structural check confirms the
+identification without appealing to any writer's own array indexing, which is
+the thing that could not be trusted: the peer's byte diff had named the field
+from the emitting code and had picked the wrong voice out of several matching
+candidates on the first attempt.
+
+### The lesson the whole investigation converges on
+
+Across a day of this: an extrapolation theory, a misread A/C comparison, two
+wrong-subject measurements, and — mine — **a three-point model that fitted the
+data to 0.10 dB and was not evidence for anything.** Two rival models, one with
+the second trim copy and one without, fitted all three points equally well,
+because they differed only in a quantity no measurement constrained. It was
+written up as confirmation of the peer's hypothesis before that was noticed,
+which is the failure mode §88 names as hardest to catch: a result that confirms
+what the recipient already believes.
+
+> **Every arithmetic argument in this investigation was underdetermined or
+> wrong. Every ablation was decisive.** Change one thing, watch the level move.
+
+That settled the trim cancellation, the filter, the amp envelope, the sample
+swap, and finally this. **A model that fits is not evidence while a rival fits
+equally well — and the way to tell them apart is never a better fit.**
+
+### Live edit versus build path
+
+A byte edit on a resident preset proves what the *machine* does; it proves
+nothing about the code that writes the file. The fix (make the voice-level
+write conditional on the voice being multi-zone — a single-zone voice has no
+zone byte and must keep the trim) still needs capturing from a bank built by
+the shipping path, because a writer change can miss in ways a hand-zeroed byte
+never would.
