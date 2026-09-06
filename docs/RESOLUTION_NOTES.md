@@ -9095,3 +9095,67 @@ reading the wrong file, and joining on an unverified index. Both are addressing
 faults (§84), both produced well-formed numbers, and neither was visible in the
 output. The rule that catches them is the same one: **name the provenance of a
 number when you state it** — which file, which slot map, verified how.
+
+## §95 — A window edge inside a short sound turns anchor jitter into level (2026-09-06)
+
+Comparing two builds of the same bank, one drum cell differed by **31.47 dB**.
+The sibling project checked its side thoroughly and found nothing: zone
+assignments identical, 16 zones, same key and velocity ranges, same samples,
+sample RMS identical to 0.00 dB. They handed it back as measurement. It was.
+
+The v127 note at that key, in 20 ms steps from its own start:
+
+    build A   -84.7 -82.1 -35.0 -38.5 -55.1 -76.2 -83.7 -84.3 ...   hit at 40-100 ms
+    build B   -85.2 -85.5 -85.1 -84.6 -34.6 -39.3 -55.7 -81.2 ...   hit at 80-140 ms
+
+**The same hit at the same amplitude, 40 ms apart** — and the two captures'
+anchors are 40 ms apart, so the offset is entirely in where the anchor landed.
+The `early` window opens at 100 ms. It catches the tail of B's hit and nothing
+whatever of A's, which has already reached the floor. Two identical sounds, 31 dB
+apart.
+
+    window     cells over 1 dB (of 66)   of which drum
+    early              9                     4
+    full               6                     0
+    attack             4                     1
+    peak               4                     0
+
+The same cell reads **+0.02 dB in `full`** and −1.29 in `attack`.
+
+### The general statement, because this is the third disguise
+
+Anchor jitter on this bench is ±50 ms (sd 0.050–0.056 across both sets, and the
+rig offset's own sd is 40–42 ms — §83). These samples last ~80 ms. **When the
+sound is shorter than a few times the anchor jitter, any window edge near its end
+converts anchor noise into level differences without bound**, because the two
+measurements are comparing a decaying signal against a noise floor on opposite
+sides of the boundary.
+
+The same class has now appeared three times, and looked different every time:
+
+1. **"Silent" drum keys** — withdrawn. Keys sounding at 42–46 dB SNR were
+   reported dead because the window opened after the sample ended (§84 addendum).
+2. **The comb anchor scored over the whole hold** — failed on percussive
+   material, scattering anchors 0.38–1.22 s, fixed by scoring the attack window.
+3. **This** — not a missing signal but a manufactured difference, 31 dB between
+   two recordings of the same unchanged sound.
+
+**A window is not a neutral choice of statistic. It is an assumption about the
+sound's duration**, and on this bench that assumption is violated by every drum
+sample in the corpus. `early` (0.10–0.40 s) is unusable for percussive material;
+`full` and `attack` are robust and agreed here to 0.02 and 1.29 dB.
+
+### What the corrected comparison then showed
+
+With the artefact removed, the build-to-build null holds except in two places.
+One was **predicted**: the sibling's sparse-layer fix repoints the zone covering
+that key on one program, and that program's cell is the largest non-drum move in
+every window (−4.78 dB full, +2.87 peak) — arrived at from audio, with no
+knowledge of which programs the fix had touched. **The other is unexplained**:
+a program not on the fix's list moves in four cells, up to +6.04 dB in the attack
+window, and has been handed back to the project that built both banks.
+
+**A confirmed prediction and an unexplained residual came out of the same
+recomputation.** The confirmation is worth little on its own — it was one cell
+out of 66 and could have been chance — but it was made before either side knew
+the other's answer, which is the only thing that made it evidence at all.
