@@ -9691,3 +9691,52 @@ trim fields at 70 and 468 unchanged on both sides.
 
 **Derived from a diff, not from a spec**, and it establishes where the bytes are
 rather than their full range — worth stating that way wherever it is recorded.
+
+## §101 — A null is a finding only after every rival explanation is excluded (2026-09-07)
+
+The last cell of the E4XT column came back stationary: a pan-modulation program
+reading **R−L = +0.42 dB at every key and both mod-wheel positions**, swing
+0.01–0.04 dB. +0.42 dB is the rig's own constant interface trim, which every
+unmodulated program on this chain reads.
+
+**That zero is a finding, and three hours earlier the identical table would have
+meant nothing.** Four explanations produce the same number, and each had to be
+excluded separately:
+
+    the chain sums, so no pan could ever appear
+        excluded by a control: the same bank pre-fix reads -59.48 dB and
+        post-fix +0.41 dB on the same rig twenty minutes apart
+    the envelope under-sampled the modulation
+        excluded by 10 ms frames -- 100 Hz sampling, Nyquist 50 Hz, against a
+        source LFO at 11.46 Hz that a 50 ms grid aliases to ~8.5 Hz or to zero
+    the balance was measured in silence
+        excluded by a level gate keeping only frames within 20 dB of the peak
+    the pan path does not work on this target at all
+        excluded by three programs on another bank panning correctly the same night
+
+**Only after all four does a flat trace mean "this program does not pan."**
+
+### And the cause came from a parameter read, not the capture
+
+Reading the cords before designing the capture — the habit that paid off on a
+zero-depth cord earlier the same night — gave the reason rather than the
+symptom. The voice carries eight cords and **none of them targets AmpPan**;
+its LFO is routed to *Pitch*. So this is not a depth-zero case and not a routing
+failure: **the cord was never written.**
+
+That is a third distinct way for a modulation to be absent, alongside the two a
+sibling project's framing offered (modulation not arriving; block not reaching
+the outputs) and the zero-depth case found earlier. **Four now, and only one of
+them is visible from audio alone.**
+
+### The habit
+
+**Before reporting a null, list the ways the measurement could produce one
+without the subject being null, and close each.** Here that was four, three of
+which were closed by work done for other reasons — the control, the frame rate,
+the level gate. Had the row been captured first and reasoned about afterwards,
+the same numbers would have supported "the E4XT cannot pan", which is false and
+was disproved on the same evening.
+
+**A null costs more to establish than a positive result, and is worth less if
+the cost is not paid.**
