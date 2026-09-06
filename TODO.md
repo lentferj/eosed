@@ -1559,6 +1559,19 @@ change did something beyond removing a constant and the diff missed it. This is
 free: the same captures answer it, and it checks a class of failure the level
 comparison cannot see.
 
+**KR-E4 prediction, written before the post-fix captures were analysed
+(2026-09-06 18:33).** Nine trimmed multi-zone voices across six presets, trim
+bytes −39 ×3 and −43 ×6. The E4XT volume law puts those at **30.30 dB and
+33.45 dB** — and unlike the S3 row these are computed for *this* row rather
+than borrowed from another. Expected: where an affected voice sounds, the cell
+rises by its own voice's figure; the six untrimmed presets do not move; nothing
+falls. **Two caveats stated in advance**, both from what the S3 row taught:
+a cell can show less than the voice's own rise when the raised voice sums with
+unraised ones, and a voice whose key span misses 36/48/60/72/84 will read as an
+unchanged cell rather than as a null. Neither would be evidence against the fix.
+Absolute levels come from the L-only analysis (§97), so no 6 dB correction is
+applied anywhere.
+
 **WITHDRAWN (§96): the reasoning above is wrong.** A static per-voice offset is
 uniform in the key dimension only across *that voice's own span*. Where a trimmed
 voice covers part of the keyboard, the preset's key response legitimately changes
