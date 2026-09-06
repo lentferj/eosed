@@ -1496,3 +1496,41 @@ than a t10, and keep the source stationary.
 something the amplitude release does not explain. §70: the filter carries more
 of what a listener hears than the amplitude envelope does at some pitches, so
 that residual would look like an amplitude error and would not be one.
+
+## Capture the fixed E4B column after the next card crossing (OPEN, 2026-09-06)
+
+**Status:** blocked, and blocked only on media. **Blocked on:** a card crossing
+— the E4XT loads banks from an ISO on the card in the drive emulator and there
+is no host path to it while it is in the drive. Rides together with the
+`ATKSHAPE` bank, which is blocked on the same crossing. **Neither has been
+asked for; that is Jan's call on his time and his hardware.**
+
+The converted E4B column was built by a writer that applied the velocity-pivot
+trim twice — voice level *and* every zone — while the cord restores one copy.
+Diagnosed and measured on the machine at **+29.50 dB** by zeroing the four bytes
+the editor protocol cannot reach (§92). The sibling project has fixed it and
+rebuilt all four rows; the pre-fix banks are kept alongside for byte comparison.
+
+**Capture `S3-E4` first — not the row with the largest effect.** The KRZ row
+rises uniformly and cannot tell the conditional fix from an unconditional one,
+because all its trimmed voices are multi-zone and both forms emit identical
+bytes. S3-E4 splits, and can fail in two directions (§92 addendum 2).
+
+**The prediction, pre-registered so the capture can falsify it:**
+
+    S3-E4    30 of 36 trimmed voices UNCHANGED   (single-zone: no zone byte,
+                                                  so the trim must stay)
+              6 of 36 RISEN ~29 dB               (multi-zone: zone copy carries it)
+
+    If 30 come back RISEN, the single-zone classification is wrong and the
+    conditional is doing something other than what both projects believe.
+
+Same grid and same session gain as the pre-fix sets or the comparison is not a
+comparison. The pre-fix captures (`krE4/ s3E4/ s1E4/ matrix6/`) are **kept, not
+cleared** — once the medium is rewritten there is no route back to the defective
+state, and they are its only recording.
+
+**What is already ruled out without hardware:** that the fix adds a trim
+anywhere. Across all four rows every changed byte goes *to* zero and none lands
+on a non-zero value, so a mis-scoped edit in the other direction is excluded by
+the diff.
