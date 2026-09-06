@@ -8945,3 +8945,35 @@ preset to byte was made, so that is an order-of-magnitude statement. §92's
 addendum already says this column cannot be repaired by subtracting a constant;
 a correction offered across a project boundary is exactly where that caveat gets
 dropped.
+
+### §93 addendum — the group mean hid a split group, and the qualifier was lost in one hop
+
+The slope figures above were sent as "the two groups slope within 1.5 dB of each
+other." They came back from the other project, one message later, as *removing*
+the instrument-family explanation for the slope. **That is one hop, and it is
+the §88 distance in the §88 direction** — a bound arriving as a null.
+
+The mean was hiding a bimodal group:
+
+    corded/string six   3.56  3.72  3.75  |  5.98  6.81  7.16
+    flat/organ six      3.40  3.41  3.43  3.44  4.20  4.21
+    means 5.16 vs 3.68 (diff 1.48), sd 1.53 vs 0.37, ranges overlapping
+
+Three of the six string programs slope 6.0–7.2 dB against the organs' 3.4–4.2 —
+**close to double, on a target with no filter-depth path at all.** So string
+material genuinely can slope ~3.5 dB more than organ material here. The mean
+difference of 1.48 dB is arithmetically correct and describes no program in the
+set.
+
+The finding survives, at reduced strength: 3.5 dB is not 17.29, so the family
+explanation stays bounded rather than restored. But anything downstream assuming
+equal slopes across the two groups is now wrong, and per-program scatter between
+the two projects' tables is genuine rather than noise.
+
+**Two habits this argues for.** Report a group difference with its spread, or
+report the members — a mean over six is one number where six numbers cost the
+same message. **And when handing a null across a project boundary, hand a bound
+instead**: "within 1.5 dB" invites "no difference" in a way "3.4–7.2, bimodal"
+does not. The correction was cheap here because it went out before the number
+reached a write-up; §88's version cost a peer an investigation into a defect
+that did not exist.
