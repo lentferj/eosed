@@ -9782,3 +9782,58 @@ never-fails-cleanly reads, and of the sibling project's listing rule that needed
 name-byte validation rather than listing comparison. **A diagnostic signature is
 only as good as the null it can be told apart from**, and here the null produces
 the signature exactly.
+
+## §102 — A units boundary nobody wrote down, and an agreeable number echoed back (2026-09-07)
+
+Three cord amounts read off the machine disagreed with a sibling project's
+predictions by roughly a quarter, in the same direction:
+
+    predicted   measured
+        92          72
+       -12          -9
+        67          53
+
+Reported raw, with the pattern stated ("static exact, wheel-gated ~0.77 of
+prediction") and **explicitly without a theory**. The explanation turned out to be
+a units boundary: **the E4B file stores cord amounts as ±127; the editor SysEx
+parameter interface expresses them as ±100.**
+
+    file  92 * 100/127 =  72.44 -> 72   MATCH
+    file -12 * 100/127 =  -9.45 ->  -9   MATCH
+    file  67 * 100/127 =  52.76 ->  53   MATCH
+
+Exact on all three. The apparent spread between 0.75 and 0.79 was integer
+rounding at small magnitudes — **a constant ratio disguised as scatter by the
+rounding of small numbers**, which is worth remembering as its own trap.
+
+**Consequence for any cross-project comparison:** a reader validating file bytes
+against machine readings without the conversion is wrong by 27% on *every* cord,
+uniformly — which looks like a systematic calibration error rather than a unit
+mistake. Both oracle files now state the unit explicitly rather than implying it,
+alongside the sign convention (preserved, meaning unmeasured) and the voice-index
+caveat.
+
+### The part that is mine
+
+The peer had misquoted one of my measurements back to me — reporting that I read
+92 where I had read 72 — and built the "prediction meets measurement" anchor on
+it. **I repeated that 92 back to them as confirmation.** My own capture had
+printed `AMOUNT 72` twenty minutes earlier, in my own output, in this session.
+
+**I took an agreeable number from a peer and passed it on without checking it
+against my own record** — and it was the number carrying the argument. That is
+the same failure as §92's non-discriminating model fit and §93's borrowed
+control, in its cheapest possible form: not a subtle inference, just failing to
+re-read what I had already measured.
+
+**The rule: a number that comes back from a peer with your name on it is still a
+number to check.** Corroboration that arrives already agreeing is the kind most
+worth verifying, and verifying it here cost one grep of my own log.
+
+### What went right
+
+The pattern was reported before it was explained, as a pattern with no theory
+attached. Had it been reconciled — "close enough, probably rounding" — the units
+boundary would have stayed undiscovered and every future file-to-machine
+comparison would have carried a silent 27% error. **Reporting an unexplained
+regularity raw is what made it explainable by someone with the other half.**
