@@ -8786,3 +8786,43 @@ write conditional on the voice being multi-zone — a single-zone voice has no
 zone byte and must keep the trim) still needs capturing from a bank built by
 the shipping path, because a writer change can miss in ways a hand-zeroed byte
 never would.
+
+### §92 addendum — the fixed build, and what the defect does to tables already taken
+
+The row was rebuilt through the shipping writer. Diffed here independently of
+the peer's report, and agreeing with it: same size (1027938 bytes), **nine
+bytes differ**, every one a voice-level volume going to zero — six reading
+signed −43 and three −39.
+
+Two things that diff settles, and one it does not.
+
+**The file and the wire disagree about width.** Nine bytes in the bank file
+correspond to the *four* bytes edited on the resident preset: the E4B stores
+the voice volume as one signed byte, the SysEx dump as a two-byte pair. An
+offset learned on one side does not transfer to the other, and neither does a
+count. This is the same trap as the voice-stride check in §92 — the only safe
+transfer between the two representations is structural.
+
+**The conditional and unconditional fixes coincide here, and the conditional is
+still the right one.** All nine trimmed voices in this bank are multi-zone, so
+both forms emit the same nine zeroes. A single-zone voice has no zone byte to
+carry the trim and must keep it, which no bank in this column happens to
+exercise — a fix can be indistinguishable from a wrong fix on the material at
+hand and still be the one to ship.
+
+**What it does not settle is any absolute level already recorded.** The whole
+E4B column was built by the defective writer, so for every trimmed preset in
+it, the captured levels are ~29 dB low. Those numbers are not wrong as
+measurements — they are a correct record of what that build produced — but
+**they cannot be read as conversion fidelity, which is what a confidence table
+is for.** The distinction is the same one §84 keeps making: the measurement was
+sound and the subject was not what the table claimed it was. A table inherits
+the defects of the artefact it measured, and nothing in the table shows it.
+
+**And a fix confirmed on the hardware still cannot be captured.** The E4XT
+reads its banks from an ISO on a card in the drive emulator; there is no host
+path to that medium while it is in the machine. So the RAM-only route that made
+the diagnosis possible — dump, edit four bytes, send back — does not extend to
+verifying the build, because what needs verifying is precisely the part that
+arrives by disk. **The diagnosis and the regression test have different reach,
+and the narrower one is the one that closes the loop.**
