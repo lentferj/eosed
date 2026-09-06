@@ -9328,3 +9328,66 @@ a comparison" rule was a caution with no measurement behind it; it now has one,
 and the answer is that cross-session comparison on this bench is sound at the
 0.1 dB level. That *strengthens* the earlier cross-session work rather than
 retiring it — and it cost nothing but leaving a disc where it was.
+
+## §97 — Correlation cannot tell stereo from silence (2026-09-06)
+
+Asked whether the rig was recording in mono, this project answered with an L/R
+**correlation** test:
+
+    bank A   corr median +1.0000   "mono-like" 6/6
+    bank B   corr median +0.0142   "mono-like" 0/12   <- reported as PROOF of true stereo
+
+and reported that bank B being decorrelated proved neither the rig nor the
+instrument summed to mono. **It proved the opposite of what was claimed.** Bank
+B's right channel was at **−83.5 dBFS with a peak of 20 LSB** — silence.
+Correlation against a noise floor is near zero, so the test could not
+distinguish a stereo pair from a live channel beside a dead one.
+
+**The precondition was never checked: is there signal in both channels at all?**
+The question asked was "do the two channels differ", which correlation answers
+correctly, and the answer to that question was then used for "are both channels
+live", which it cannot answer. Same shape as the SNR rule in §87 — a
+peak-against-RMS threshold answers a question, just not the one being asked.
+
+### What the level check then showed, and why the first diagnosis was also wrong
+
+The sibling project found the dead channel and concluded the input was broken,
+asking for a re-patch. Per-set R levels with timestamps say otherwise:
+
+    13:13  MPC row     R -55.7 dBFS  peak  4752   live
+    13:57  KRZ row     R -83.5       peak    20   DEAD
+    14:35  S3000 row   R -40.3       peak 29763   live
+    14:50  S1000 row   R -49.8       peak  3109   live
+    17:41  S3000 row   R -29.1       peak 32766   live
+    18:01  KRZ row     R -85.1       peak    16   DEAD
+
+**A broken input cannot be alive at 13:13, dead at 13:57 and alive at 14:35.**
+The dead channel follows the *bank*: the KRZ-converted row plays to the left
+output only. The instrument and the rig are fine, and the operator who twice
+reported seeing only the left channel light on the converter was right both
+times — that is the correct behaviour for that bank.
+
+**Two wrong diagnoses in ten minutes, from two directions.** One tested
+correlation and never checked level; the other checked level and never checked
+whether it varied by subject. **Neither error is about the measurement — both
+are about which variable was held fixed while the other moved**, and the
+timestamps that settled it were already on disk.
+
+### Consequences
+
+- **The captures are valid.** They faithfully record an instrument outputting to
+  one channel; nothing needs re-taking.
+- **The analysis convention is what is wrong.** Averaging a live channel with a
+  dead one is **−6.02 dB**, not the −3 dB convention recorded for decorrelated
+  material — so every absolute level for that row is 6 dB low. Re-derivable from
+  the left channel alone, with no bench time.
+- **A standing open item is partly explained.** The KRZ→E4B row was recorded as
+  ~20 dB down with the cause open; **6 dB of that is this**, and whatever routes
+  the row to one output is now the first thing to check for the rest.
+- **Pre/post comparisons are untouched** — same path in both arms — so §96
+  stands as measured.
+
+**The rule: check that a signal exists before characterising its shape.** Level
+first, then correlation, then spectrum. Every stage of this harness that reads
+a waveform now has a documented failure caused by skipping straight to the
+interesting statistic.
