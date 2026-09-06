@@ -9391,3 +9391,56 @@ timestamps that settled it were already on disk.
 first, then correlation, then spectrum. Every stage of this harness that reads
 a waveform now has a documented failure caused by skipping straight to the
 interesting statistic.
+
+### §97 addendum — the correction is not a constant, and the swings on that row are floors
+
+The obvious repair for a row measured as a mono sum of one live and one dead
+channel is to add 6.021 dB. **That is wrong on 170 of 540 cells.**
+
+Averaging a live channel with *silence* is exactly −6.021 dB. Averaging it with
+a *noise floor* is not, and the error grows as the signal approaches that floor:
+
+    L-only minus mono-sum, by velocity
+      v127   mean +6.006   sd 0.035   min +5.824
+      v112   mean +5.992   sd 0.065
+      v 64   mean +5.643   sd 0.636   min +3.030
+      v 16   mean +4.508   sd 1.719   min +0.611
+      v  1   mean +4.001   sd 2.087   min +0.777
+
+At the loud end a constant would have been fine, which is exactly how such a
+correction gets adopted: **it is validated on the cells where it does not
+matter.** The right repair is to re-derive from the surviving channel — an
+L-only copy of the analysis, not arithmetic on its output.
+
+**Nothing relative moved**, as a uniform offset should not:
+
+    organ slope k36->k84   5.23 -> 5.23
+    string slope           5.44 -> 5.48
+    organ-string gap      36.70 -> 36.72 dB
+
+So §93's argument and every shape statement stand; only absolute dBFS for that
+row moves, by +6.0 dB at the loud end.
+
+### The limitation the re-derivation exposed
+
+The velocity swings quoted for this row are **floor-limited lower bounds under
+both conventions.** Re-derived from L the corded presets gain 3.2–4.8 dB of
+swing — and their v1 cells still sit at **0.8–4.9 dB SNR**, so the quiet end is
+in the noise either way:
+
+    preset   swing mono   swing L-only   v1 SNR (L-only)
+    P000        23.52        26.72            4.9
+    P001        17.98        22.82            1.9
+    P011        22.28        26.87            1.3
+
+**Any swing from this row is a "≥", not a value.** The untrimmed presets are
+unaffected — v1 at 64–70 dB SNR, swing 0.01 dB, a real null. This does not touch
+the §83 velocity law, which was measured on dedicated calibration material with
+headroom.
+
+**And the two faults compound.** The hard-left pan discards half the signal path
+before the converter, so the quiet end of every ramp on this row lands 6 dB
+closer to the noise floor. Fixing the pan does not merely re-centre the row — it
+buys back 6 dB of usable dynamic range exactly where this row's measurements are
+worst. A routing bug and a measurement limitation that look independent were the
+same 6 dB seen from two ends.
