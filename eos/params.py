@@ -606,6 +606,18 @@ CORD_DESTINATIONS: Dict[int, str] = {
     161: "Sum", 162: "Switch", 163: "Abs", 164: "Diode", 165: "FlipFlop",
     166: "Quantiz", 167: "Gain4X",
     168: "C00Amt", 169: "C01Amt", 170: "C02Amt", 171: "C03Amt",
+    # 176 is MEASURED, not transcribed: it appears as a live cord destination on
+    # hardware (ModWheel -> 176, driving the amount of cord 8), and the resulting
+    # behaviour was confirmed audibly -- a program whose cord-8 AmpPan amount is
+    # 0 stays centred at CC1=0 and pans full-scale at CC1=127 (RESOLUTION_NOTES
+    # §98/§95). The source PDF names only C00Amt..C03Amt, so the rest of this
+    # family is absent from the spec we transcribed.
+    #
+    # The obvious reading is C{n}Amt = 168 + n for the 18 cords, i.e. 168..185.
+    # ONLY 176 HAS BEEN OBSERVED. The others are not listed here because an
+    # inferred id in a lookup table is indistinguishable from a measured one at
+    # the point of use -- add them as they are seen on the machine.
+    176: "C08Amt",
 }
 
 
