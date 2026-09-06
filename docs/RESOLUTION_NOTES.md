@@ -9507,3 +9507,55 @@ the noise, and removing one of them recovers it.
 Wider than the S3000 row's 0.12 dB, as expected for a row sitting 6 dB closer to
 the floor. **Across both banks: 90 cells, nothing over 1 dB**, spanning a card
 removal, two re-seats and 4.5 hours.
+
+## §98 — Amp Pan is cord destination 65, and the control is what proved it (2026-09-06, live)
+
+`CORD_DESTINATIONS` in `eos/params.py` carries `65: "AmpPan"`, transcribed from
+E-mu's SysEx spec, between `64: AmpVol` and `66: AmpXfd`. **Transcription is not
+measurement** (§94, §97), and a sibling project needed the id to decide whether
+the E4XT can carry a dynamic panner at all. Measured:
+
+    static source, DC (160), with AmpVol as a positive control
+      baseline                    L -32.46  R -32.04   R-L  +0.42
+      CONTROL DC -> AmpVol +100   L -19.11  R -18.70   R-L  +0.42   level +13.35
+      CONTROL DC -> AmpVol -100   L -85.65  R -86.40   R-L  -0.75   level -53.2
+      TEST    DC -> id 65  +100   L -85.30  R -24.81   R-L +60.49   hard right
+      TEST    DC -> id 65  -100   L -24.85  R -86.48   R-L -61.63   hard left
+
+**122 dB of balance swing with level roughly preserved**, against a control that
+moves level by 66 dB and leaves balance at +0.42 dB throughout. The two
+destinations do the two different things they should.
+
+    time-varying source, Lfo1~ (96) -> 65, amount 100, one 4 s note
+      R-L in 50 ms steps: -56.7 -31.0 +3.8 +57.5 +50.7 +1.5 -38.2 -56.7 ...
+      range -56.7..+57.5 dB, 22 sign changes -> ~3.06 Hz
+
+**Dynamic panning works.** (The swing narrows from ±57 to ±22 dB across the
+note: the amplitude envelope decaying so the quiet half of each cycle nears the
+floor, not the LFO decaying.) RAM only; cord 17 restored to `{0,0,0}` and
+verified by readback.
+
+### The result is real because of the control, and only because of it
+
+**The first two runs both failed, both from addressing errors, and both read
+back perfectly.**
+
+1. **`PRESET_SELECT` (223) chooses the preset for EDITING and does not change
+   what the MIDI channel plays.** Preset 3 was being edited while preset 0
+   sounded. The spec says this in as many words; it still took a dead control to
+   notice. Fixed by sending the Program Change alongside the editor selection.
+2. **Voice 0 is not the voice that sounds at that key — voice 2 is.** Found by
+   putting the control cord on each voice in turn and watching which one moved:
+   voice 2 at −53.33 dB, every other voice within ±0.17. Voices 5–7 refuse the
+   write, which is also how the preset's voice count was learned.
+
+**Every parameter read back exactly as written in all three runs.** Readback
+confirms a value was stored; it says nothing about whether the thing storing it
+is the thing being heard. **Without the positive control the report would have
+been "destination 65 does nothing" — the inverse of the truth, and it would have
+killed a feature on another project's roadmap.**
+
+The rule this earns: **an RE probe for "does X do anything" must include a
+control that is already known to do something, driven through the same path.**
+A null result from an unproven path is not evidence about X; it is evidence
+about the path. Two of the three runs here produced exactly that null.
