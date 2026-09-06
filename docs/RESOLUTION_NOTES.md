@@ -9254,3 +9254,77 @@ between the two builds to the last decimal** — 2101.3, 2076.0, 520.8, 128.5,
 separate days. That is a stronger statement about the repeatability of this
 capture chain than any amplitude work in §83–§95 has produced, and it arrived as
 a by-product of checking something else.
+
+## §96 — The fix measured, and two things the prediction got wrong (2026-09-06, live)
+
+The double-trim fix (§92) was captured on hardware: the discriminating row
+before and after, 30 captures each, same grid, same session, both builds
+resident on separate disc ids so nothing had to be compared across a card swap.
+
+**Build identity was established from the wire, not from ids or names.** Both
+discs carry the same four bank names and both loads leave an **identical screen
+hash** — same bank name, same first preset name — so the LCD could not have
+distinguished them. Dumping all six presets from each and diffing gave 12 bytes
+= six two-byte pairs going to zero, decoding as **−16 ×2, −20 ×3, −29 ×1**:
+exactly the value distribution the sibling project reported from the file, six
+bytes there against twelve on the wire (§92 addendum's width asymmetry). One
+preset was byte-identical between builds and served as the null control.
+
+    preset  trim   predicted rise   largest observed   delta   keys risen
+    P000    -16        12.34             1.64         -10.70      1/5
+    P001    -20        15.44            14.90          -0.55      3/5
+    P002    -29        22.46             0.02         -22.44      0/5
+    P003    none        0.00             0.06          +0.06      0/5
+    P004    -16        12.34            12.20          -0.14      5/5
+    P005    -20        15.44            14.84          -0.61      4/5
+
+Predictions from the E4XT volume law (§83) applied to each preset's **own** trim
+byte. Where the affected voice sounds, agreement is 0.14–0.61 dB.
+
+**Both directions of the falsifier pass.** The most negative change anywhere is
+−0.05 dB across all 30 cells, so nothing lost a trim it needed; the
+byte-identical control moved 0.06 dB; velocity swing is preserved within 0.12 dB
+on five presets and 0.69 on the sixth.
+
+### The prediction was wrong twice, and both were reasoning errors
+
+**1. The magnitude was imported from another row.** TODO.md recorded "6 risen
+~29 dB". That is the *other* row's trim size (−39/−43). This row's trims are
+−16/−20/−29, predicting 12.3/15.4/22.5 dB. The structure was right and the
+number was borrowed — the same class as reading a group mean over a bimodal
+group, and the fourth borrowed quantity to go wrong in a day.
+
+**2. "A static per-voice offset cannot bend a curve" is false as stated.** It is
+true only if the voice spans the whole measured range. Two presets here change
+their key-response shape — flat at the bottom, up 14.8 dB at the top — because
+the trimmed voice covers only part of the keyboard. **The shape falsifier was
+wrong; the fix was not.** A per-voice quantity is uniform in the key dimension
+only across that voice's own span, which is exactly the thing a five-key grid
+cannot see.
+
+### What the measurement cannot answer, and why
+
+The falsifier asked for "30 voices unchanged". **This measures keys, not
+voices.** A trimmed voice that sounds at none of the five sampled keys is
+indistinguishable from one that was correctly left alone — P002's contributes
+0.02 dB, and P000's appears only at one key as +1.64, consistent with a raised
+voice summing with unraised ones rather than sounding alone. 19 of 30 cells are
+unchanged to within 0.06 dB, and under an unconditional fix the single-zone
+voices would have risen too, so the evidence favours the conditional without
+closing it. **Closing it needs the voice key ranges** — a file-side question,
+answerable against captures already taken.
+
+### §G0 is now bounded by a number
+
+Leaving the pre-fix disc mounted made the morning's captures of the *same bank*
+a free control on the session boundary itself:
+
+    same 30 cells, MATRIX6 this morning vs MATRIX6 tonight
+    mean -0.009 dB    sd 0.034    max |diff| 0.12 dB    cells over 1 dB: 0
+
+Across a card removal, two re-seats, a bank reload and eight hours, **the same
+bank measures the same to within 0.12 dB.** The "same session gain or it is not
+a comparison" rule was a caution with no measurement behind it; it now has one,
+and the answer is that cross-session comparison on this bench is sound at the
+0.1 dB level. That *strengthens* the earlier cross-session work rather than
+retiring it — and it cost nothing but leaving a disc where it was.
