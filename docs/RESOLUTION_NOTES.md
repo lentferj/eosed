@@ -8826,3 +8826,47 @@ the diagnosis possible — dump, edit four bytes, send back — does not extend 
 verifying the build, because what needs verifying is precisely the part that
 arrives by disk. **The diagnosis and the regression test have different reach,
 and the narrower one is the one that closes the loop.**
+
+### §92 addendum 2 — choose the capture that can fail in two directions
+
+The obvious row to re-capture first is the one with the largest effect: the KRZ
+row, where every trimmed voice rises ~29.5 dB uniformly. **It is the wrong
+choice**, and the reason generalises past this bug.
+
+That row's trimmed voices are all multi-zone, so the correct fix (drop the
+voice-level copy only where a zone copy exists to carry the trim) and a wrong
+one (drop it unconditionally) emit **identical bytes**. Capturing it can show
+that the fix did something. It cannot show that it did the right thing, because
+on that material there is nothing it could have got wrong.
+
+The S3000 row can. Of its 36 trimmed voices, 30 are single-zone — no zone byte
+exists, so `vpar[54]` is the only place the trim can live and removing it would
+make those voices ~29 dB too **loud**. The conditional keeps them. Verified in
+the built files here, diffing pre against post independently of the peer's
+report:
+
+    row        bytes changed   trimmed voices     all changes to zero
+    KR-E4            9              9                     yes
+    S3-E4            6             36                     yes
+    S1-E4            6              6                     yes
+    MPC-E4          12             12                     yes
+
+**Six of thirty-six.** The writer is selective in exactly the place selectivity
+is required, and every edit removes rather than adds. (The 30/6 zone split is
+the peer's classification from the source; what is checked here is that the
+output changed 6 and not 36, which is the observable that would differ between
+the two candidate fixes.)
+
+So the capture to run first is the one where **a wrong fix and a missing fix
+fail in opposite directions** — 30 voices unchanged and 6 risen. A uniform rise
+across a row is a weaker result than a split one, however much larger it is.
+The habit worth keeping: when choosing what to measure after a fix, do not pick
+the subject with the biggest expected effect. **Pick the subject where the
+plausible wrong answers are on opposite sides of the right one**, and prefer
+material that exercises the branch the fix added — otherwise the test passes
+for every version of the fix, including the ones that are wrong.
+
+This is the third time in one investigation that the material at hand could not
+tell two hypotheses apart (see §92's model-fit example, and the conditional
+form's invisibility on the KRZ row). Each time the fix was the same: find or
+build a subject on which they disagree.
