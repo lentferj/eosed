@@ -9444,3 +9444,66 @@ closer to the noise floor. Fixing the pan does not merely re-centre the row — 
 buys back 6 dB of usable dynamic range exactly where this row's measurements are
 worst. A routing bug and a measurement limitation that look independent were the
 same 6 dB seen from two ends.
+
+### §96 addendum — the build path proves itself, 0.08 dB from the hand edit
+
+The KRZ row captured before and after, 60 captures each, both builds resident,
+analysed from the left channel alone (§97):
+
+    v127, mean over five keys, MATRIX6 -> MATRIX7
+      P000  +29.58     P003  +0.21
+      P001  +32.54     P004  +0.05
+      P002  +29.61     P005  +0.03
+      P009  +32.62     P006  +0.18
+      P010  +32.64     P007  +0.20
+      P011  +32.61     P008  +0.21
+    most negative change anywhere: -0.03 dB
+    within-preset spread: P000 rises 29.52-29.63 across all five keys
+
+Six trimmed presets rise, six untrimmed do not, nothing falls, and the rise is
+uniform across the keyboard — these voices span the full key range, which is why
+the shape caveat that applied to the S3000 row (§96) does not apply here.
+
+**§92 measured +29.50 dB by zeroing four bytes on the resident preset. The
+shipping writer gives +29.58 dB. The distinction drawn that morning — "a live
+edit proves the machine's behaviour, it does not prove the build path" — is now
+closed at 0.08 dB.**
+
+### A small systematic in the volume law
+
+    byte -39   predicted 30.30   observed 29.59   delta -0.71   (2 presets)
+    byte -43   predicted 33.45   observed 32.60   delta -0.85   (4 presets)
+
+The law of §83 **over-predicts by 0.7–0.85 dB at both byte values, in the same
+direction**, where §83 records it as verified to byte −60 at ±0.46 dB. Two
+clusters is not a refit and this is logged as an observation, not a correction —
+but it is consistent, and it says the removal of one trim copy is slightly
+smaller than the law's figure for that byte.
+
+### Swing tracks the trim 1:1, not 2:1
+
+Post-fix velocity swings are **29.22 and 29.25** for the two −39 presets and
+**32.05–32.10** for the four −43 presets: **swing ≈ the trim byte's own dB value
+to within about a dB**, across six presets. If the trim is constructed as
+−swing/2 to move the velocity pivot, that relation should be 2:1 and it is 1:1.
+Either the construction is −swing, or the measured swing is not the quantity
+being halved. A file-side question, recorded here because the correlation is
+tight enough to be structural rather than coincidental.
+
+### The floor problem, quantified
+
+Pre-fix v1 SNR on the trimmed presets was **1.0–4.3 dB** — in the noise. Post-fix
+it is **24.5–36.2 dB**. So the pre-fix swings were floors and the post-fix ones
+are measurements, and most of the apparent swing increase is the floor lifting
+rather than the ramp changing. This is the §97 addendum's prediction confirmed:
+the trim and the hard-left pan together pushed the quiet end of every ramp into
+the noise, and removing one of them recovers it.
+
+### Cross-session control, second bank
+
+    KR row, this morning vs tonight, L-only, n=60
+    mean -0.107 dB   sd 0.234   max |diff| 0.69   cells over 1 dB: 0
+
+Wider than the S3000 row's 0.12 dB, as expected for a row sitting 6 dB closer to
+the floor. **Across both banks: 90 cells, nothing over 1 dB**, spanning a card
+removal, two re-seats and 4.5 hours.
