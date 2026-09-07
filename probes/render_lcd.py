@@ -115,7 +115,8 @@ def write_png(path, rows_of_px, scale=2, gap=6):
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
-    frames = [json.loads(l) for l in open(src)]
+    with open(src, encoding="utf-8") as _fh:
+        frames = [json.loads(l) for l in _fh]
     big = max(frames, key=lambda f: f["length"])
     data = unpack_7to8(big["bytes"][16:-1])
     assert len(data) == W * H // 8, len(data)

@@ -117,13 +117,14 @@ def cmd_capture(args, b) -> None:
         row = read_voice(b, args.preset, v, ids)
         voices[str(v)] = {str(k): int(val) for k, val in row.items()}
         print(f"  voice {v}: {len(row)} of {len(ids)} parameters", flush=True)
-    with open(args.file, "w") as fh:
+    with open(args.file, "w", encoding="utf-8") as fh:
         json.dump({"preset": args.preset, "voices": voices}, fh, indent=1)
     print(f"  -> {args.file}")
 
 
 def cmd_verify(args, b) -> int:
-    data = json.load(open(args.file))
+    with open(args.file, encoding="utf-8") as _fh:
+        data = json.load(_fh)
     diffs = 0
     for vs, want in sorted(data["voices"].items(), key=lambda kv: int(kv[0])):
         got = read_voice(b, args.preset, int(vs), [int(k) for k in want])
@@ -139,7 +140,8 @@ def cmd_verify(args, b) -> int:
 
 
 def cmd_replay(args, b) -> int:
-    data = json.load(open(args.file))
+    with open(args.file, encoding="utf-8") as _fh:
+        data = json.load(_fh)
     failed = []
     for vs, want in sorted(data["voices"].items(), key=lambda kv: int(kv[0])):
         v = int(vs)

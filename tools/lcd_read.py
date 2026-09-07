@@ -74,10 +74,12 @@ def key(s):
     return f"{s.shape[0]}x{s.shape[1]}:" + "".join(str(v) for v in s.flatten())
 
 def load():
-    return json.load(open(TEMPLATES)) if os.path.exists(TEMPLATES) else {}
+    return (json.load(open(TEMPLATES, encoding="utf-8"))
+            if os.path.exists(TEMPLATES) else {})
 
 def save(lib):
-    json.dump(lib, open(TEMPLATES, "w"), indent=0)
+    with open(TEMPLATES, "w", encoding="utf-8") as fh:
+        json.dump(lib, fh, indent=0)
 
 def read_rate(a, lib=None):
     """-> (text, unknown_keys). text is None if any glyph is unrecognised."""
