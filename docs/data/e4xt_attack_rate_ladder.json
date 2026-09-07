@@ -92,5 +92,14 @@
    "rise_10_90": 12.600000000000001,
    "flags": []
   }
+ ],
+ "interpolation": "ln(t_peak) is near-linear in byte: slope 0.0525-0.0656 per byte across all seven intervals. USE LOG INTERPOLATION. Linear interpolation over the widest gap (87->96) differs by 0.4 s: byte 91 gives 11.63 s linear against 11.22 s log-linear. The rule was unstated once and the two models were quoted interchangeably -- see RESOLUTION_NOTES \u00a7105 addendum.",
+ "additional_points": [
+  {
+   "byte": 91,
+   "t_peak": "11.10-11.95 depending on smoothing window",
+   "rise_10_90": "7.00-7.50",
+   "provenance": "measured on a DIFFERENT bank and different material from the ladder rows, with a separate script. Recorded because it sits inside the ladder's widest gap (87->96), but NOT merged into rows: this ladder's own cross-program check found byte 89 giving 10.1 s on one preset and 9.10 s on another, ~11%, so points from different material are not interchangeable with the rows."
+  }
  ]
 }

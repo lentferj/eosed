@@ -10130,43 +10130,65 @@ the top a fixed *hold* truncates the answer — which is §104's error appearing
 the third time in a day, at a third scale. Window ≈ 5% of the expected value,
 hold ≈ 6x, both derived per point rather than chosen once.
 
-### §105 addendum — the ladder predicted a hardware result, and an intermediate check that could fail alone
+### §105 addendum — a corrected bank on hardware, and a prediction that was not one
 
-A sibling project used §105's ladder in the inverse direction: to choose the byte
-that would produce a wanted attack time. The result was played on hardware.
+A sibling project used §105's ladder in the inverse direction, to choose the byte
+that should produce a wanted attack time, and the rebuilt bank was played here.
 
-**The intermediate check came first and is the more valuable half.** The rebuilt
-bank's Atk1 rate read **91** off the machine — the byte the ladder implied — and
-that confirms the writer's `seconds → byte` half **without any audio at all**.
-Had it come back a different byte, the capture would have been irrelevant and the
-faulty half already identified. **An intermediate check earns its place by being
-able to fail independently of the thing it feeds.**
+**CORRECTED 2026-09-07 after review.** This addendum first claimed the ladder
+"predicted a hardware result" that "neither half could have predicted alone."
+**That was wrong and it flattered both projects.** The byte was chosen *from*
+this ladder, so the ladder agreeing with the outcome is a consistency check on
+one law, not a composition of two independent halves. What is corrected below is
+the claim, not the measurements.
 
-Then the audio, both builds analysed identically:
+**The readback, and what it does and does not establish.** The rebuilt bank's
+Atk1 rate read **91** off the machine. That confirms the byte the writer intended
+reached the media and the instrument — a real check, and it can fail without any
+audio. **It does not independently confirm the `seconds → byte` law**, because
+the expected 91 came from the sibling's own arithmetic over this ladder. It
+verifies implementation against intent, not intent against the machine.
+
+Both builds, analysed identically:
 
     window       previous build (byte 89)     rebuilt (byte 91)
                  t_peak    10-90%             t_peak    10-90%
       50 ms      10.05      7.25              11.95      7.05
+     250 ms      10.10      5.75              11.85      7.25
      500 ms      10.10      6.00              11.60      7.50
     1000 ms      10.10      6.00              11.10      7.00
 
-**t_peak moves 10.1 s → ~11.6 s**, and the ladder's interpolation for byte 91
-between the measured 87 (8.85 s) and 96 (15.10 s) was **11.6 s**.
+**t_peak moves 10.1 s → 11.1–11.95 s depending on window.**
 
-**One project measured byte → time, the other fixed seconds → byte, and the
-composition predicted a hardware result that neither half could have predicted
-alone.** That is the case for decomposing a law into its halves rather than
-calibrating end to end: an end-to-end measurement returns a single number with
-both halves entangled, which is precisely how two errors in opposite directions
-had been hiding each other by partly cancelling.
+**The interpolation rule was never stated and it changes the answer.** Byte 91
+sits in the ladder's widest gap, between measured 87 (8.85 s) and 96 (15.10 s):
+
+    linear      11.63 s
+    log-linear  11.22 s      <- the better model: ln(t) per byte is 0.0525-0.0656
+                                across all seven intervals, 0.0594 on 87->96
+
+The original text quoted 11.6 s — the linear figure — without saying so. **Both
+interpolants fall inside the measured 11.10–11.95 s spread, so this capture
+cannot discriminate between them**, and any agreement quoted at the few-percent
+level is unsupported.
+
+**What IS independent, and it is the result worth keeping.** The target of
+**11.40 s** is the sibling's measurement of the *source* program's full rise,
+taken on the MPC and owing nothing to this ladder. The machine played the
+rebuilt bank at 11.1–11.95 s. **Source asks 11.40, hardware delivers within the
+window spread of it, where the previous build sat at 10.1 s.** That is a genuine
+end-to-end check of the corrected conversion; the ladder's own agreement with
+itself is not.
 
 ### Two reporting decisions worth more than the result
 
 **The figure is "within a few percent", not "+1.8%".** The point estimate against
-target is +1.8%, but t_peak spans 11.10–11.95 s across smoothing windows, so
-1.8% claims a precision the spread does not support. **A number quoted tighter
-than its own window spread is a false precision**, and the tighter version reads
-better, which is exactly why it needs refusing.
+the 11.40 s target is +1.8%, but t_peak spans 11.10–11.95 s across smoothing
+windows, so 1.8% claims a precision the spread does not support. **A number
+quoted tighter than its own window spread is a false precision**, and the tighter
+version reads better, which is exactly why it needs refusing. (The target's
+provenance is recorded above for the same reason: a percentage against an
+unrecorded denominator cannot be checked by a later reader.)
 
 **The 10-90% statistic collapsed, and that is a result rather than a footnote.**
 It ranges 5.75–7.25 on one build and 7.00–7.50 on the other — overlapping, so it
