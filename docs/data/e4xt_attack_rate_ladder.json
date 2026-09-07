@@ -1,0 +1,96 @@
+{
+ "parameter": "E4_VOICE_VENV_SEG0_RATE (id 70) -- amplitude envelope Atk1 rate",
+ "device": "E4XT Ultra, EOS 4.70",
+ "measured": "2026-09-07",
+ "quantity": "byte -> observed attack time, from audio. t_peak is time from note-on to the envelope's peak (the full 0->100 traversal); rise_10_90 is the 10-90% rise. BOTH are given because 'attack time' is ambiguous between them and the difference is a factor of ~1.6.",
+ "method": "one preset with steady material, Atk1 rate written over SysEx, note held and the rise measured from the recorded audio. Per-point hold and window: window ~5% of the expected rise floored at 20 ms, hold ~6x the expected time. A fixed window cannot measure a ladder spanning 0.1-12 s and a fixed hold truncates the top.",
+ "shape_ratio": {
+  "rise_10_90 / t_peak": 0.619,
+  "sd": 0.041,
+  "note": "measured on the E4XT itself. A sibling project's 0.704 is the MPC One's figure; the machines have different ramp shapes and the difference propagates into any converted time."
+ },
+ "range_limit": "NOT to be read below ~2 s without a re-take. The three sub-second points drift (see flags/ratios); at byte 48 the 30 ms window is only ~3.5% of the rise, so quantisation is a real fraction of the measurement.",
+ "cross_check": "a preset whose panel showed Atk1 rate 89 measured t_peak ~10.1 s; byte 89 on a different preset with different material gave 9.10 s. The timing follows the byte across programs, which a material artefact could not.",
+ "rows": [
+  {
+   "byte": 20,
+   "intended": 0.1,
+   "hold": 6,
+   "window": 0.02,
+   "peak_db": -40.59198486430976,
+   "t_peak": 0.18000000000000016,
+   "rise_10_90": 0.10000000000000009,
+   "flags": []
+  },
+  {
+   "byte": 36,
+   "intended": 0.25,
+   "hold": 8,
+   "window": 0.02,
+   "peak_db": -48.720373192493334,
+   "t_peak": 0.4800000000000002,
+   "rise_10_90": 0.32000000000000006,
+   "flags": []
+  },
+  {
+   "byte": 48,
+   "intended": 0.5,
+   "hold": 10,
+   "window": 0.03,
+   "peak_db": -52.77054551850712,
+   "t_peak": 1.02,
+   "rise_10_90": 0.8399999999999999,
+   "flags": []
+  },
+  {
+   "byte": 72,
+   "intended": 2.0,
+   "hold": 15,
+   "window": 0.1,
+   "peak_db": -53.854692488336894,
+   "t_peak": 3.6,
+   "rise_10_90": 2.5,
+   "flags": []
+  },
+  {
+   "byte": 79,
+   "intended": 3.0,
+   "hold": 20,
+   "window": 0.15,
+   "peak_db": -53.90508306035522,
+   "t_peak": 5.699999999999999,
+   "rise_10_90": 3.5999999999999996,
+   "flags": []
+  },
+  {
+   "byte": 87,
+   "intended": 5.0,
+   "hold": 30,
+   "window": 0.25,
+   "peak_db": -54.00606628827576,
+   "t_peak": 8.85,
+   "rise_10_90": 5.25,
+   "flags": []
+  },
+  {
+   "byte": 96,
+   "intended": 8.0,
+   "hold": 45,
+   "window": 0.4,
+   "peak_db": -53.94809982295882,
+   "t_peak": 15.1,
+   "rise_10_90": 8.8,
+   "flags": []
+  },
+  {
+   "byte": 102,
+   "intended": 11.62,
+   "hold": 70,
+   "window": 0.6,
+   "peak_db": -54.08870333163623,
+   "t_peak": 21.3,
+   "rise_10_90": 12.600000000000001,
+   "flags": []
+  }
+ ]
+}

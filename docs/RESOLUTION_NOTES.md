@@ -10067,3 +10067,65 @@ was not *"is this disagreement too strong to be real?"* — a judgement about
 plausibility, which can be got wrong twice — but **"were these two sides measured
 from the same object?"**, which has an answer. It would also have been cheaper
 than either check that eventually found it.
+
+## §105 — The envelope attack ladder, and a quantity with two meanings (2026-09-07)
+
+The E4XT displays envelope rates as **bytes**, not times — unlike the LFO rate,
+whose panel readout gave §103's table directly. So the byte → time law had to be
+measured from audio. Eight points, `E4_VOICE_VENV_SEG0_RATE` (id 70), one preset
+with steady material, per-point hold and window:
+
+    byte   t_peak    10-90%
+      20     0.18      0.10
+      36     0.48      0.32
+      48     1.02      0.84
+      72     3.60      2.50
+      79     5.70      3.60
+      87     8.85      5.25
+      96    15.10      8.80
+     102    21.30     12.60
+
+Data in `docs/data/e4xt_attack_rate_ladder.json`. **Higher byte is slower and
+strongly non-linear** — 72→79 costs 2 s, 96→102 costs 6.
+
+**Cross-checked against a program rather than only itself:** a preset whose panel
+showed Atk1 rate 89 measured t_peak ~10.1 s, and byte 89 on a *different preset
+with different material* gave 9.10 s. The timing follows the byte across
+programs, which a material artefact could not.
+
+### "Attack time" means two things and they differ by 1.6x
+
+    t_peak    time from note-on to the envelope's peak -- the full 0 -> 100 traversal
+    10-90%    the conventional rise, 0.619 +- 0.041 of t_peak on this machine
+
+A sibling project's converter emitted bytes intended to produce given attack
+times. Against **t_peak** its bytes ran **1.838x long, sd 0.050 across two
+decades**; against **10-90%** only **1.14x**. **The ladder cannot choose between
+those** — it is a question about what the source's field denotes, not about the
+machine, and it was settled from the source side (the source law's own measured
+10-90%/full ratio is 0.704, not 1.0, so it denotes the full traversal).
+
+**Recording that as a finding rather than a footnote**: a measurement can be
+complete, precise and still not answer the question, when the question turns on a
+definition. The right move was to report both numbers and name the ambiguity, not
+to pick the one that made a cleaner story.
+
+### Two limits stated rather than smoothed away
+
+**The law is not to be read below ~2 s without a re-take.** The three sub-second
+points drift — `10-90%/intended` runs 1.00, 1.28, 1.68 there against 1.05–1.25
+above — because at byte 48 a 30 ms window is ~3.5% of the rise and quantisation
+becomes a real fraction of the result. Excluding them tightens every statistic,
+which is the evidence that they are the weak ones, not a reason to hide them.
+
+**The machine's own shape ratio is 0.619, not the 0.704 that had been borrowed
+from a different machine.** That borrowed constant was doing real work in
+someone's arithmetic, and different machines have different ramp shapes.
+
+### The generalisable part
+
+**The analysis window must scale with the value being measured.** A fixed window
+cannot measure a ladder spanning 0.1 s to 12 s: too coarse at the bottom, and at
+the top a fixed *hold* truncates the answer — which is §104's error appearing for
+the third time in a day, at a third scale. Window ≈ 5% of the expected value,
+hold ≈ 6x, both derived per point rather than chosen once.
