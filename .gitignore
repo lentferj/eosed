@@ -18,3 +18,11 @@ dist/
 *.bak
 *.orig
 *~
+
+# Bench working files — the rig harness and measurement logs for Jan's E4XT.
+# Kept IN the repo so a scratch clean-up cannot lose them, but NOT published:
+# they encode one specific bench (ports, JACK capture names, device id) and
+# 22 KB of capture history. The scratch copies under ~/temp are symlinks to
+# these, so the ~75 probe scripts that `from rig import Rig` keep working.
+# NOTE: gitignored means NOT versioned and NOT backed up by push.
+bench/
