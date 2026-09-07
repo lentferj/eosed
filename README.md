@@ -55,6 +55,9 @@ are for.
   wrong, measure again. Several single lines in this README are an evening at
   the bench, and the wrong turns are written down in
   [`docs/RESOLUTION_NOTES.md`](docs/RESOLUTION_NOTES.md) alongside the findings.
+  What was actually recorded, and under which conditions, is catalogued in
+  [`docs/CAPTURES.md`](docs/CAPTURES.md) — the audio itself is bench-local and
+  several sets are of machine states that no longer exist.
 - **A MIDI interface, a SCSI emulator and media**, plus **AI assistance, which
   is a paid service** used heavily throughout and not cheap at this volume.
 
