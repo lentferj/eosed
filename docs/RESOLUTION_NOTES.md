@@ -9994,3 +9994,76 @@ That is exactly the property it was built for, and the failure it prevented is a
 specific one: returning four plausible numbers from the wrong field, which would
 have disagreed with the table and read as *the caveat failing* rather than as a
 navigation fault. **A guess would have been indistinguishable from a finding.**
+
+## §104 — A quiet outlier with no parameter to blame, and two wrong banks (2026-09-07)
+
+A converted program read **−61 dB against peers at −33** on the E4XT, reproduced
+to 0.3 dB, with its source material measured **+3.2 dB above the bank median** in
+the built file and **+4.6 dB** in the original WAVs. Three sessions spent a day
+looking for the attenuator. **There is no attenuator.**
+
+    prog   hold   peak      ramp at 1 / 2 / 4 / 6 / 8 s
+      0     2.0  -60.85    -79.4  -65.6    -      -      -
+      0     8.0  -37.47    -79.2  -64.4  -53.0  -41.6  -45.6
+      3     2.0  -35.50    -57.7  -70.3    -      -      -     <- control
+      3     8.0  -35.44    -58.2  -60.2  -60.8  -61.4  -69.5
+
+**The program has a 5.46 s envelope attack and the harness holds notes for
+2.0 s.** It was scored a fifth of the way up its own ramp. Lengthening the hold
+to 8 s raises it **+23.4 dB** from one constant; the control — a peer with a
+0.000 s attack — moves **0.06 dB** across the same change, which is what rules
+out the longer window inflating the peak and leaves no alternative standing.
+
+**The mechanism accounts for ~23 of the 25 dB gap, not all of it.** The residual
+2 dB is unestablished; the ramp reading −41.6 at 6 s and −45.6 at 8 s means the
+true peak lands between samples, which would plausibly cover it, but that is a
+hypothesis and is recorded as one.
+
+**Why it was so expensive: a truncated attack has no parameter signature.** Every
+volume, trim, cord, filter and envelope field reads normal, because every one of
+them *is* normal. The measurement's precondition — that the note had time to
+sound — is not a field anyone thinks to check. **Before explaining a quiet
+outlier with a parameter, check the note had time to sound.**
+
+Campaign-wide the exposure is one preset in 37 across six banks: one at 273% of
+the hold and a hard floor of exactly 0.000 s everywhere else. **No population
+near the boundary**, so the threshold question that seemed important is moot
+here — but the shape recurs wherever a probe is shorter than the thing probed.
+
+### Run-to-run reproducibility, measured for the first time
+
+A mis-tagged capture turned into the figure no rig here had. Two independent runs
+of the same bank, ~45 minutes apart:
+
+    44 cells   mean -0.002 dB   sd 0.010   max |diff| 0.05 dB   cells over 0.5 dB: 0
+
+**Hundredths of a dB.** Every confidence number produced here had assumed
+run-to-run variance was small; it is now bounded rather than assumed. And it
+settles more than it was asked: **a 38 dB discrepancy cannot be capture noise on
+this bench**, so the "one flaky capture" hypothesis that consumed part of the day
+was never plausible. **Had this figure existed at the time it would have redirected
+the search to a wrong subject faster than the subject check did.**
+
+### Two wrong banks, and the lesson that is not "add a check"
+
+Bank index 2 addressed one bank on one disc and a different bank on its
+successor. It was loaded by index twice, and both times a confirmation
+screenshot was captured — **deliberately, as the guard** — and **not read**.
+
+The first error produced a confident retraction of a correct measurement; the
+second was catching the first. A peer amended their notes on the strength of it.
+
+**The check existed and was performed. It was not read, because the answer was
+already known.** No further safeguard addresses that: the safeguard was present
+and the failure was in consuming it. What the day actually shows is narrower and
+harder — **verification lapses exactly when the work gets interesting**, which is
+when its result is most likely to be acted on.
+
+### The question that would have caught it
+
+The disagreement pattern was three independent contradictions at once. Both
+sessions read that as strong evidence of a real divergence. The useful question
+was not *"is this disagreement too strong to be real?"* — a judgement about
+plausibility, which can be got wrong twice — but **"were these two sides measured
+from the same object?"**, which has an answer. It would also have been cheaper
+than either check that eventually found it.
