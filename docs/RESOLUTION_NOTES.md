@@ -9896,3 +9896,53 @@ the LFO frequency, which the clean exponential supports and does not prove.
 **`params.py` is unchanged** — this is a calibration to check, not to adopt, and
 replacing one unverified constant with another would be the same mistake at a
 different value.
+
+### §103 addendum — the panel is honest, and the ambiguity is resolved against us
+
+§103 left it open whether the display was not the modulation rate, or the
+calibration off that display was wrong. **Both produced the table; the panel
+reading separates them.** Read off the LFO 1 page against the audio:
+
+    byte    panel   measured   cnv_lfo_rate   map error
+      40     1.98     1.98         1.25        -36.9%
+      60     3.74     3.74         3.46         -7.5%
+      95     8.85     8.85        11.47        +29.6%
+     105    11.14    11.14        14.11        +26.7%
+     115    14.04    14.04        16.34        +16.4%
+
+**The panel equals the measurement to two decimal places at every byte**,
+including byte 40 where the error runs the other way — deliberately chosen as the
+hardest discriminator. So the display is truthful and **the defect is entirely
+this project's fit.**
+
+The residual pattern says why: agreement is best next to the 2026-06-10 anchors
+(bytes 0, 64, 127) and worst in the middle of the gaps. **A log-quadratic through
+three points is exact at those three by construction and unconstrained between
+them** — the shape was never tested where it was used, and the constant's own
+comment said it was "refineable with intermediate readouts". None were ever
+taken.
+
+### Two caveats discharged by measurement rather than by argument
+
+§103 listed three. The panel agreeing with the audio to three significant figures
+**proves the balance frequency equals the LFO frequency 1:1**, which had been an
+assumption; and it holds across five bytes, not one, which largely answers the
+"seven points from one sweep" worry. **The surviving caveat is one preset, one
+voice.**
+
+### The right repair is a table, not a better curve
+
+§6a's original problem was that the spec's display table was untranscribable —
+129 entries recovered where 128 were expected — and a fitted curve was adopted
+instead. **The panel is a readable oracle at every byte, and the audio
+measurement is now proven equal to it**, so the true table can be recovered
+empirically rather than approximated. Fitting a better curve to a lookup table
+would repeat the original error at higher precision.
+
+`params.py` is deliberately unchanged. Five dual-verified points prove the fit
+wrong; they do not license a replacement.
+
+**Incidental, from the same screen:** the Cords page displays amounts as
+**percent** (`+49%`, `+6%`), which is §102's ±100 interface unit stated by the
+machine itself — a units boundary that was visible on the front panel the whole
+time.
