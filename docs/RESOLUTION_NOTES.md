@@ -9837,3 +9837,62 @@ attached. Had it been reconciled — "close enough, probably rounding" — the u
 boundary would have stayed undiscovered and every future file-to-machine
 comparison would have carried a silent 27% error. **Reporting an unexplained
 regularity raw is what made it explainable by someone with the other half.**
+
+## §103 — The LFO rate map reproduces the panel, and the panel is not the rate (2026-09-07)
+
+A converted program whose source LFO runs at 11.46 Hz was measured panning at
+**8.85 Hz** — clean, identical at both mod-wheel positions, 285 frames at 10 ms
+giving 0.35 Hz resolution. Its rate byte is **95**, and `cnv_lfo_rate(95)` returns
+**~11.47 Hz**, which is why the writer chose that byte.
+
+**The byte is correct according to the map. The map is wrong about the machine.**
+
+Sweeping the rate byte in RAM and measuring the resulting modulation directly:
+
+    byte    cnv_lfo_rate   measured    ratio
+      40        1.25         1.98      0.63
+      60        3.46         3.74      0.93
+      75        6.33         5.49      1.15
+      85        8.78         7.02      1.25
+      95       11.47         8.85      1.30
+     105       14.11        11.14      1.27
+     115       16.34        14.04      1.16
+
+**Not a constant offset — the shape is wrong**, crossing unity near byte 62 and
+reaching 1.30 at 95. The measured points fit
+`exp(-0.000074821·b² + 0.0373635·b − 0.679590)` to within 2.6%, and above byte 85
+they are a *pure* exponential, `exp(0.023096·b − 0.0142)`, residuals ±0.004 Hz.
+**For 11.46 Hz the byte is 105, not 95.**
+
+### Why this was invisible for months
+
+§6a records that `cnv_lfo_rate` came from a sibling project's empirical
+calibration **off the E4XT's own rate menu**. It reproduces the panel display by
+construction, and it was validated the same way. **Nobody had measured the rate
+the machine actually modulates at** — the calibration and its check were the same
+measurement, so agreement was guaranteed and meant nothing.
+
+That is the §92 pattern in a different dress: a model that fits, where the thing
+it was fitted to is not the thing anyone cares about.
+
+**What remains ambiguous, and the check that settles it:** either the panel
+display is not the modulation rate, or the menu calibration was misread. **Both
+produce this table.** Distinguishing them needs a panel reading at a known byte,
+which has not been done — recorded here as ambiguous rather than attributed.
+
+### Scope
+
+The map is used for every LFO rate the converter chooses, on every target and
+every destination — pitch and filter LFOs as much as pan. **A pan LFO is simply
+the first one whose rate was ever measured**, because the AmpPan work of §98–§102
+made the modulation directly visible in the stereo image. The others were
+converted through the same map and have never been checked.
+
+### Not adopted
+
+Seven points, one preset, one voice, one key. The rate should not depend on any
+of those and that has not been shown; the balance frequency is assumed equal to
+the LFO frequency, which the clean exponential supports and does not prove.
+**`params.py` is unchanged** — this is a calibration to check, not to adopt, and
+replacing one unverified constant with another would be the same mistake at a
+different value.
