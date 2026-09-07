@@ -9946,3 +9946,51 @@ wrong; they do not license a replacement.
 **percent** (`+49%`, `+6%`), which is §102's ±100 interface unit stated by the
 machine itself — a units boundary that was visible on the front panel the whole
 time.
+
+### §103 addendum 2 — the table confirmed in the shipping path, and the last caveat discharged
+
+Two GRATER builds were placed on one disc, differing by **one byte**: the rate
+chosen by the old fitted map and the rate chosen from the measured table.
+
+    build A   byte  95   table  8.85   measured  8.85 Hz   (CC1 = 0 and 127)
+    build B   byte 106   table 11.44   measured 11.44 Hz   (CC1 = 0 and 127)
+
+Exact at both mod-wheel positions, 750 frames each, 0.27 Hz resolution. **The
+pan swing is unchanged across the pair** — 27.05 → 26.74 dB at CC1 = 0, 66.19 →
+65.21 at 127 — so only the rate moved, which makes the comparison one-variable in
+fact rather than by assertion. One disc, no cross-card drift.
+
+**This is the first rate this project ever chose that has been verified as the
+rate the machine produces.**
+
+The source asked for 11.50 Hz and got 11.44, because the grid cannot express
+11.50. That reads as an honest quantisation **only because the writer now reports
+the rate it achieved**; under the old behaviour the same 0.06 Hz would have sat
+invisibly on top of a 2.6 Hz error.
+
+### The caveat that stood since the sweep is discharged
+
+The table was recovered from one preset, one voice. Four spot bytes on a
+different bank, a different preset, a different voice, and a **different LFO
+shape** (triangle against the sweep's sine):
+
+    byte  30   table  1.37   panel  1.37     byte 100   table 10.07   panel 10.07
+    byte  70   table  4.88   panel  4.88     byte 120   table 15.56   panel 15.56
+
+plus byte 64 read incidentally at 4.12 — the June anchor. **The mapping is a
+global property of the LFO**, not per-voice and not shape-dependent. Four points
+rather than a second sweep, on the reasoning that if it were per-voice, four
+would show it as clearly as 128.
+
+### The reader's refusal fired in the wild, first time out
+
+The initial spot-check run returned `??.??????..?.???.???.??` and reported
+MISMATCH on all four bytes. The page remembers its cursor field, and an earlier
+mis-navigation had left the cursor on **Delay** — so the reader read that field,
+met glyphs it had no template for, and **reported `?` rather than inventing
+digits.**
+
+That is exactly the property it was built for, and the failure it prevented is a
+specific one: returning four plausible numbers from the wrong field, which would
+have disagreed with the table and read as *the caveat failing* rather than as a
+navigation fault. **A guess would have been indistinguishable from a finding.**
