@@ -10198,3 +10198,226 @@ near its peak, a crossing-based statistic degrades faster than an extremum-based
 one**, because every crossing is referred to a peak that is itself moving. Pick
 the statistic from the material, not from convention — 10-90% is the conventional
 choice and it was the wrong one here.
+
+## §106 — A window that assumed a plateau, and a probe that could be wrong (2026-09-11)
+
+A cross-machine comparison needs the two machines measured over the *same part
+of the note*. The obvious window — "past the attack, inside the hold" — was
+agreed on both sides before anyone looked at an envelope. It was wrong, and the
+replacement proposed for it was wrong in the opposite direction.
+
+Six presets, five notes, five velocities, held 2.0 s, analysed over 0.35–1.35 s
+after note-on. One preset (slot P001 on the bench) has **no steady state at
+all**: it swells to its peak at 2.0 s and then decays continuously. Level across
+that window, relative to the note's own peak:
+
+    note   window start   window end   change
+      24      -18.95         -12.96     +5.99
+      38      -19.17         -11.25     +7.92
+      52      -26.70          -7.23    +19.47
+      65      -10.71          -8.30     +2.41
+      79      -15.66         -10.12     +5.54
+
+**A band vector averaged over that is a band vector of a ramp**, and a residual
+between two machines each somewhere on its own ramp is dominated by where on the
+ramp each landed — the exact artefact a residual exists to avoid.
+
+The proposed fix, 3.5–4.5 s, was **worse**. Tilt across a 1.0 s window on the
+worst cell, by start time:
+
+    0.35-1.35   +16.27 dB     <- the original: on the rising ramp
+    1.50-2.50    +1.70
+    2.50-3.50    +0.93        <- flattest
+    3.00-4.00    -5.85
+    3.50-4.50   -11.76 dB     <- the proposal: on the decay, and steeper
+    7.00-8.00    -1.50
+
+**The flattest window is at the peak**, which is the opposite of where "past the
+attack" looks by habit. Two wrong windows for one note, and the reason both were
+wrong is a single unexamined assumption: that the material has a plateau. Nobody
+checked before designing a measurement that needed one.
+
+### The probe has to be able to come out wrong
+
+The suspicion when the 2.0 s hold showed peaks at 1.90–2.00 s was
+§ATTACKTRUNCATION — that the peak was not at 2.0 s but merely cut off there. The
+check was **one cell at HOLD 10.0**, ten seconds of hardware:
+
+    true peak      2.009 s          (the HOLD 2.0 reading was 2.003 s)
+    10% -> 90%     0.269 -> 1.396 s
+    decay          -32 dB by 8 s
+
+So the peak was real and the 2.0 s figures were not truncated. But the value of
+the probe was not the answer; it was the **hold it was taken at**. Probing at
+6.0 s would have confirmed the peak at 2.0 s and said nothing whatever about
+whether 6.0 s was itself a ceiling. **A bound tested at its own value always
+confirms itself.** Go somewhere the answer can be wrong, or the check is
+decoration.
+
+### The window is chosen per preset, by a rule fixed before the data
+
+No single absolute window is flat for all six: the others peak in 17–142 ms and
+decay from there, so a window flat for one is steeply tilted for another. Tilt
+matters because it **amplifies any small timing difference between the machines
+into a large residual**.
+
+    For each preset, over 1.0 s windows on a 0.25 s grid inside the hold, take
+    the one minimising  max(mean |tilt| side A, mean |tilt| side B)  across that
+    preset's cells; ties to the earlier window.
+
+**Min-max, not min-mean** (mpc2emu): the artefact scales with whichever side is
+steeper, so the quantity to bound is the worse one. Min-mean will trade one
+side's flatness for the other's steepness and call it an improvement.
+
+**Both sides, not one** (mpc2emu): tilt is an envelope property, not a filter
+property, so reading the other machine's envelope to choose a window leaks
+nothing about the thing under test — while choosing on one machine leaves the
+other's tilt unbounded.
+
+**The level guard is not optional.** Pure tilt-minimisation has no notion of
+*why* a window is flat, and the failure is reachable: on the probe cell the
+7.00–8.00 s window has only −1.50 dB of tilt, flatter than everything except
+2.50–3.50, and it is flat **because it is 32 dB down and approaching noise**. A
+candidate is rejected unless every cell on every side has window RMS at least
+12 dB above that cell's own pre-roll floor — the same floor-relative test the
+capture harness uses for silence, and for the same reason: a threshold
+calibrated against a level is not a threshold. A preset that clears no window
+returns **no window**, rather than one obtained by relaxing the guard.
+
+Each side's own individually-best window is reported regardless. **If the two are
+far apart for some preset that is an envelope finding in its own right** —
+possibly a larger one than any filter corner — and the min-max must not absorb
+it silently.
+
+## §107 — What a 1/24-octave band residual can and cannot see (2026-09-11)
+
+Two machines playing the same material at the same note and velocity: subtract
+the band vectors and the material's own spectral structure cancels, along with
+every definitional choice in the analysis, **provided the choice is applied
+identically to both sides**. That is why one analyser is run by both projects
+rather than two that agree on paper.
+
+The band resolution was set at 1/24 octave because 1/6 octave is 231 Hz at 2 kHz
+and the narrowest feature this board is known to make is 108 Hz — a narrow
+feature present on one machine and absent on the other would be half-averaged
+away on *both* sides and the difference would read small. That reasoning is
+correct, and the limit it leaves can now be stated as a number rather than a
+worry.
+
+**Method**: white noise, a notch of known depth and width injected into one copy
+only, both put through the band path, peak |band residual| read off. That is
+exactly what the residual does to a feature present on one machine.
+
+    a -30 dB feature of the given width, present on one side only
+    width (oct)   bands    500 Hz   2 kHz   8 kHz
+       0.028       0.67       3.6     5.8     5.0    invisible
+       0.042       1.01      15.9    16.9    30.0    alignment-dependent
+       0.056       1.34      29.9    30.0    30.0    true depth
+       0.083       1.99      30.0    30.0    30.0
+       0.250       6.00      30.0    30.0    30.0
+
+**A feature must span about 1.35 of the 1/24-octave bands — 0.056 octave — to be
+reported at its true depth. Below ~0.7 bands it is invisible. Between the two,
+the answer depends on where the feature falls relative to a band edge**, which is
+not a property of the instrument.
+
+Since 0.056 octave is 0.039·f Hz wide, **a 108 Hz feature is faithful up to about
+2.8 kHz** and under-reported above it. The failure is a *ceiling*, not a loss of
+accuracy:
+
+    108 Hz notch      -12dB   -20dB   -30dB   -50dB
+      2000 Hz          12.0    20.0    30.0    50.0
+      3200 Hz           7.5     8.8     9.1     9.1
+      6400 Hz           2.6     2.8     2.8     2.8
+
+At 6.4 kHz a −20 dB feature and a −50 dB feature both read 2.8 dB. **Reading a
+small high-frequency residual as "the machines agree" is wrong in exactly the
+direction that matters.** Wide features are unaffected everywhere: a 1/3-octave
+feature reads true depth at 100, 400, 1600 and 6400 Hz, so a filter corner
+*moving* is always reported faithfully; only genuinely narrow resonances and
+notches hit the ceiling, and those need a high-Q setting.
+
+### The residual and the prominence finder have different limits, and not by degree
+
+A prominence measured against a 1-octave smoothed envelope has a second failure
+the residual cannot have: a feature that is **wide compared with that envelope**
+drags its own reference down and collapses. A −50 dB notch 108 Hz wide reads
+
+      at 100 Hz (±54% of centre, over half an octave):     4.2 dB
+      at 200 Hz (±27%):                                   14.3 dB
+      at 800 Hz (±6.75%):                                 44.3 dB
+
+So for a 108 Hz feature the prominence finder is trustworthy roughly 800 Hz –
+2 kHz, while the residual is trustworthy from below 100 Hz to 2.8 kHz. **The
+residual is not merely the more neutral instrument, it is the more capable one**,
+because it never touches the envelope. That is a stronger argument for making it
+primary than the one originally given for it.
+
+**And a small systematic error is not noise because it is small.** A synthetic
+−30 dB notch came back as 28.18 dB and was let through as agreement on a first
+pass. The 1.8 dB shortfall is the same envelope effect — systematic, and small
+only at that width. *Close enough* is the shape most of this week's errors wore.
+
+## §108 — Guards scoped to the wrong resource, and a check that certifies (2026-09-11)
+
+Three failures in one hour on a two-machine capture night, all the same shape:
+**a guard scoped to one resource applied to a hazard that lives on another.**
+
+**The capture harness refuses to start a second run on the same rig** — two runs
+on one rig share a MIDI port and a capture pair, and that contamination is
+undetectable afterwards, so it must be refused before the first note. Correct,
+and it does not cover the JACK **client registration**, which is server-wide. Two
+runs on *different* rigs passed the guard cleanly and wedged each other: both
+hung in the JACK socket read, wrote nothing, printed nothing — and `jack_lsp`
+from a third shell hung too, which is what showed the block was server-side
+rather than a slow client. Killing one freed the server immediately.
+
+**A bare `pkill -f 'measure.py'` crosses sessions**, because the process table is
+shared and is exactly that kind of resource. It killed two passes belonging to
+another session. And a bare pattern can match **the shell issuing it**: a
+`pkill -f 'grid6\.sh'` matched its own command line, which contained the script
+text being written, and killed the process doing the killing. Match on PIDs read
+from `ps`, with an explicit self-exclusion.
+
+**A lock scoped wider than its hazard costs what the hazard would have.** The fix
+for the registration wedge was a shared `flock`, and holding it for a whole
+six-program pass **serialised the two rigs completely** — 25 minutes of parallel
+work became 50 minutes of sequential, one side blocked three minutes with nothing
+captured. The hazard is over in the first second or two; everything after it is
+per-rig. Correct scope:
+
+    flock "$LOCK" -c "nohup python3 measure.py <rig> <tag> ... > log 2>&1 & sleep 8"
+    until ! pgrep -f "measure.py <rig> <tag>" >/dev/null; do sleep 5; done
+
+`& sleep 8` holds the lock only while the client registers, then drops it; the
+run continues unlocked. **Both directions of mis-scoping came from not asking
+what the resource actually is** — one too narrow for what it touched, one too
+wide for what it protected.
+
+### A completion check that cannot tell finished from killed does not fail — it certifies
+
+The worst of the three was local and silent. A runner reported
+
+    01:03:59 GRID_v048 attempt 1 finished
+
+for a pass that had been SIGKILLed **with zero captures written**. Its completion
+test was `kill -0` on the child, so *the process is gone* counted as *the work is
+done*. It would have handed the comparison a 30-cell velocity row containing
+nothing, labelled complete — and unlike the other two, nothing about it was loud.
+
+**Test for an artefact the work produces last, not for a process state.** The
+capture harness writes its features file only after the final program, so:
+
+    whole() { [ -f "features_$1.json" ] || return 1
+              [ "$(ls captures/$1_00*.wav 2>/dev/null | wc -l)" -eq 6 ]; }
+
+Six captures **and** the features file. The absence of that file is a fact about
+the work; the absence of a process is a fact about the process.
+
+**Related: a level spread wide enough to clip one preset and not another.** Across
+the same six presets at velocity 16 the peaks span 32.7 dB (−9.2 to −41.9 dBFS).
+At velocity 127 the loudest can reach full scale, and **a clipped capture does not
+look broken, it looks bright**, because clipping adds harmonics — which lands in a
+cross-machine residual as a timbre difference. Check peak dBFS, samples at full
+scale, and the **longest consecutive run** of them: one sample at −0.0 dB is a
+coincidence, forty in a row is a flat top.
