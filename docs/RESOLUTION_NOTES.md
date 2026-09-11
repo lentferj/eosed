@@ -10794,3 +10794,26 @@ again next time should not have a single point of failure — and **it means
 neither copy has to be canonical**, which is exactly how §105's material got
 lost: one record, no second copy, and the omission invisible until something
 started depending on it.
+
+### Addendum — when a claim dies, chase the wreckage
+
+Nine claims were refuted across two projects in one day. **Neither of the two
+real defects found came from a surviving hypothesis; both fell out of a dying
+one.**
+
+    an attack reader wrong on 130 of 130 corpus voices
+        fell out of reading ONE envelope segment wrongly, which prompted a
+        device read, which showed the two-segment structure
+
+    a board path silently merging two filter shapes into one
+        fell out of suppressing a warning, which prompted reading EVERY
+        warning, which surfaced 31 that the emitting guard forbids
+
+**A refuted hypothesis has usually moved something on the way down** — a
+measurement taken, a field read off the device, a structure inspected — and that
+residue is where both findings were. Dropping a dead claim cleanly is the tidy
+move and would have cost both.
+
+So: **when a claim is refuted, look at what the refutation touched before
+closing it.** That is an instruction, not a moral — the cost is one look and the
+alternative is discarding the only new evidence the episode produced.
