@@ -10753,3 +10753,44 @@ on one side only.
 width, detector family, and threshold.** Fixed here at **5 ms / threshold /
 −3 dB**, which gives byte 72 = 2.035 s. Quoted bare, the same capture supports
 1.73 s, 2.28 s, 3.85 s or 4.69 s.
+
+## §114 — Two ways to generalise from a sample, and only one has a cheap fix (2026-09-11)
+
+**NOT LOOKING AT A POPULATION YOU CAN SEE.** A corpus figure taken off 6 of 64
+disc images; a shape claim taken off 1 of 5 measured notes. The fix is to check
+the denominator, and **nothing in the situation prompts you to** — the number
+looks the same either way.
+
+**NOT ASKING A SESSION THAT IS HOLDING THE ANSWER.** The other five notes existed
+and were in another session's hands. This mode **exists only when two parties
+work one problem**, and its fix is a single question — *do you have the rest?*
+— which makes it the cheaper of the two to avoid and, in practice, the one
+nobody applies.
+
+The reason it is not applied: **a number arriving from a peer feels like a
+result rather than like a sample.** The first failure feels like laziness and is
+therefore guarded against; the second feels like collaboration.
+
+### The defence that held: quote measured points, not fitted parameters
+
+A fitted exponent of 2.6 was offered for the attack curve. The five measured
+notes support 1.66–2.36, so **the fit sat outside the range of the data it came
+from** while looking more precise than any of it. Restated from two columns of
+the same table —
+
+    to 10% of level   0.846 s measured against 0.246 s linear   3.44x
+    to half           1.712 s against 1.230 s                   1.39x
+    half level arrives 0.48 s late
+
+— it reproduced exactly on the other side and survives whatever curve turns out
+to fit. **A fitted parameter has freedom that two measured points do not**, and
+that freedom is what lets it land outside its own evidence.
+
+### Redundancy is correct for a list like this
+
+The seven definitional-parameter instances (§111, §113) are recorded here **and**
+in the sibling project, deliberately. A list whose entire value is being noticed
+again next time should not have a single point of failure — and **it means
+neither copy has to be canonical**, which is exactly how §105's material got
+lost: one record, no second copy, and the omission invisible until something
+started depending on it.
