@@ -10588,3 +10588,107 @@ The third is the one worth naming as a class: **a test whose discriminating
 power rests on a parameter you cannot measure more accurately than its
 sensitivity is not a test**, and the right output is to say so rather than to
 report the number it happens to produce.
+
+## §111 — Five definitional mismatches in one day, all inside shared tooling (2026-09-11)
+
+Two projects compared one instrument against another, cell by cell, using **one
+analyser run by both sides** specifically so that implementation differences
+could not land in the result. Five disagreements arrived anyway, and **not one of
+them was arithmetic**. Every one was about *what the arithmetic was applied to*.
+
+    hold unrecorded          the capture schedule was never written to the record,
+                             while the help text said it was (see §109)
+    attack_ms vs t_peak_ms   ONE function returns both; they differ by a second on
+                             the preset under test, and the agreeing one was wrong
+    offset origin            one side measured from the note onset at fixed times,
+                             the other from each note's own envelope peak
+    t90 vs t100              calibration points in one convention, the law in the
+                             other, related by a documented 0.9 that nobody applied
+    SEG0 vs the whole attack this project read one envelope segment for an envelope
+                             that rises through two
+
+**Sharing the code fixed the arithmetic and left every naming and reference
+choice untouched, and that is where all five lived.** A shared implementation
+guarantees two sides compute the same function; it guarantees nothing about which
+output field each reads, what each anchors to, or which of two conventions each
+number is in.
+
+### What made them survivable
+
+**Asking which field before comparing, not after.** The `attack_ms` / `t_peak_ms`
+pair is the sharpest: two attack numbers out of one trusted function, a second
+apart, and **the pair that agreed was the wrong pair**. Reading `attack_ms` on
+both sides gives 2.42 s against 2.69 s and reports the conversion as fine.
+Reading `t_peak_ms` gives 2.92 against 3.80 — a 30% discrepancy. It was caught
+because the other side asked which field the number came from *before* comparing.
+
+**The sign test, which is a better discriminator than any tolerance.** On
+`t_peak` the per-note differences are the **same sign on all five notes** (+325
+to +1181 ms). On `attack_ms` they change sign — one note runs 455 ms the other
+way. **A statistic whose per-note differences flip sign is not measuring the
+quantity whose per-note differences do not**, so the `attack_ms` medians
+"agreeing" was a median landing between disagreeing signs. No tolerance would
+have separated those; the sign pattern does it immediately.
+
+**Per-note comparison rather than two medians.** An across-note spread is a
+property of the preset and should reproduce on both machines. Here one side's
+spread is 206 ms and the other's 941 ms — **4.6x, deterministic on both** — and
+the rank orders disagree. A scalar law error preserves ordering and relative
+spread; this does neither, so "the law is 30% out" was never the right
+description.
+
+## §112 — An envelope with two attack segments, and a ladder that measured one
+
+`E4_VOICE_VENV_SEG0_RATE` (Atk1) is not the attack when **Atk1 LEVEL is below
+100%**: the envelope keeps rising through SEG1 (Atk2) and the peak is at the end
+of *that*. Read off the device, one preset in this set:
+
+    Atk1 rate  39   Atk1 LEVEL  43 %     <- the rise stops at 43%
+    Atk2 rate  78   Atk2 LEVEL 100 %     <- and continues to full
+
+§105's ladder is SEG0 only, so byte 39 log-interpolates to **0.580 s** against a
+**2.92 s** measured `t_peak` — a factor of five, and it very nearly went out as
+"the ladder is wrong". **One parameter was read for an envelope that has six.**
+The same shape as measuring an absence a fourth above a fundamental whose second
+series is a fourth below (§110).
+
+Composed correctly the disagreement vanishes:
+
+    Atk1 covers  0 ->  43 %:  0.580 x 0.43 = 0.249 s
+    Atk2 covers 43 -> 100 %:  5.338 x 0.57 = 3.043 s
+    total to full level                    = 3.29 s   (measured 2.92, -11%)
+
+and the −11% residual is the sample's own decay pulling the product's peak
+**earlier**, which is the predicted direction for decaying material.
+
+**The sibling project's reader had the same fault with a different signature**:
+it applied the rate slowdown to segment 1 only and span-scaled neither segment.
+The two errors partly cancel, and **cancel exactly at a knee of 45.6%**. This
+preset's knee is 43% — 2.6 points from an accidental fixed point, which is the
+only reason its number looked right. Across 666 voices in 21 banks, **every
+attacked voice is two-segment (130 of 130, zero single-segment), and 48% read
+more than 25% wrong** — 0.54x at a 10% knee, 1.61x at 68%.
+
+The justifying comment was *"ATTACK IS DELIBERATELY NOT SPAN-SCALED: it climbs
+the full range by definition."* **True of the attack as a whole and false of each
+segment** — a correct statement about the wrong unit of analysis, which is the
+same family as the four in §111.
+
+### A measurement whose subject is not named is not reproducible
+
+§105's `method` says "one preset with steady material" and **names no preset and
+no sample**. That was adequate for a standalone result and is not adequate now
+that the ladder is a cross-machine reference: it cannot be re-taken or extended
+on its own material.
+
+**Steady material can be established by measurement rather than assertion.**
+Flatten the amp envelope to a rectangle — every segment instant, every target
+100% — and whatever the level does across the hold is the sample:
+
+    preset   drift over 6 s        max ripple
+     A      -10.03 .. +4.87 dB    5.04 .. 14.38 dB    <- unusable
+     B       -1.47 .. +0.44        0.22 ..  2.65      <- steady on 3 of 5 notes
+
+Two presets chosen for an unrelated property; one is usable and the other swings
+14 dB. **Assuming either was "steady material" was a coin flip**, and the ladder
+annotation now records which one, measured, with the numbers.

@@ -3,7 +3,7 @@
  "device": "E4XT Ultra, EOS 4.70",
  "measured": "2026-09-07",
  "quantity": "byte -> observed attack time, from audio. t_peak is time from note-on to the envelope's peak (the full 0->100 traversal); rise_10_90 is the 10-90% rise. BOTH are given because 'attack time' is ambiguous between them and the difference is a factor of ~1.6.",
- "method": "one preset with steady material, Atk1 rate written over SysEx, note held and the rise measured from the recorded audio. Per-point hold and window: window ~5% of the expected rise floored at 20 ms, hold ~6x the expected time. A fixed window cannot measure a ladder spanning 0.1-12 s and a fixed hold truncates the top.",
+ "method": "one preset with steady material, Atk1 rate written over SysEx, note held and the rise measured from the recorded audio. Per-point hold and window: window ~5% of the expected rise floored at 20 ms, hold ~6x the expected time. A fixed window cannot measure a ladder spanning 0.1-12 s and a fixed hold truncates the top. MATERIAL NOT IDENTIFIED -- see RESOLUTION_NOTES 111. 'One preset with steady material' names no preset and no sample, so this ladder cannot be re-taken or extended on the material it was measured on. It was written as a standalone result and has since become a cross-machine reference, which is a load it was not documented for. Verified-steady material has since been established by measurement (amp envelope flattened to a rectangle, sample contour read directly): E4XT RAM preset P007 as loaded 2026-09-11 gives 0.22-0.71 dB of ripple over 6 s on notes 52/65/79. Use that, or re-establish the same way, for any extension.",
  "shape_ratio": {
   "rise_10_90 / t_peak": 0.619,
   "sd": 0.041,
@@ -101,5 +101,6 @@
    "rise_10_90": "7.00-7.50",
    "provenance": "measured on a DIFFERENT bank and different material from the ladder rows, with a separate script. Recorded because it sits inside the ladder's widest gap (87->96), but NOT merged into rows: this ladder's own cross-program check found byte 89 giving 10.1 s on one preset and 9.10 s on another, ~11%, so points from different material are not interchangeable with the rows."
   }
- ]
+ ],
+ "scope": "SEG0 (Atk1) ONLY, and SEG0 is not the whole attack on presets that use two attack segments. An envelope whose Atk1 LEVEL is below 100% continues rising through Atk2, so t_peak is at the end of SEG1 and this table does not predict it. Combine as 1.838 * (R(atk1) * L1 + R(atk2) * (1 - L1)) with L1 = Atk1 level. Reading this table against a two-segment attack understates it by up to 5x -- measured: byte 39 interpolates to 0.58 s against a 2.92 s measured t_peak on a preset whose Atk1 level is 43%."
 }
