@@ -10817,3 +10817,35 @@ move and would have cost both.
 So: **when a claim is refuted, look at what the refutation touched before
 closing it.** That is an instruction, not a moral — the cost is one look and the
 alternative is discarding the only new evidence the episode produced.
+
+### Addendum — a wrong lesson drawn from a misdiagnosis outlives the misdiagnosis
+
+A sibling session diagnosed an E4XT silence as cleared RAM, from `5542 kB used`
+against source banks of 6.3–15.3 MB on disk. **Only the samples a preset
+references load, not whole banks** — the eight resident presets reference
+3,510 kB, so that figure meant RAM was FULL. The preset-memory figure said the
+same: six presets dump to ~4 kB, so "5 kB used" is eight presets present.
+
+**The diagnosis was wrong. The lesson drawn from it was worse.** It was stated
+as *"a catalog answers `is the NAME there`, not `is the SOUND there`"* — and on
+this machine presets and samples do **not** survive a power cycle, so a catalog
+listing names means they *were* loaded. **The original catalog reading was
+correct.**
+
+**And this session accepted the correction and confessed to an error it had not
+made**, in writing, twice — because the correction arrived from a peer as a
+diagnosis of *this* session's work, and a plausible rule about one's own mistake
+is harder to push back on than a factual claim about the world. **It was the user
+who refuted it**, from knowing the machine: *"if it lists presets, they have been
+loaded after a power cycle."*
+
+**A general lesson extracted from a misdiagnosis is more durable than the
+misdiagnosis** — the wrong figure gets corrected when someone re-runs the
+command, but the rule propagates into other work and teaches future sessions to
+distrust a reading that was right. **So when a diagnosis is retracted, retract
+anything generalised from it in the same motion**, and check the arithmetic of a
+correction with the same suspicion as the arithmetic of a claim. A correction is
+a claim.
+
+**Both here and in the sibling tree, deliberately** (§114): the record that
+matters is the one that survives, and neither copy should have to be canonical.
