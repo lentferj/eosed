@@ -10692,3 +10692,64 @@ Flatten the amp envelope to a rectangle — every segment instant, every target
 Two presets chosen for an unrelated property; one is usable and the other swings
 14 dB. **Assuming either was "steady material" was a coin flip**, and the ladder
 annotation now records which one, measured, with the numbers.
+
+## §113 — The attack is convex, and a scalar attack time cannot carry that (2026-09-11)
+
+The E4XT's amplitude-envelope attack is **not a linear ramp**. Measured on
+material established steady by the §112 rectangle test, single attack segment
+(Atk1 level 100, no knee), Atk1 rate byte 72, times from note-on to the first
+crossing of each fraction of the plateau, 5 ms smoothing:
+
+    note    t10     t50     t90    t50/t90   implied n in level ~ t^n
+      24   0.796   1.615   2.110    0.765           2.20
+      38   0.769   1.707   2.188    0.780           2.36
+      52   0.846   1.712   2.214    0.773           2.28
+      65   0.904   1.753   2.500    0.701           1.66
+      79   0.975   1.914   2.633    0.727           1.84
+
+    median t50/t90 = 0.765, spread 0.079 across five notes
+
+    linear in amplitude  -> 0.556
+    exponential approach -> 0.301
+    MEASURED             -> 0.765     convex: slow start, accelerating finish
+
+**A sibling project measured a conversion target's ramp at 0.500–0.558 over four
+rungs — linear.** So the two machines rise by different functions, and the
+E4XT spends ~77 % of its time-to-t90 reaching half level where a linear ramp
+spends 56 %.
+
+### The consequence is structural, not a tolerance
+
+A converted format that carries **a time** can match the endpoints and cannot
+match the middle. On a 3.5 s attack the E4XT is at 13 % of level where a linear
+ramp is at 29 %, and reaches half level about half a second later. **That is an
+audible difference no value of the time parameter can remove**, and it belongs
+beside "the target has no envelope key-follow" and "`DECAY1` has no range left"
+as a limit of the target format rather than as a conversion error.
+
+### It also explains a detector disagreement that looked like a defect
+
+Threshold-crossing and argmax disagree by **1.69x** on the same capture — 2.28 s
+against 3.85 s. On a straight ramp every sane detector lands near the same
+place. **On a convex rise there is no knee, so the two families are measuring
+genuinely different points of the curve and must disagree by an amount set by
+the curvature.** The 1.69x is the curvature reported in the units of two
+conventions; it is not noise and not a bug in either detector.
+
+### Measurement scale is a parameter of "steady", not just of the detector
+
+Material called steady at 0.22–0.71 dB of ripple — RMS over 0.2 s windows —
+swings **±1.5 dB** at the 5 ms the detector actually uses. **The figure was right
+for the window it was computed over and wrong for the window that consumes it.**
+Not a different definition: the same definition at a different *scale*.
+
+A threshold set below that swing is crossed by a ripple peak during the rise and
+fires early by construction, which is what a −0.1 dB rule did here. **The
+threshold must be chosen for the noisier side's material**, exactly as a window
+must be chosen by min-max across both machines (§109) — or the rule is well posed
+on one side only.
+
+**So an attack time is quotable only with three things attached: smoothing
+width, detector family, and threshold.** Fixed here at **5 ms / threshold /
+−3 dB**, which gives byte 72 = 2.035 s. Quoted bare, the same capture supports
+1.73 s, 2.28 s, 3.85 s or 4.69 s.
