@@ -10421,3 +10421,170 @@ look broken, it looks bright**, because clipping adds harmonics — which lands 
 cross-machine residual as a timbre difference. Check peak dBFS, samples at full
 scale, and the **longest consecutive run** of them: one sample at −0.0 dB is a
 coincidence, forty in a row is a flat top.
+
+## §109 — Choosing an analysis window, and three rules that were wrong (2026-09-11)
+
+A cross-machine band residual is computed over a 1 s window inside a held note.
+Where that window sits is a methodological decision, and on this campaign
+**every preset's window moved when the rule changed** — so the choice is not a
+detail, it is a named decision with a date and a reason.
+
+Three rules were proposed. The first two were defective and **the defects were
+opposite**, which is the useful part.
+
+**TILT — minimise the tilt of the smoothed LEVEL envelope across the window.**
+Independent of the comparison statistic, so selection cannot bias the floor.
+That independence is the property worth keeping. But **the residual is computed
+on the SPECTRUM**, and during a filter sweep the level can be flat while the
+spectral content moves as fast as the filter does. On a preset with
+`filter_env_cents = -8936` over a 1.92 s decay, the tilt rule chose the window
+whose repeat-pair spread is **0.971 dB when 0.075 was available 1.75 s later** —
+a factor of thirteen, and close to the worst window on offer.
+
+**REPEAT-PAIR — minimise the measured band difference between two captures of
+the same stimulus.** Right quantity, and it breaks the independence: **that
+difference IS the floor.** Minimising it over ~20 candidate windows takes the
+minimum of twenty noisy floor estimates, which sits well below the true floor,
+so every residual is judged against an optimistically small denominator and
+significance is systematically overstated. The mirror of the known
+one-pair-understates-spread trap, done on purpose. Rejected (mpc2emu).
+
+**DRIFT — spectral movement WITHIN one pass.** Right quantity, independent:
+a sweep in progress is visible as the spectrum moving inside a single capture,
+so no second pass is touched.
+
+    tilt          level, within pass     independent, WRONG quantity
+    repeat-pair   spectrum, across       right quantity, BIASES the floor
+    drift         spectrum, within       right quantity, independent
+
+**Validated by scoring each rule's chosen window with a repeat pair the rule
+never saw** — validation, not selection:
+
+    preset   tilt window   drift window
+     P000      0.971  ->     0.119     8x better, the case the diagnosis was about
+     P001      0.050  ->     0.068     worse by 0.018
+     P002      0.036  ->     0.013     better by 0.023
+     P003      0.216  ->     0.230     worse by 0.014
+     P004      0.060  ->     0.056     better by 0.004
+
+**One large gain; everything else at or below the repeat noise.** The honest
+claim is "drift fixes the case the diagnosis was about and is a wash elsewhere",
+not "drift is better" — six presets with one carrying the whole difference is
+the shape that has to be distrusted.
+
+### The scores rank windows and estimate nothing
+
+Drift scores came out at **1.5 to 17.5 dB**. One preset scores **13.62 dB of
+within-window drift and repeats to 0.056 dB**, because **a deterministic sweep
+drifts hugely and repeats perfectly.** Drift predicts poor repeatability only in
+combination with timing jitter, and the rig's jitter is ±5 ms. So a drift score
+must never appear in a column adjacent to a residual.
+
+**And a high score at the CHOSEN window is a warning that was missed.** The rule
+takes a minimum over candidates and has no disqualification threshold, so
+`12.38 dB at the chosen window` means **this preset has no good window**, not
+**this window is good**. One preset scored 12.38 against another's 1.54 in output
+both sessions read as simply "the window". That is how the output is consumed
+rather than a fault in the rule, and it generalises to every campaign that uses
+it.
+
+### A guard that is documented and does not exist
+
+`measure.py --hold` help: *"Recorded in the features file so takes at different
+holds can never be compared by accident."* The record held
+`rig tag program label wav notes velocity` — **no hold.** Files captured at 2.0
+and at 6.0 were indistinguishable, on the one constant the campaign had changed
+that night. Same species as the `kill -0` completion check (§108) and worse: that
+one merely failed, this one was documented as working.
+
+**The fix has a subtlety that matters more than the fix (mpc2emu): a missing
+value must be UNKNOWN, never defaulted.** A downstream `get('hold', 2.0)` would
+read a 6.0 capture as 2.0 and **pass a guard it should fail** — converting a
+*missing* guard into a *wrong* one, which is strictly worse, because the missing
+one leaves a human checking by hand and one was. A default here is a fabricated
+measurement. Absent on either side → refuse; state it explicitly → stamp it in
+the output as ASSUMED so the assumption travels with the numbers.
+
+## §110 — A +786 cent shift, a suppressed warning, and an absence measured in the wrong place (2026-09-11)
+
+Two machines playing the same converted material were compared cell by cell.
+Three of six presets turned out to be **playing at the wrong pitch** on the
+target side — +831, +210 and +786 cents — so no cross-machine spectral
+comparison on those presets means anything.
+
+**The cause was diagnosed correctly by the converter and suppressed.** The writer
+emits, once per sample:
+
+    [WARN] '<sample>': stored at 28000 Hz, which the target cannot play.
+           It will sound at 44100 Hz -- +786 cents. Resample first.
+
+A build script called the writer directly, bypassing the sample-rate
+conformance step, and wrapped the call in `contextlib.redirect_stdout` **to keep
+the build output tidy**. Correct, specific, quantified, remedy named — and
+unreachable. Two sessions then spent an hour recovering the same fact from the
+audio of two machines.
+
+**That is a distinct failure from the rest of this week's collection.** Every
+other one was a guard that did not exist, did not fire, or fired on the wrong
+thing. **This is the only one where the system diagnosed itself correctly and was
+not allowed to say so.**
+
+### Confirming it from the audio, and why a pitch estimator could not
+
+`octave_err` from YIN disagreed across the two machines and was **not usable on
+either**: the preset sounds two layers five semitones apart, and an estimator on
+two simultaneous harmonic series locks to the lower, the upper, or a common
+subharmonic depending on which dominates its window. One side read −1
+everywhere, the other read 0, +1, 0, 0, −2 — both deterministic, neither
+meaningful.
+
+**The series themselves are meaningful.** Reading the zone map off the device —
+same sample id in both voices, root keys 67 and 72, key ranges offset by five —
+predicts a second fundamental at `f0 x 2^(-5/12)`, and it is there:
+
+    voice 0  174.73 Hz      voice 1  130.83 Hz   (predicted 130.86, -0.4 cents)
+
+and against the other machine, on both layers independently:
+
+    upper  275.39 / 174.68  =  +788.1 cents
+    lower  205.81 / 130.83  =  +784.4 cents
+    predicted from the stored sample rate:  +786.4 cents
+
+**Two series, two machines, two cents.** An envelope-modulation rate ratio
+measured earlier at 1.580 is +791.9 cents — the same shift a third time, so a
+"different modulation rate" finding and a "different pitch" finding were always
+one thing.
+
+### An absence is worth only as much as the statement of where you looked
+
+Before the zone map was read, this note's author reported **"no second series a
+fourth up — x2.5 against x2790, 61 dB down, absent rather than quieter"** and
+built a conclusion on it (*"one layer against two"*). The search was a fourth
+**above**, because the other machine's two series sit above each other. **The
+second layer is a fourth below.** The quoted number was real and was about a
+frequency where nothing was ever expected.
+
+**Writing "no second series in 233.2 ± 3 %" instead of "no second series" would
+have made the error visible inside the sentence that contained it.** A negative
+result carries its search region or it carries nothing.
+
+### Three tests that could not fail informatively
+
+All three produced a confident number from data that could not carry it, and
+none presented as an error — only as a value.
+
+- **Aliased**: an envelope modulation near 1.1 Hz sampled at 0.5 s steps — 1 Hz
+  Nyquist. Reported as a measurement.
+- **Too short a record**: the same quantity estimated over a 4 s window at
+  0.27 Hz — **1.1 cycles**. The resulting 91 % scatter was at least partly the
+  estimator and could not be separated from the signal. Fixed by re-capturing at
+  a 20 s hold; not by argument.
+- **Hypersensitive discriminator**: a predicted beat rate in which **0.6 cents of
+  tuning error moves the prediction by 41 %**. The rival hypotheses could not be
+  separated by any measurement available, because the discriminator depends on a
+  quantity below what can be independently established.
+
+The third is the one worth naming as a class: **a test whose discriminating
+power rests on a parameter you cannot measure more accurately than its
+sensitivity is not a test**, and the right output is to say so rather than to
+report the number it happens to produce.
