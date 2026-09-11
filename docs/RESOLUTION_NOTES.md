@@ -10847,5 +10847,14 @@ anything generalised from it in the same motion**, and check the arithmetic of a
 correction with the same suspicion as the arithmetic of a claim. A correction is
 a claim.
 
+**The corollary, which belongs to the sender rather than the receiver: state the
+arithmetic, not the conclusion.** The correction arrived as *"your reading was
+wrong, the RAM is empty"* rather than *"5542 kB used, against this — check me."*
+**A correction delivered as a conclusion removes the recipient's ability to
+refuse it**: the denominator error could not have been caught here because it was
+never shown. So the receiving failure (accepting a claim about one's own work)
+and the sending failure (sending a verdict instead of a calculation) are two
+halves of one exchange, and only the sender can fix the second.
+
 **Both here and in the sibling tree, deliberately** (§114): the record that
 matters is the one that survives, and neither copy should have to be canonical.
