@@ -87,3 +87,32 @@ def test_no_tracked_text_io_without_an_explicit_encoding():
         if lines:
             offenders[str(path.relative_to(ROOT))] = lines
     assert not offenders, f"open() in text mode without encoding=: {offenders}"
+
+
+def test_every_tracked_python_file_actually_compiles():
+    """`ast.parse` is not enough: it builds a tree without enforcing rules the
+    compiler applies afterwards.
+
+    Found by a sibling project 2026-09-14. They inserted a declaration above
+    `from __future__ import annotations` in six files, verified with
+    `ast.parse` over all six, and got zero failures — because a misplaced
+    `__future__` import is a *compile*-stage error, not a parse-stage one:
+
+        ast.parse(src)            -> accepts it silently
+        compile(src, f, "exec")   -> SyntaxError: from __future__ imports must
+                                     occur at the beginning of the file
+
+    Their framing is the one worth keeping: **a check adjacent to the thing it
+    guarantees will pass while that thing is false.** The other checks in this
+    file parse, so they inherit the same blind spot — a tracked file that cannot
+    be imported would satisfy every one of them. This closes it by asking the
+    question the runtime actually asks.
+    """
+    broken = {}
+    for path in _tracked_python():
+        src = path.read_text(encoding="utf-8")
+        try:
+            compile(src, str(path), "exec")
+        except SyntaxError as exc:
+            broken[str(path.relative_to(ROOT))] = f"line {exc.lineno}: {exc.msg}"
+    assert not broken, f"tracked file does not compile: {broken}"
