@@ -10858,3 +10858,65 @@ halves of one exchange, and only the sender can fix the second.
 
 **Both here and in the sibling tree, deliberately** (§114): the record that
 matters is the one that survives, and neither copy should have to be canonical.
+
+## §115 — Test hardest the part you are most confident in (2026-09-14)
+
+Written after building a static invariant for a sibling project and getting a
+false positive in the one check I had reasoned about least.
+
+The invariant routes every modal dialog through a single module, so that a
+dialog is interceptable in a test. Two halves: a **call** check (is a modal
+constructed or statically invoked?) and an **import** check. The import check
+exists because `from x import QMessageBox as MB` renames the symbol and
+`MB.warning(...)` then matches nothing in the call scan — **the import line is
+the only place the real name still appears.**
+
+It was verified against 21 cases before handover. **Every one of them was a
+call.** The import check got four straightforward cases and no adversarial
+thought at all. It is the check that produced the false positive.
+
+**That is not bad luck. I tested the part I had thought about.** Confidence
+marks where the reasoning has already been done and therefore where the testing
+feels redundant — which makes it exactly where the untested reasoning lives.
+A sibling put it as: *the memo I keyed carefully and the assertion I wrote
+loosely; the literal I pinned and the substring match I did not think about; the
+perturbation I designed and the check that it perturbed anything.*
+
+### A defence usually creates a false-positive class, and it is worth naming
+
+The import check cannot distinguish **importing a modal to subclass it** from
+**importing one to raise it** — the import line is identical. So the alias
+defence necessarily flags every dialog the project legitimately subclasses.
+
+Traced rather than assumed, because the obvious explanation was wrong: a base
+class is an `ast.Name` in `ClassDef.bases` and **never** an `ast.Call`, so
+`class SettingsDialog(QDialog)` could not have reached the call check at all.
+Both of us had attributed it to the wrong half.
+
+**And the exemption list that fixes it must not carry two rationales under one
+label.** `NOT_A_MODAL` holding both `QDialogButtonBox` (genuinely not a modal)
+and `QDialog` (genuinely is one, but subclassed) invites the next person to
+extend it by matching the label rather than the rationale. Renamed to say what
+it means — names whose import is legitimate outside the seam — with the reason
+written beside each entry.
+
+### Three smaller rules from the same exchange
+
+**Guard the seam, not just the listing.** "No modals outside the seam" is
+satisfied by there being no modals *anywhere*, which is indistinguishable from a
+healthy tree until the first one is added. So assert the seam module exists
+**and actually contains a modal.** Same species as asserting a file listing is
+non-empty (§108), one level up.
+
+**A ratchet must fail in both directions.** `BASELINE = 48` failing upward on a
+new violation is the obvious half. Failing **downward on a stale baseline** —
+someone removes a site without lowering the number — is the half usually left
+out, and without it the number quietly stops meaning anything. A stale
+threshold is a stale stub (§111) wearing different clothes.
+
+**Deliver a check in the shape of the harness that will run it.** A 204-line
+invariant written pytest-shaped, handed to a project whose suites are scripts
+with a `main()` and an exit code, **ran and exited 0 having done nothing** — a
+file whose entire purpose is catching checks that cannot fail, delivered in a
+form that could not fail. One question before writing would have caught it, and
+running it caught it in ten seconds where reading it had not.
