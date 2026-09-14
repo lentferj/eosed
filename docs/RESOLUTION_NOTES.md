@@ -12021,3 +12021,151 @@ back, because their checklist carries the quarter-cycle version.
 us needed. **The agreement is what made the disagreement worth chasing** — two
 implementations that agreed everywhere would have proved only that we had
 written the same code twice.
+
+## §122 — The firmware route is open after all, and it settles 0.0565 vs 0.0581 (2026-09-14)
+
+§116 concluded that the EOS OS images are packed and the unpacker is not in them,
+and inferred the decompressor lives in the sampler's boot ROM. **The first half
+stands. The inference was wrong, and Jan's `EOS/` directory is why.**
+
+### The boot loader is on disk, and it is plaintext
+
+`EMU_FLASHPREP_OMNIFLOP.IMG` is not an OS image. It is **"Ultra FLASH Prep
+v1.0"**, and the discriminator of §118 calls it instantly:
+
+```
+                      entropy   256-byte windows < 6.0
+  EOS 4.70 OS image     7.19             1.6%      packed
+  FLASH Prep image      5.05            99.4%      PLAINTEXT 68k
+```
+
+It contains two complete programs, each with its own runtime copy: a FLASH Prep
+utility at file 0, and the **EOS Primary Loader, "Version 01f05"**, from file
+`0x15c34`. Strings: `Erasing boot FLASH...`, `Searching for OS...`,
+`Download OS from MIDI?`, `Burn to flash?`, `Verifying csum: 0x%08.8x`, the whole
+floppy error table, and the 68k exception handlers.
+
+**The load bias is exactly 0x15c34**, confirmed rather than fitted: `pea 0x184bc`
+maps to file `0x2e0f0`, which is `"Please insert disk %d."` on the nose.
+
+**And the target is 68020-class, not 68000** — `DIVU.L`, `EXTB.L`, `TST.L An`
+are present, and undecodable words fall from 4504 to 3667 when the ISA is
+corrected. k2kremote warned that a later-ISA decode accepts what the chip cannot
+run; this is the inverse and equally bad, since a 68000 decode desynchronises on
+every 68020 instruction.
+
+### The container's magic carries a compression flag in its low nibble
+
+```
+  0x76543210   plain     the loader writes the label "none"
+  0x76543211   packed    the loader writes the label "Lz77"
+```
+
+Both constants appear in the loader as an adjacent compare pair, and the packed
+branch stores the bytes `4C 7A 37 37 0A`. **The scheme is E-mu's own and they
+call it Lz77.**
+
+### But literals are entropy-coded, which is why nothing decoded it
+
+A crib test settles the shape without reversing anything. The OS shares its
+runtime with the loader, so the decompressed image must contain the same
+strings; under LZ77 a string's *first* occurrence is emitted as literal bytes, so
+those bytes must survive in the compressed stream.
+
+```
+  crib                        in the plain loader   in the packed 4.70 payload
+  "Fatal: Bus Address error"        found                   absent
+  "0123456789abcdef"                found                   absent
+  "Floppy CRC Error"                found                   absent
+  ... and absent at gaps of 1, 2 and 3 bytes per character
+```
+
+**So literals are not bytes.** "Lz77" is LZ77 **with entropy-coded literals**,
+which is why 36 byte- and bit-aligned LZSS variants, LZW at four settings, and
+every standard library failed, and why the payload entropy is 7.19 rather than
+the ~6.5 a byte-literal LZ77 of 68k code would give.
+
+**The decompressor was not found in the FLASH Prep image.** Searched, at both
+68000 and 68020: pointer-subtract match copies (0 of 52 byte-copy loops have
+one), ring-buffer indexed copies (12 found, all strcmp/checksum/search), window
+masks (the 4095/8191/2047 constants are all hardware registers or IEEE-754
+exponent masks), and canonical-Huffman decode loops. **That is a statement about
+the idioms searched, not a proof of absence** (§110).
+
+### The 4.62 OS image is NOT packed, and that is the way in
+
+`462prep.zip` uses an **older container** — magic `0x12345678`, 24-byte ASCII
+banner, length in 512-byte sectors at +0x1c, checksum at +0x20 — and it is
+**uncompressed**:
+
+```
+  EOS 4.62 payload   1,244,160 bytes   entropy 6.34   42% of 4 kB windows < 6.0
+  strings: "Scanning AKAI device", "Akai S1000 Volume", "S3000 preset",
+           "Empty file", and the OS's own vocabulary --
+           Preset x76, Sample x82, Voice x30, Filter x14, Envelope x6
+```
+
+It disassembles as clean 68020 with consistent absolute addressing. **This is a
+plaintext EOS operating system**, and it is the substrate mpc2emu's scanner was
+built for and never had.
+
+### The table, and what it settles
+
+A vectorised log-linear run search (control: 400 kB of noise, no hit at any
+length) finds a **128-entry u16 big-endian table at payload offset `0x0edd56`**,
+descending 65535 → 4, a 16384:1 span. 128 entries is one per MIDI parameter byte.
+
+```
+  byte range    log-slope per entry      r2
+      0-128           0.06224          0.98950
+       0-20           0.12824          0.86542
+      20-60           0.05964          0.99941
+     60-100           0.05638          0.99994   <- the range ours was fitted over
+    100-128           0.07775          0.98815
+```
+
+**Our two candidate laws, and the firmware's answer:**
+
+```
+  ENV_RATE_SWEEP_K   0.0565   fitted from captures over bytes 60..100
+  ENV_RATE_K         0.0581   the time-alone law
+  firmware, 60..100  0.05638
+                              -> -0.2% from 0.0565,  -3.0% from 0.0581
+```
+
+**0.0565 is the one. The 2.8% disagreement that "a table would settle and we
+could not" is settled, and it went the way the sweep-fitted constant said.**
+
+**And the table is not a single exponential.** r² is 0.99994 over 60–100 and
+0.9895 over the whole range; both ends are steeper. **Our law is right exactly
+where it was fitted and wrong outside it** — which is a firmware-side account of
+§105's "not to be read below ~2 s without a re-take", arrived at independently
+of the measurement that prompted that warning.
+
+### Three caveats, all load-bearing
+
+**This is 4.62 and the bench runs 4.70.** The 4.70 image is packed and unreadable,
+so this is a cross-check against a neighbouring version, not a reading of the
+firmware we are measuring.
+
+**The table's identity is inferred from shape, not proven.** E-mu publish no
+anchors, so nothing here matches a known value the way s3ked's four Akai integers
+did. 128 entries, monotone, log-linear, at the right slope is consistent with an
+envelope rate table and is not proof it is one. mpc2emu's caveat is the right
+one: **a hit is a candidate, not a table** — confirm by changing the parameter on
+hardware and predicting an entry.
+
+**A table says what the machine intends; the captures say what left the
+converters.** They agree here to 0.2%, which is the outcome that needs the least
+explaining and therefore the most care. Recorded in
+`docs/data/eos462_env_rate_table_candidate.json` with its provenance and every
+caveat attached to the data rather than to the prose.
+
+### A second table, deliberately not interpreted
+
+A 128-entry saturating curve sits immediately after it at `0x0ede58`: 38% of full
+scale at 10% of index, 97% at 50%, strongly concave. It is tempting to read that
+against §113's convex attack. **It is not being read that way**, because nothing
+identifies what it is — a velocity curve, a volume law, a pan law and an envelope
+shape would all look like this, and the day already contains one fork built on an
+effect that turned out not to exist.
