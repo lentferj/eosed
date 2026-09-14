@@ -11773,3 +11773,80 @@ same way: **change the detector and see whether the floor moves.** A machine's
 minimum attack time does not care about the smoothing width; a detector's floor
 is roughly proportional to it. One sweep of the analysis parameters over
 captures they already hold separates them, with no hardware.
+
+### §121 addendum 3 — the mechanism is carrier leakage, and a pure tone is NOT immune
+
+mpc2emu's rule — *build a comparison whose answer you already know into the
+run* — has a free instance in every capture this project takes: **a played
+note's pitch is fixed by the note number before anything is measured.** It cost
+nothing to run against today's own wavs, and it corrects §121's stated
+mechanism and addendum 2's advice to a sibling.
+
+**What it found first.** The preset sounds **one octave below** the note number
+— −1198, −1221, −1218, −1209 cents at notes 28/40/52/64, i.e. a consistent
+octave with the note-to-note ratios equal-tempered to within 1% (1.974, 2.003,
+2.011 for octave steps). So the rate-scaling assumption is confirmed rather than
+asserted. **And note 16's fundamental is therefore ~10 Hz** — below the analysis
+floor, which is why its ratio came out at 8× rather than 16×: the peak found
+there was a harmonic.
+
+**Which makes the real mechanism visible.** A 10 Hz tone measured with a 5 ms
+RMS window is measured over **0.05 of a cycle** — the "envelope" is tracking the
+waveform, not the envelope. Tested on a synthetic pure tone, constant amplitude,
+**no modulation of any kind**:
+
+```
+   f0 (Hz)   cycles per 5 ms window   max/min swing of the 5 ms envelope
+     10.3            0.052                     20.57 dB
+     20.6            0.103                     14.51
+     41.2            0.206                      8.32
+     82.4            0.412                      1.79
+    164.8            0.824                      1.51
+    329.6            1.648                      0.67
+   1046.5            5.232                      0.26
+```
+
+**That is the same ripple-versus-pitch curve the twelve real presets showed, on
+material with nothing to modulate.** And with the window scaled to the period —
+constant cycles per window — the swing is flat at 1.51 dB across every pitch.
+
+So §121's mechanism was stated one level too specific. It is not that the
+sample's own amplitude modulation stretches with playback rate (that is real and
+present, but it is not needed). **It is that the detector's window spans a
+note-dependent number of carrier cycles, and below about one cycle the carrier
+leaks into the envelope and its peaks cross a −3 dB threshold early.** At 10 Hz,
+**67% of 5 ms windows sit above the −3 dB line** with no attack in progress at
+all.
+
+**The correction to addendum 2, and it is the one that matters for the sibling.**
+s3ked's null was measured on a looped pure tone at MIDI note 84 — about
+1046 Hz, **5.2 cycles per 5 ms window, 0.26 dB of swing**. Their subject was
+immune, and addendum 2 said so, but **for the wrong reason**: not because it was
+a pure tone, because it was a HIGH one. A pure tone at 41 Hz shows 8.3 dB of
+swing and is fully exposed. Their conclusion survives; the generalisation drawn
+from it does not, and "use a clean tone" would have been the wrong lesson to
+carry away.
+
+**The rule, in its correct form:**
+
+> **An envelope detector's window must span a fixed number of carrier cycles,
+> not a fixed number of milliseconds.** A ladder across notes changes the
+> carrier period at every rung, so a fixed window measures a different quantity
+> at each — and the bias it introduces varies with note, which is
+> indistinguishable from a note-effect.
+
+This is machine-independent and material-independent. It applies to the AKAI,
+the K2000 and the MPC exactly as it applies here, and it applies to pitch
+detection as much as to envelope detection — which is where VinSamLib had
+already routed the weaker version.
+
+**And the free check that found it should be standing practice.** Every capture
+this rig makes contains a quantity whose true value is known a priori: the
+pitch of the note it played. Checking it costs one FFT, needs no second
+measurement to compare against, and validates sample rate, wav header, analysis
+scaling and tuning in one number. mpc2emu reports it is what caught a sibling's
+hardcoded 44100 against a 48000 rig — a carrier read as 961 Hz where the note
+number said 1046.50.
+
+**Two measurements agreeing is much weaker than one measurement matching a value
+that was never measured**, and only the second kind is free.
