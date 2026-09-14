@@ -13288,3 +13288,74 @@ unrelated accumulator at `0x5fcca` uses the same `base + mod>>5` idiom), so a
 32x-finer modulation store is a firmware-wide convention rather than an envelope
 quirk. The routine that computes a cord's contribution from source x amount was
 not located.
+
+## §131 — The zone selector breaks voice-parameter addressing; §130 and half of §125 are retracted (2026-09-14, live)
+
+Jan, on §130's claim that three parameters "resist writing over the editor
+protocol": *"that would be kind of catastrophic — can you recheck?"* **It is
+retracted. Nothing resists writing. The cause was a selector this project was
+setting itself.**
+
+### The A/B
+
+Same preset, same voice, same values, same session — the only difference is
+whether `SAMPLE_ZONE_SELECT` (id 226) was set before the writes:
+
+```
+  WITHOUT zone-select                    WITH zone-select (226 = 0)
+    cord11 SRC  wrote 35 -> read  35 OK     wrote 35 -> read 255  IGNORED
+    cord11 DST  wrote 56 -> read  56 OK     wrote 56 -> read 255  IGNORED
+    FTYPE       wrote  2 -> read   2 OK     wrote  2 -> read   0  IGNORED
+    FMORPH      wrote 120 -> read 120 OK    wrote 120 -> read 120 OK
+```
+
+**Selecting a zone makes voice-level ids unaddressable** — writes are silently
+dropped and reads return fixed junk (255 for the cord fields, 0 for FTYPE) —
+while zone-scoped and some voice parameters keep working. `E4_VOICE_FMORPH`,
+`E4_GEN_VOLUME`, the envelope rates and the cord `AMT` are unaffected, which is
+why the failure looked id-specific.
+
+### What this retracts
+
+**§130's "three parameters cannot be reliably written" — withdrawn entirely.**
+They write fine. Every failure was in a helper that called `setp(226, 0)` as part
+of its selection preamble.
+
+**§125's "`E4_VOICE_FTYPE` does not reflect the live filter" — withdrawn.** That
+conclusion came from reading FTYPE as 0 while the panel showed LP4, using a
+capture script whose selection preamble set the zone. With the zone not selected,
+FTYPE reads correctly: it reads 0 now, and the panel is on LP2.
+
+So the LP4 / LP6 measurements **could** have been driven entirely over SysEx.
+Jan set the filter type at the panel three times for no reason other than this
+bug, and §125's "set it from the front panel" rule was a workaround for a
+self-inflicted fault. **The measurements themselves stand** — the pole counts are
+unaffected, since the filter type was genuinely what the panel said.
+
+### Why it took so long to find, which is the part worth keeping
+
+**The failure was introduced midway through the day and looked like a property of
+the machine.** The FTYPE enumeration that succeeded (values 0-11, all read back)
+had no zone-select in its preamble; every later run that failed did. The
+selector was added to the helpers because zone-scoped reads needed it —
+`E4_GEN_SAMPLE`, key ranges — and then it stayed in preambles that went on to
+write voice parameters.
+
+**And the diagnosis was reached by eliminating the suspect Jan named, not by
+confirming it.** mididings was A/B'd out (identical write rates connected and
+disconnected) — and that elimination is what forced the search back onto our own
+code. **A hypothesis that is cheap to test and turns out wrong is still the thing
+that moved it**, which is the argument for testing the named suspect first even
+when it looks unlikely.
+
+**The mechanism-not-a-rule point again.** The A/B that settled it took four
+minutes and could have been run the first time a write was refused, six hours
+earlier. What made it finally happen was a user asking "recheck" — an external
+prompt, not an internal trigger.
+
+### Practical rule
+
+**Do not leave `SAMPLE_ZONE_SELECT` set when addressing voice-level parameters.**
+Select preset and voice; select a zone only around the zone-scoped reads that
+need it, and re-select the voice afterwards. Any helper that sets 226 as part of
+a generic preamble is wrong.
