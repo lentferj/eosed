@@ -13966,3 +13966,115 @@ units actually driven and converting the fitted law once is the right order, but
 a few points driven **both** ways — SysEx parameter and preset-body byte — still
 need to confirm the two paths land together before anything is fitted in byte
 units for the writer.
+
+## §137 — LFO→amplitude measured: the swing, the clamp, and the direction that was asserted backwards (2026-09-14, live)
+
+`E4B_LFO_VOLUME_FULL_DB` sat in mpc2emu's code marked UNMEASURED since July.
+Measuring it turned up three things, only one of which was the constant.
+
+### Run 1 was clipped, not measured
+
+First attempt, LFO→AmpVol at full cord depth with the unmodulated sustain at
+100%:
+
+| source | rate | peak | trough | depth | peak vs unmodulated |
+|---|---:|---:|---:|---:|---:|
+| `Lfo1~` | 20 | −4.59 | −59.35 | 54.77 | +7.70 |
+| `Lfo1~` | 35 | −4.31 | −56.16 | 51.85 | +7.99 |
+| `Lfo1+` | 20 | −4.13 | −13.85 | 9.72 | +8.17 |
+| `Lfo1+` | 35 | −4.07 | −13.89 | 9.81 | +8.22 |
+
+Every run peaks within 0.6 dB of the same value and the raw maximum is
+**−3.96 dBFS in all four**, source and rate irrelevant. That is a clamp, and it
+set the peak in every capture — so none of those depths is the modulator's.
+The error: the unmodulated level was put at full and a modulator was then asked
+to swing it *up*.
+
+**But the clamp is itself a result.** A cord can drive the amp level roughly
+**8 dB above what the envelope alone reaches**, and then it stops. That is the
+headroom budget for any LFO→AmpVol cord, and it would otherwise be discovered as
+clipping in somebody's converted bank.
+
+### Run 2: unmodulated level mid-range, amount swept
+
+Unmodulated level at SysEx 53 (~byte 67): 45.0 dB of room up to the sustain-100
+level, 49.0 dB down to the floor. Amount swept 25/50/100 so the onset of
+clipping appears in the data instead of being asserted afterwards. Depths from a
+**sine fit** to the tracked envelope, not percentiles — p97−p3 folds the
+tracker's own scatter into the depth and inflates small depths more than large
+ones (it read amount 25 about 3 dB high).
+
+| source | amount | peak-to-trough | tracker scatter | swing centre vs unmodulated |
+|---|---:|---:|---:|---:|
+| `Lfo1~` | 25 | 23.17 dB | 3.53 dB | +0.98 dB |
+| `Lfo1~` | 50 | 47.65 | 2.70 | +1.30 |
+| `Lfo1~` | 100 | *clipped* | | |
+| `Lfo1+` | 25 | 23.15 | 3.54 | **+13.08** |
+| `Lfo1+` | 50 | *clipped* | | |
+| `Lfo1+` | 100 | *clipped* | | |
+
+### The two sources have the same swing and differ only in where it sits
+
+23.17 against 23.15 dB at amount 25 — the same number. The *centre* differs:
+`Lfo1~` centres the swing on the unmodulated level (+0.98 dB), `Lfo1+` centres
+it half a depth **above** it (+13.08 against a half-depth of 11.6).
+
+At a positive amount, therefore:
+
+- **`Lfo1+` (97) swings upward.** The peak rises a full depth above the
+  unmodulated level and the trough barely moves. It costs the whole depth in
+  headroom, not half, and clips any zone near full scale — which is what broke
+  run 1.
+- **`Lfo1~` (96) swings symmetrically**, costing depth/2 upward.
+
+mpc2emu's `lfo_volume_depth_to_amount` docstring asserted the *downward* reading
+from 2026-07-28 until 2026-09-01, when the assertion was found to rest on
+nothing. It is now measured, and it was **backwards for both sources**.
+
+### The depth law, and a question it raises about §133
+
+Peak-to-trough is proportional to amount within 3% (0.927 dB per amount unit at
+25, 0.953 at 50), extrapolating to **≈95 dB peak-to-trough at full amount**.
+
+§133 puts cord modulation full scale at 132 bytes of destination field, measured
+on a different destination. At §136's 0.7618 dB/byte that predicts **100.6 dB**.
+Measured is 5% low, and the obvious explanation does not cover it: detector
+smearing at window/period 0.143 attenuates a sine by **1.3%** (−0.11 dB),
+computed from the Hann transform rather than guessed. So ~1.3 of the 5 points is
+smearing and ~4 is not. What remains is either the 1.3% uncertainty on dB/byte or
+**cord amounts scaling differently per destination** — §133's 132 bytes was
+measured into a *rate* field and this is a *level* field, and nothing establishes
+the scaling is shared. That is a live question for any converter: one
+modulation-full-scale constant for all destinations, or one per destination.
+
+For a writer: **0.95 dB peak-to-trough per unit of cord amount with `Lfo1~`**,
+measured at amounts 25 and 50, extrapolated above. Never amount 100 with
+`Lfo1+` from a normal sustain level.
+
+### A confound that was real in shape and inert in fact
+
+Cord 2 on P009 is `Lfo1~ → Pitch`. Changing the LFO rate drives it too, and a
+pitch modulation walks the carrier out of a **fixed-bin** detector, which reads
+as amplitude loss with nothing in the output looking wrong. Its amount was
+already 0, so run 1 was not corrupted — but the measurement had no way of knowing
+that until it looked. Read a shared modulator's other destinations before
+changing it; zero and restore them.
+
+### What the constant was actually for — nothing
+
+mpc2emu grepped it on being asked what it meant: `E4B_LFO_VOLUME_FULL_DB` is
+referenced by no reader, writer or codec, because **the E4B writer emits no
+LFO→AmpVol cord at all**. It was not a stale constant, it was a missing feature:
+`LfoVolume` is non-zero on 13,987 of 82,581 corpus instruments (16.9%) and all
+of it is silently dropped — a class no diagnostic can see, because nothing in the
+path reads the field.
+
+The general form is mechanically findable, and mpc2emu built the audit: enumerate
+every leaf tag real corpus files carry, check whether its name appears anywhere
+in the reading path, rank by how many files carry a non-modal value. 174 distinct
+tags, **114 never mentioned**, 69 of those never varying (harmless defaults). The
+largest survivor is a **pitch envelope** — three tags, 7,238 instruments with
+non-default values, and no pitch-envelope field in the data model at all.
+
+**The question that found it was "what does this constant mean?", asked about
+something that had looked maintained for months.**
