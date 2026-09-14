@@ -13541,3 +13541,70 @@ the constraint that makes it work:
 That is materially different from "confirm the table at bytes 20-59", which is
 what the list said this morning and which would have spent a bench hour without
 separating `ENV_RATE_K` from the firmware constant.
+
+## §134 — The rate law measured without the table: it is piecewise, and neither constant is right everywhere (2026-09-14, live)
+
+The outstanding check from §132/§133, run as specified: set a rate byte, measure
+`t90`, set another, measure again, take the ratio. **No table, no cord, no fit** —
+audio and byte numbers only. Two pairs, each inside one of the table's piecewise
+segments. P017, flat noise, note 72 root-matched, every rung measured twice.
+
+```
+  byte      25      55      60     100
+  t90    0.210   1.160   1.500  14.520 s     (repeat spreads 0.020/0.000/0.000/0.080)
+```
+
+**Byte 25 was quantisation-limited** at the 20 ms smoothing used for the capture —
+its two takes, 0.200 and 0.220 s, are exactly one analysis window apart on a
+0.21 s rise. Re-analysed from the same audio at finer widths:
+
+```
+   k per byte      2ms      5ms     10ms     20ms  |  table   0.0565   0.0581
+     60 -> 100   0.05649  0.05577  0.05638  0.05675 | 0.05656  0.05650  0.05810
+     25 ->  55   0.05866  0.05787  0.05802  0.05697 | 0.05999  0.05650  0.05810
+```
+
+### What it settles
+
+**The law is NOT a single constant.** At matched smoothing (2 ms, the finest the
+material supports) the two bands give **0.05649** and **0.05866** — a 3.8%
+difference, in the direction the firmware table predicts. **The piecewise
+structure found in §122 by reading the table is confirmed by direct measurement**,
+independently of the table.
+
+**And neither candidate is right across the range:**
+
+```
+  bytes 60-100   measured ~0.0564   ENV_RATE_SWEEP_K 0.0565 fits;  ENV_RATE_K 0.0581 is +2.9% off
+  bytes 25- 55   measured ~0.0587   ENV_RATE_K 0.0581 fits (+1.0%); SWEEP_K 0.0565 is -3.8% off
+```
+
+Each constant is right in one band and wrong in the other. **So "move
+`ENV_RATE_K` to 0.0565" is the wrong question** — it trades an error in the band
+holding 90% of corpus usage for a better fit in the band holding 8%. §122's
+corpus weighting already implied a piecewise law would be needed; this is the
+measurement that establishes it without reading the table at all.
+
+### The limit, and it is not small
+
+**Within-band smoothing spread is 1.8% (60-100) and 3.0% (25-55)**, against a
+between-band difference of 3.8%. The effect is larger than the spread but not by
+much, and it rests on one preset at one note. **The direction is solid — both
+bands are ordered as the table says, at every smoothing width tried — but the
+magnitude is not pinned**, and the measured 25-55 slope of 0.0587 sits 2% below
+the table's 0.0600 rather than on it.
+
+**What would tighten it**: rungs further apart within each segment (22 and 58;
+62 and 98), a second preset, and a detector whose window is chosen per rung
+rather than fixed — the fast rung needs a few milliseconds and the slow one does
+not care. All bench work, none of it hard.
+
+### The method point
+
+**This is the first measurement today that adjudicates between the two constants
+without passing through the table**, and it was only possible because §132's
+cross-check was withdrawn as circular and mpc2emu specified what a non-circular
+version would need: two rungs rather than one, both inside a single segment.
+**The corrected instruction found something the original would have missed** —
+"confirm the table at bytes 20-59" would have produced a single time, which
+cannot separate two slopes at all.
