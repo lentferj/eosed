@@ -12148,12 +12148,37 @@ of the measurement that prompted that warning.
 so this is a cross-check against a neighbouring version, not a reading of the
 firmware we are measuring.
 
-**The table's identity is inferred from shape, not proven.** E-mu publish no
-anchors, so nothing here matches a known value the way s3ked's four Akai integers
-did. 128 entries, monotone, log-linear, at the right slope is consistent with an
-envelope rate table and is not proof it is one. mpc2emu's caveat is the right
-one: **a hit is a candidate, not a table** — confirm by changing the parameter on
-hardware and predicting an entry.
+**The table's identity is inferred from shape, not proven** — but "inferred from
+shape" is a hedge where a number is available, and s3ked was right to say so.
+Counted rather than hedged:
+
+```
+  monotone 100-entry runs in the image (u16/u32, BE/LE, every alignment)   5,689
+  of those, within +-5% of the measured slope                                 42
+  distinct tables those 42 windows belong to                                   1
+```
+
+**All 42 hits are overlapping windows of a single 128-entry table, which appears
+twice in the image** — byte-identical copies 261,396 bytes apart, at `0x0edd56`
+and `0x12da6a`. Half the hits were at the second copy, which on first inspection
+looked like a rival candidate and is the same table.
+
+**So: one distinct candidate in 5,689 monotone runs, at a tolerance twenty-five
+times looser than the match actually achieved.** A log-slope test over a long
+window is far more selective than "we matched a shape" sounds: monotone runs are
+common and almost none of them grow at a specified rate.
+
+That is a stronger claim than the hedge it replaces, and it is still not proof.
+E-mu publish no anchors, so nothing here matches a known value the way s3ked's
+four Akai integers did. mpc2emu's caveat remains the operative one: **a hit is a
+candidate, not a table** — confirm by changing the parameter on hardware and
+predicting an entry.
+
+**The version caveat is the real exposure, not the method caveat.** 4.62 against
+the 4.70 on the bench. s3ked offers a mildly encouraging precedent — the S1000
+OS v4.40 and S3000XL OS v2.0 tables are byte-identical at all four anchors,
+across two machine generations — so envelope tables do seem to survive
+revisions. Mildly: two data points, a different manufacturer.
 
 **A table says what the machine intends; the captures say what left the
 converters.** They agree here to 0.2%, which is the outcome that needs the least

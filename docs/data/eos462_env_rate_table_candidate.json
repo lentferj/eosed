@@ -1,7 +1,7 @@
 {
  "table": "candidate envelope rate table, 128 entries, u16 big-endian",
  "source": "EOS v4.62 OS image, offset 0x0edd56 in the container payload (payload starts 0x200 after the 0x12345678 header)",
- "IDENTITY_IS_INFERRED": "Found by SHAPE, not by matching published values -- E-mu publish no anchors. 128 entries (one per MIDI parameter byte), monotone descending, log-linear. That is consistent with an envelope rate table and is NOT proof it is one. Confirm by changing the parameter on hardware and predicting a value from the entry.",
+ "IDENTITY_IS_INFERRED": "Found by SHAPE, not by matching published values -- E-mu publish no anchors. 128 entries (one per MIDI parameter byte), monotone descending, log-linear. That is consistent with an envelope rate table and is NOT proof it is one. Confirm by changing the parameter on hardware and predicting a value from the entry. See 'selectivity': one distinct candidate in 5689 monotone runs. Still not proof -- no published anchor exists for EOS.",
  "VERSION_CAVEAT": "This is 4.62. The bench runs 4.70, whose OS image is packed (RESOLUTION_NOTES 116/122) and cannot be read. Treat as a cross-check, not a reference.",
  "found_2026-09-14": true,
  "span": "65535 -> 4, 16384:1",
@@ -149,5 +149,15 @@
   5,
   4,
   4
- ]
+ ],
+ "selectivity": {
+  "monotone_100_entry_runs_in_image": 5689,
+  "within_5pct_of_slope": 42,
+  "distinct_tables_those_belong_to": 1,
+  "table_appears_twice_at": [
+   "0x0edd56",
+   "0x12da6a"
+  ],
+  "note": "All 42 hits are overlapping windows of ONE table present in two byte-identical copies 261396 bytes apart. One distinct candidate in 5689 monotone runs, at a tolerance 25x looser than the match achieved. Counted rather than hedged, at s3ked's suggestion."
+ }
 }
