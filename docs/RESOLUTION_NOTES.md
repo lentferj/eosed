@@ -11028,3 +11028,91 @@ technique borrowed from a sibling machine carries the sibling's platform
 assumptions silently, and the cheapest place to find that out is before the
 search, by asking what the container is, rather than after, by concluding a
 table is absent when the whole image is.
+
+## §117 — The attack constant is probably right and its recorded reason is wrong (2026-09-14)
+
+mpc2emu flagged that the sentence justifying `_E4XT_ATK_SLOWDOWN` 1.838 → 1.0
+"compares a full-level intent against a −3 dB measurement while asserting *at the
+same convention*", and that 3.552/1.960 = 1.81 sits uncomfortably close to the
+1.838 it killed. **They are right about the sentence. The constant survives
+anyway, for a different reason than the one written down, and that is a worse
+state than being wrong — the next person to revisit will check the reason.**
+
+### The sentence
+
+`intends` denotes the **full traversal** — §105 settled that from the source
+side (the source law's own 10-90%/full ratio is 0.704, not 1.0). The hardware
+figure it was compared against, 2.035 s at byte 72, is a **−3 dB threshold
+crossing** at 5 ms smoothing. Those are two conventions, and "the machine agrees
+with `intends`" asserts they are one.
+
+### How far apart they actually are
+
+From §113's five notes — measured `t90` and the implied exponent in
+`level ~ (t/T)^n` — solving for the −3 dB crossing (0.7079 of plateau) and for
+the full traversal:
+
+    note    t90     n     t(-3dB)   t(full)   full/-3dB
+      24   2.110   2.20    1.892     2.214      1.170
+      38   2.188   2.36    1.976     2.288      1.158
+      52   2.214   2.28    1.993     2.319      1.164
+      65   2.500   1.66    2.163     2.664      1.231
+      79   2.633   1.84    2.311     2.788      1.206
+
+    median full/-3dB = 1.170        (t90/-3dB = 1.115, the floor that needs no
+                                     extrapolation past the last measured point)
+    a linear ramp would give 1.4125  <- the AKAI's factor
+
+**Convexity pulls the two conventions together, it does not spread them.** So
+the Akai's 1.4125 — which s3ked confirmed to three decimals on *their* linear
+ramp — is the wrong correction to carry across, and carrying it would have
+overshot by 21%. A convention factor is a property of the *shape*, and the two
+machines do not share one.
+
+### So the 1.838 was the detector, and the arithmetic is checkable
+
+    1.838   old bias, measured against argmax t_peak
+    1.689   argmax vs -3 dB threshold on one capture (113: 3.85 s vs 2.28 s)
+    -----   1.838 / 1.689 = 1.088 residual
+
+with sd 0.050 on the 1.838 (±2.7%). **1.088 is about three of those — small,
+and not zero.** And 3.552/1.960 = 1.812 is that same detector gap showing up a
+second time, not independent evidence for a machine bias.
+
+**One trap avoided in the writing of this.** The first pass multiplied the two
+factors — 1.170 × 1.689 = 1.976 — to "decompose" the 1.838, and overshot by
+7.5%. They are not independent: argmax lands *in the plateau*, past the full
+traversal, so the 1.689 already contains the 1.170 and then some. Two factors
+that overlap cannot be multiplied, and the overshoot was the only thing that
+said so.
+
+### What the constant should be, and why the answer is a choice
+
+- Targeting the **−3 dB crossing**: `SLOWDOWN = 1.0`. Correct as it stands.
+- Targeting the **full traversal**, which is what `intends` denotes:
+  `SLOWDOWN ≈ 1.17` (floor 1.11 without extrapolation).
+
+**Nothing in the measurements picks between those.** It is a question of which
+point of the curve the conversion should match, and §113 says it cannot match
+more than one: the shapes differ so much that on a 3.5 s attack the E4XT is at
+13% of level where the source is at 29%.
+
+**The recommendation is to keep 1.0 and rewrite the reason.** Matching at half
+power is closer to where the ear weights an attack than matching the last few
+percent of the traversal — which is also the part the plateau ripple (±1.5 dB at
+5 ms, §113) makes least measurable. That is a defensible choice. It is not the
+claim currently recorded, which is that the machine agrees with `intends`.
+
+### The generalisable part
+
+**A constant can be right for a reason that is not the recorded reason, and the
+recorded reason is what the next revision will be argued from.** mpc2emu's
+instinct — flag it rather than act on it, because the Akai argument does not
+carry over — was the correct handling, and the flag arrived with its own
+arithmetic so it could be checked rather than accepted. That is the §114
+addendum working in the direction it was written for.
+
+**And a convention factor is not a constant of the domain.** 1.4125 is exact for
+a linear ramp and simply false here; the same symbol, "the difference between
+full and −3 dB", takes a different value on every ramp shape. A number that
+transfers between machines is a number whose derivation transfers.
