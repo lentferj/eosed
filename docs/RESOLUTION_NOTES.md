@@ -11530,3 +11530,24 @@ are there: it is not needed by today's question.
 measurement. The read is usually correct — theirs was — and correctness is not
 the issue. A read reports what the machine was told; only a measurement reports
 what the machine did, and every gap found today has lived in that difference.
+
+**Two corrections from s3ked, both against their own numbers.**
+
+**The 16.5 dB is a property of their subject, not of their machine** — that
+program has its velocity-to-level depth set to 20, and a program with it at 0
+should show almost none. So it is an upper bound from one badly-chosen subject
+and **must not be used to size our test**; the magnitude belongs to the subject
+and only the instruction transfers. Corrected in `row_schema_required`, where it
+had been written as a machine property and would have been quoted as an expected
+value. **A number crossing a machine boundary without its conditions** is the
+form that has cost the most this week — §117's 1.4125, §119's 1.170, and now
+this — and here it was caught by the person who supplied it.
+
+**And "a read standing in for a measurement" is not quite the failure.** Their
+read of the velocity-to-*attack* fields as 0 was correct: velocity genuinely has
+no route to the attack there. What went unchecked was whether some *other* route
+existed, and a velocity-to-*level* field sat in the same header. So it is an
+**incomplete enumeration of routes**, which is the sharper statement: a read
+tells you about the field you read and says nothing about the one you did not
+think to. A measurement is how you find the route you did not enumerate — which
+is why it substitutes for the read, not because reads are unreliable.
