@@ -12439,3 +12439,55 @@ The addendum's install procedure quotes the machine's own prompts:
 that image is the boot loader — an identification that had rested entirely on
 our own disassembly, now corroborated by a source that shares none of its
 assumptions. The third strand again, arriving free.
+
+### §122 addendum 5 — the document is for a version that was never officially released, and that weakens the argument this project leaned on
+
+Jan, on the 4.7 addendum:
+
+> The dynamic filter **is** there — rather test it. When that addendum was
+> released, E-MU was already on the way out as a company (being bought by
+> Creative Labs). **4.7 was actually never officially released.**
+
+**This does not merely restore the filter claim. It undermines the reasoning
+addendum 4 used, including the half that went our way.**
+
+Addendum 4 made *two* arguments from the same premise — that the document's
+silence is informative:
+
+1. the dynamic-filter change is absent, therefore withdraw it;
+2. sound-generation vocabulary is absent across thirteen enumerated terms,
+   therefore envelopes are very likely unchanged 4.62 → 4.70.
+
+**Jan's direct observation of the behaviour is a counterexample to (1), and a
+counterexample to (1) is a counterexample to the premise.** A document that omits
+a real, audible change to the filter path is a document whose silence about the
+envelope path proves much less than addendum 4 claimed. **And an addendum for a
+version that was never officially released, written while the company was being
+absorbed, is exactly the kind of document expected to be incomplete** — which is
+a reason to have discounted its silence *before* a counterexample arrived, not
+after.
+
+**What survives and what does not:**
+
+- **The document's positive content stands.** FAT32 as the major feature, the
+  RFX Compressor, the plug-in restructure, the seven bug fixes. Documents do not
+  invent features, and a manufacturer naming its own headline change is reliable.
+- **The verbatim loader prompts stand**, and the FLASHPREP identification with
+  them — that is positive content too.
+- **The absence argument is withdrawn in both directions.** The
+  envelopes-unchanged conclusion goes back to resting on addendum 3's
+  *structural* argument (FAT32 is the filesystem layer, plug-ins are effects;
+  neither has reason to touch an envelope rate table) plus the community
+  recollection — which is where it was before the PDF, and weaker than addendum 4
+  said.
+- **The dynamic-filter capability is restored as a claim to test**, not
+  withdrawn and not assumed.
+
+**The generalisable part, and it is uncomfortable because the error was
+asymmetric.** The document confirmed something we wanted (the version caveat) and
+disconfirmed something we wanted (the held-note capability). The disconfirmation
+was accepted immediately and written up as a virtue; the confirmation was not
+examined with the same suspicion, and it was the one that needed it, because a
+source's silence is only as good as its completeness — which nobody had asked
+about. **"Zero occurrences of thirteen terms" is a measurement of the document,
+not of the firmware**, and the distinction was available from the start.
