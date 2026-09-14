@@ -11971,3 +11971,53 @@ the file the whole time, recorded under a heading about something else.
 that was never measured.** Agreement between measurements shares every
 assumption the analysis makes; a note number shares none of them. And only the
 second kind is free.
+
+### §121 addendum 6 — the tool's threshold was on the wrong quantity, and the structure is half-integer not quarter
+
+s3ked reproduced the pure-tone curve independently — their 0.165 row agrees
+with this project's to **0.02 dB** (10.32 against 10.34), two separate
+syntheses of the number that governs their own `ATTAK1` ladder — and used it to
+find a real defect in `tools/carrier_check.py` as first shipped.
+
+**A threshold on cycles-per-window cannot work.** Cleanliness is a property of
+the *fractional part*, so a cut at 0.41 ranks 0.41 (1.87 dB) as worse than 0.66
+(1.79 dB) when 0.66 is the worse ratio. **Their fix is correct and is adopted:
+synthesise a tone at the measured `f0`, run the actual window over it, and
+threshold on the swing that comes back.** Three lines, no table, no constant that
+has to be right, and it stays correct when someone changes the smoothing width.
+**The cycle count is worth recording and is the wrong thing to decide on.**
+
+The tool now measures. Same verdicts on this session's ladder — note 16 REFUSE
+at 20.62 dB, note 40 REFUSE at 8.43 dB, note 64 WARN at 1.54 dB — but for the
+quantity that matters rather than for a proxy.
+
+### And a disagreement, stated before it is reconciled
+
+s3ked's table reports the swing collapsing at **quarter-cycle** ratios — 0.25 and
+0.75 both 0.04 dB. **This project measures 6.51 dB at 0.25 and 1.88 dB at 0.75.**
+We agree at 0.50 and 1.00.
+
+**The arithmetic decides it, and the quarter-cycle reading is wrong.** The mean
+of `sin²` over a window `[t0, t0+T]` is
+
+```
+  1/2  -  sin(2*pi*f*(2*t0+T)) * sin(2*pi*f*T) / (4*pi*f*T)
+```
+
+which vanishes **for all `t0`** if and only if `sin(2*pi*f*T) = 0`, i.e.
+`f*T = k/2`. **Cancellation is exact at HALF-INTEGER cycles per window — 0.5,
+1.0, 1.5, 2.0 — and at quarter-cycle ratios that term is at its maximum**, so
+the result depends on where the window starts. Successive tiled windows step
+their start by `T`, so they sample different phases and a real swing appears.
+Swept over start phase, 0.25 gives 6.51 dB at every phase, not only some.
+
+So the structure is half-integer, and the practical rule they drew from it —
+**many whole cycles with margin**, not "enough" and not "more than half" — is
+right, and right for a reason one step different from the one recorded. Sent
+back, because their checklist carries the quarter-cycle version.
+
+**Worth noting what made this findable:** an independent synthesis agreeing to
+0.02 dB on the row that mattered, and disagreeing by 6.5 dB on a row neither of
+us needed. **The agreement is what made the disagreement worth chasing** — two
+implementations that agreed everywhere would have proved only that we had
+written the same code twice.

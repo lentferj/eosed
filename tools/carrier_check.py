@@ -60,14 +60,29 @@ import wave
 
 import numpy as np
 
-#: Swing a -3 dB threshold detector must survive. Below 0.41 cycles/window the
-#: pure-tone swing exceeds 3 dB and an early crossing is available to it.
-REFUSE_BELOW = 0.41
-#: Between 0.41 and 2 the swing is NON-MONOTONE in the cycle count -- it depends
-#: on the fractional part of window/period, not just on how many cycles fit
-#: (0.50 -> 0.04 dB but 0.66 -> 1.79 dB). So "more than half a cycle" is not a
-#: safe rule; require whole cycles with margin.
-WARN_BELOW = 2.0
+#: THE VERDICT IS MEASURED, NOT INFERRED FROM THE CYCLE COUNT.
+#:
+#: A first version of this tool thresholded on cycles-per-window (REFUSE below
+#: 0.41). s3ked reproduced the curve independently and showed that cannot work:
+#: the swing collapses to nothing at QUARTER-CYCLE ratios, because an RMS window
+#: spanning a whole number of half-periods averages a sine exactly, and spikes
+#: between them --
+#:
+#:   cycles/window  0.25  0.33  0.41  0.50  0.60  0.66  0.75  1.00
+#:   swing (dB)     0.04  3.91  1.83  0.00  1.22  1.79  0.04  0.00
+#:
+#: So cleanliness is a property of the FRACTIONAL PART, and a cut on the count
+#: ranks 0.41 (1.83 dB) as worse than 0.66 (1.79 dB) when 0.66 is the worse
+#: ratio. The count is worth RECORDING and is the wrong thing to DECIDE on.
+#:
+#: Synthesising a tone at the measured f0 and running the actual window over it
+#: costs three lines, needs no table, and stays correct when someone changes the
+#: smoothing width. The two thresholds below are on the SWING, which is what the
+#: -3 dB detector actually has to survive.
+REFUSE_SWING_DB = 3.0
+WARN_SWING_DB = 1.0
+#: Whole cycles with margin is the design rule -- not "enough", and not "more
+#: than half", which is what a coarse table leads you to write.
 
 
 def equal_tempered(note: int) -> float:
@@ -116,15 +131,33 @@ def check(path, note, smoothing_ms, t0, t1, expect_octave=0):
                 cycles_per_smoothing_window=cycles)
 
 
-def verdict(cycles):
-    if cycles < REFUSE_BELOW:
-        return "REFUSE", (f"{cycles:.3f} cycles/window: a pure tone swings >3 dB here, so a "
-                          f"-3 dB threshold can be crossed early. Scale the window to the "
-                          f"carrier period, or measure at one note only.")
-    if cycles < WARN_BELOW:
-        return "WARN", (f"{cycles:.3f} cycles/window: swing is non-monotone below 2 cycles and "
-                        f"depends on the fractional part of window/period. Usable, not safe.")
-    return "OK", f"{cycles:.3f} cycles/window."
+def envelope_swing_db(f0, smoothing_ms, sr, seconds=4.0):
+    """Swing a constant-amplitude tone at `f0` shows through this exact window.
+
+    Synthetic and constant by construction, so whatever this returns is the
+    DETECTOR's, not the material's.
+    """
+    t = np.arange(int(seconds * sr)) / sr
+    x = np.sin(2 * np.pi * f0 * t)
+    win = max(1, int(smoothing_ms * 1e-3 * sr))
+    n = len(x) // win
+    if n < 8:
+        return float("nan")
+    e = np.sqrt((x[:n * win].reshape(n, win) ** 2).mean(axis=1))
+    return 20.0 * math.log10(float(e.max()) / max(float(e.min()), 1e-12))
+
+
+def verdict(swing_db, cycles):
+    tail = f"(swing measured on a synthetic tone at this f0 and window; {cycles:.3f} cycles/window)"
+    if not swing_db == swing_db:                       # NaN
+        return "UNKNOWN", f"could not synthesise a long enough window {tail}"
+    if swing_db > REFUSE_SWING_DB:
+        return "REFUSE", (f"{swing_db:.2f} dB of envelope swing on a CONSTANT tone. A -3 dB "
+                          f"threshold can be crossed early by that, so any time measured here "
+                          f"is biased. Use many whole cycles per window {tail}")
+    if swing_db > WARN_SWING_DB:
+        return "WARN", f"{swing_db:.2f} dB of swing on a constant tone. Usable, not safe {tail}"
+    return "OK", f"{swing_db:.2f} dB of swing {tail}"
 
 
 def main(argv=None) -> int:
@@ -149,8 +182,10 @@ def main(argv=None) -> int:
     print(f"  fundamental               {r['f0_hz']:.2f} Hz")
     print(f"  expected from note {a.note:<3d}    {r['expected_hz']:.2f} Hz")
     print(f"  error                     {r['cents']:+.1f} cents")
-    v, why = verdict(r["cycles_per_smoothing_window"])
+    swing = envelope_swing_db(r["f0_hz"], a.smoothing_ms, r["sr"])
+    v, why = verdict(swing, r["cycles_per_smoothing_window"])
     print(f"  cycles per {a.smoothing_ms:g} ms window  {r['cycles_per_smoothing_window']:.3f}")
+    print(f"  envelope swing (synthetic) {swing:.2f} dB")
     print(f"  VERDICT                   {v} -- {why}")
     off = abs(r["cents"]) > a.cents_tolerance
     if off:
