@@ -13724,3 +13724,42 @@ improves on a fitted exponential over the range we can actually see.
 on the strength of its provenance — *it is the machine's own table* — rather than
 on a fit, and provenance turned out not to be enough. **Being the right data does
 not make it the right model.** The table is real; `C/T[byte]` was mine.
+
+### §135 addendum — the durable finding is the floor, and a failure mode of two careful people
+
+**mpc2emu's reframing, which is better than "the table lost":**
+
+> The low end of the EOS rate law **cannot currently be measured at all**, and
+> any future proposal resting on it needs a detector before it needs an argument.
+
+Bytes 3/5/8 measure 41/47/59 ms against a no-attack control floor of 20-60 ms
+(§130). **The entire region the table's case rested on — bytes 1-19, where
+mpc2emu weighted the advantage as a factor of 2-3 — is below this rig's
+resolution.** That is a standing constraint on the instrument, not a fact about
+this model, and it outlives the proposal that exposed it. A detector with a floor
+well under 10 ms is a prerequisite for any work down there.
+
+### And the failure mode, which neither of us would have caught alone
+
+The order of events, stated because it flatters nobody:
+
+1. **I proposed** `t = C/T[byte]`, **flagged that the four mid-range rungs did not
+   justify it**, and recommended it anyway.
+2. **mpc2emu improved it** — correctly — by moving `t0` out of the model and into
+   the measurement, which is genuinely better engineering.
+3. **They then reported a four-decimal agreement** that was the fit reproducing
+   its own two input points.
+4. **I caught that**, and we both restated the honest position: the case rests on
+   the table being the machine's data.
+5. **Nobody tested it where it claimed to win**, for two rounds of refinement.
+
+**Two careful people improved a model neither had tested at the place it claimed
+its advantage, and each improvement made it more persuasive without making it
+more true.** Collaboration sharpened the argument and the sharpening was itself
+the hazard — a lone author might have shipped it faster, but would also have had
+less reason to believe it.
+
+**What broke the loop was a user asking for the measurement neither of us had
+run**, and it took one capture session. The question *"has anyone measured the
+thing this claim is actually about?"* was available at every step and was asked
+by neither participant.
