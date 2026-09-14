@@ -11476,3 +11476,57 @@ A candidate, not a conclusion, and the corroboration is ambiguous: s3ked's secon
 Akai program was a *higher* note and also measured *slower* — same direction,
 which is either support or two instances of one confound. And per §119's own
 lesson, the confound is the reading to exclude first.
+
+### §120 addendum — the note-dependence is an E4XT property, and the fork's capture must control velocity by measurement
+
+s3ked measured the plateau-level hypothesis on the Akai, `ATTAK1` 0 and 60,
+notes 48/72/96:
+
+```
+  plateau   +0.00  +0.02  -0.02 dB    flat to 0.02 dB over 48 semitones
+  t90        0.19659 0.19666 0.19757   0.5% over 48 semitones
+                                       E4XT, for comparison: 1.25x over 55
+```
+
+mpc2emu's prediction was +0.035 dB/semitone and this is off by a factor of
+eighty — **but the model only had a job where a note-dependence exists, and on
+that machine there is none.** A hypothesis applied to a machine with nothing for
+it to explain has not failed on its merits, and recording it as "falsified"
+would retire a model that has never been tested where it applies.
+
+**What this does settle, and it is worth more than the hypothesis:**
+note-dependence is an **E4XT property, not a generality of envelope
+generators.** Two machines, one parameter, one has it by 25% and one does not by
+0.5%. That was an open possibility this morning. Whatever §120's fork finds is
+therefore about this machine's generator specifically, which is a sharper result
+than it would have been — the capture is more worth taking, not less.
+
+**And it resolves §120's ambiguous corroboration in the opposite direction.**
+The caveat there was that s3ked's second Akai program was a higher note and also
+slower — "either support or two instances of one confound". On a machine with no
+note-dependence it can be neither: their slower program **cannot** be a note
+effect, so it does not corroborate our level hypothesis, and their
+program-dependence stands as a real and separate thing rather than as a possible
+confound. §119's reading of *our* 11% as a plausible note artefact is unaffected,
+because the note-dependence it invokes is ours and is large.
+
+### The capture's protocol has a requirement the fork did not state
+
+s3ked eliminated velocity by **measuring** it rather than by reading `V_ATT1..3`
+and `VELDEP` as 0: plateau moves **16.5 dB** across velocity 40→127, attack
+moves 1.6%.
+
+§120's fork separates 0.00 / +1.92 / +4.39 dB **on plateau level**. A velocity
+sensitivity of that order would swamp all three, and it is exactly the kind of
+thing a parameter read reports as absent. **So the capture must hold velocity
+fixed and demonstrate the plateau is insensitive to it on the material used,
+before any of the three predictions can be told apart.** Without that the fork
+measures the wrong quantity precisely.
+
+`velocity` added to `row_schema_required` for the same reason the other columns
+are there: it is not needed by today's question.
+
+**The recurring form, now four times today:** a parameter read standing in for a
+measurement. The read is usually correct — theirs was — and correctness is not
+the issue. A read reports what the machine was told; only a measurement reports
+what the machine did, and every gap found today has lived in that difference.

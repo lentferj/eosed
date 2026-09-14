@@ -110,6 +110,7 @@
   "columns": [
    "preset",
    "note",
+   "velocity",
    "byte",
    "peak_db",
    "t_peak",
@@ -120,7 +121,7 @@
    "smoothing_ms",
    "threshold_db"
   ],
-  "why": "RESOLUTION_NOTES 120. The rows below carry byte and times but no preset, no note and no per-note level, and that blocked three separate retrospective tests within half an hour on 2026-09-14 -- a sample-rate test (needs preset), an uncontrolled-note reading (needs note) and a test locating the envelope's convexity (needs level per note). Each was a lookup in data already taken; none can be recovered without re-measuring on material no longer in RAM.",
+  "why": "RESOLUTION_NOTES 120. The rows below carry byte and times but no preset, no note and no per-note level, and that blocked three separate retrospective tests within half an hour on 2026-09-14 -- a sample-rate test (needs preset), an uncontrolled-note reading (needs note) and a test locating the envelope's convexity (needs level per note). Each was a lookup in data already taken; none can be recovered without re-measuring on material no longer in RAM. 'velocity' added 2026-09-14: a sibling machine's plateau moves 16.5 dB across velocity 40-127 while its attack moves 1.6%, so a level-based test is swamped by an uncontrolled velocity. Hold it fixed AND demonstrate insensitivity by measurement -- a read of the velocity-depth parameters reports what the machine was told, not what it did.",
   "rule": "Record every column on every row ALWAYS, including when no current question needs it. The cost of a missing column is never visible when you decide not to add it, and it is never paid by the session that omitted it."
  }
 }
