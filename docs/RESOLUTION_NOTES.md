@@ -12628,3 +12628,67 @@ distinguish three hypotheses was reported as having picked one — the same
 under-determination §123 had just diagnosed in §116, committed in the paragraph
 that diagnosed it. The check that caught it was available before the claim was
 made and took two minutes.
+
+## §124 — Filter modulation reaches a SOUNDING voice, but only by the modulation path (2026-09-14, live)
+
+Jan set up cords on P009 — **cord 9: MIDI F (CC 26) -> FilFreq, +100%; cord 10:
+MIDI G (CC 27) -> FilRes, +100%** — and reported the behaviour works from a
+controller. Measured, with the control in the design:
+
+```
+  windows at CC   0     32     64     96    127
+  sweep (CCs sent)   354.1  395.2  626.6  628.1  639.7 Hz   centroid
+  control A          351.9  352.2  350.7  349.5  351.1
+  control B          353.5  356.8  349.1  350.3  358.9
+
+  >1.5 kHz energy fraction, sweep: 0.0075 -> 0.0316  (4.2x)
+
+  change within the held note: +285.6 Hz against 5.4 Hz worst-case control -- 53x
+```
+
+**The filter moves on a note already sounding. Jan's claim is confirmed and this
+project's withdrawal of it (§122 addendum 4) was wrong.**
+
+### Two mechanisms, and only one of them reaches the voice
+
+Both were measured on the same bench within twenty minutes, and they disagree:
+
+```
+  editor-protocol write, E4_VOICE_FMORPH (id 83), mid-note
+      -8.9 Hz against a 7.1 Hz control      -> NO effect on the sounding voice
+      (and the parameter read back as 255: the write landed, in the buffer)
+
+  MIDI CC 26 through a modulation cord, mid-note
+      +285.6 Hz against a 5.4 Hz control    -> the voice follows it
+```
+
+**So "does a parameter change reach a sounding voice" has no single answer — it
+depends on which path the change arrives by.** §34 established that an
+editor-protocol edit goes to a buffer the panel does not reflect, and that
+voice-level parameters (id 39) reach the audio while preset-level ones do not.
+This adds the distinction that matters for experiments: **an editor write reaches
+the next note; a modulation cord reaches the current one.**
+
+**And it is why the first test returned a clean, correct, misleading negative.**
+The measurement was sound, the control was right, the conclusion — "no effect
+beyond drift" — was true of what was tested and false of the question being
+asked. Nothing in that result said the mechanism had been missed; it took Jan
+naming the cords.
+
+### What this unsticks
+
+**Every filter measurement in this project has re-triggered the note**, so each
+carries the amplitude envelope's attack and the filter envelope's sweep on top of
+whatever the parameter did — three things moving, one of them the subject.
+§113's static-vs-static work flattened envelopes specifically to get around that.
+
+A held-note CC change removes it at source: **one note, one sample, one envelope
+state, and the only thing that moves is the parameter.** That is a cleaner
+instrument than the parked pole-count-versus-resting-corner question was waiting
+for, and it does not need the "built static material with both corners known and
+equal" that has blocked it.
+
+**Worth recording how it arrived**: not because the rig improved and not because
+better material was found, but because a withdrawn claim was reinstated by
+someone who had heard the machine do it. The instrument was available all along
+and the notes said it was not.
