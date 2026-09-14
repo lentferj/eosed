@@ -13099,3 +13099,71 @@ caveat is that it is one filter type (LP2) on one preset at one note. LP4 and LP
 give systematically *lower* corners at the same byte (§125's captures: 257.8 vs
 287.1 at FMORPH 50), so the byte→corner map is filter-type dependent and this
 table is LP2's.
+
+## §129 — The E4B cord encoding, settled on hardware (2026-09-14, live)
+
+mpc2emu's corpus histogram of modulation destinations rested on the assumption
+that the E4B file byte at `voice[190 + 4N + 1]` and the SysEx destination id are
+the same enumeration. **Nothing had checked it**, and the filter-type case earlier
+the same day (§125) is what a file byte and a parameter id look like when they
+are *not* the same scheme.
+
+mpc2emu built the test: one preset, one voice, three cords planted **directly in
+the E4B bytes**, in non-adjacent slots, with values the EOS template does not
+ship, each triple unique in the file. Jan put it on the card and loaded it to
+P019. **The E4XT parses the E4B itself, so nothing of ours is in the path** —
+which is the property that makes it a test rather than a consistency check.
+
+### Result
+
+```
+  slot   planted in the E4B          read back over SysEx
+    3    src 40  dst 73  amt 99      src 40  dst 73 (VEnvAtk)  amt 78
+    7    src 41  dst 75  amt 98      src 41  dst 75 (VEnvRls)  amt 77
+   11    src 42  dst 82  amt 97      src 42  dst 82 (FEnvDcy)  amt 76
+  every other slot zero              every other slot zero
+```
+
+**Destinations and sources are byte-identical.** Three non-adjacent codes, so it
+is not a coincidence at one value. **§E4BRATEMOD's gate is discharged for all 43
+destination codes at once**, and the corpus histogram becomes a real reading of
+what modulates what.
+
+The bank was confirmed to be the right one before anything was read, by its
+shape rather than its name: exactly three non-zero cords, in slots 3/7/11, with
+all fifteen others zero — not a configuration the E4XT ships.
+
+### And the amounts give the unit conversion mpc2emu could not compute
+
+The amounts are **not** identical, and the discrepancy is exact rather than noisy:
+
+```
+  file 99 -> 78     file 98 -> 77     file 97 -> 76     file 28 -> 22
+  round(file * 100/127):  78            77                76            22
+```
+
+**The E4B stores the cord amount as a signed byte in ±127; the SysEx parameter
+reports it as a percentage in ±100.** The fourth row is mpc2emu's own template
+default — the `+0.220` they had already measured in the corpus — and it lands on
+the same law without having been used to derive it.
+
+That is the conversion they said was the last piece and on our side of the line:
+**a cord amount of 1.000 in their model is file byte 127, which is SysEx 100%.**
+
+### What is still open
+
+**What SysEx 100% delivers in the envelope generator's internal units.** §127
+showed the rate index is `(field + second term) >> 5`, so the modulation arrives
+32× finer than the MIDI byte — but the second term's own full scale is computed
+in a routine we have not read. **The file↔SysEx leg is now pinned; the
+SysEx↔internal leg is not.**
+
+### The method note
+
+**Three values rather than one, non-adjacent, in a shape the instrument does not
+ship.** Each choice defends against a different failure: one value can coincide,
+adjacent values can be an off-by-one that happens to land, and a shape that could
+be a factory preset cannot be distinguished from a leftover bank. The
+verification was designed so that a wrong answer could not look like a right one
+— which is the thing this project spent the whole day failing to do by accident
+and mpc2emu did here on purpose.
