@@ -14354,3 +14354,89 @@ had already observed the converse of this today — an anomaly that gets an
 explanation built on top of it stops being an anomaly. This is the same trap
 entered from the other side: an anomaly *dissolved* by a tidier reading is just
 as dangerous, and neither §139 nor §133 had the measurement needed to choose.
+
+## §141 — The per-destination question, closed as an interval rather than an answer (2026-09-14, live)
+
+§139 said cord full scale is 127 for all destinations. §140 withdrew that and
+leaned toward a real rate-versus-level difference. **Both were premature.** With
+the calibration measured properly, the data does not distinguish them, and this
+section records the interval rather than picking a third story.
+
+### The calibration, measured densely and locally
+
+§140's rate figure swung 125.6–137.0 bytes depending on which
+`d(ln rate)/d(byte)` was used, and I filed that spread as uncertainty. **It was
+not uncertainty. §134 had already established the rate law is piecewise**, so a
+global slope cannot exist and the "defensible readings" I averaged were the
+curvature disagreeing with itself. The constant needed was the *local* slope over
+the bytes the cord sweep actually reached (58–85 around a base of 72).
+
+Measured: eight rate bytes 58–86, each twice, note 64 so a 4096-sample window is
+85 ms and still spans 14 carrier cycles — half the smearing of §136's 8192 window
+at 82 Hz, which had flattened exactly the fast end of this calibration.
+
+| byte | 58 | 62 | 66 | 70 | 74 | 78 | 82 | 86 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| dB/s | 53.89 | 39.73 | 32.19 | 25.54 | 20.51 | 16.47 | 12.96 | 10.43 |
+| repeat | 54.43 | 39.73 | 32.09 | 25.70 | 20.52 | 16.44 | 12.94 | 10.45 |
+
+Repeatability 0.5%. Log-linear fit −0.05761 (r² 0.998282); quadratic term
++0.000175/byte², which varies the local slope 8.5% across ±14 bytes — so the
+curvature is real and worth handling exactly rather than averaging.
+
+**Cross-check worth keeping: this calibration was taken at note 64 and the cord
+run at note 52.** Interpolated to byte 72 it gives 22.76 dB/s against the cord
+run's measured 22.89 — **0.58% apart, so the envelope rate law is
+note-independent** and calibrations transfer between notes. That is a free result
+and it validates using one carrier to calibrate another.
+
+### The rate destination, with curvature inverted rather than averaged
+
+Inverting the quadratic calibration per rung instead of applying one slope:
+
+| amount | dB/s | effective byte | shift |
+|---:|---:|---:|---:|
+| −10 | 11.10 | 84.97 | +13.06 |
+| −5 | 16.62 | 77.55 | +5.65 |
+| +5 | 35.61 | 64.40 | −7.50 |
+| +10 | 50.40 | 58.73 | −13.17 |
+
+**−1.3122 bytes per amount unit → 131.2 bytes at ±100%.**
+
+### The two numbers, with their uncertainties propagated
+
+| destination | full scale | ± |
+|---|---:|---:|
+| `VEnvDcy` (rate) | 131.2 bytes | ±3.9 |
+| `AmpVol` (level) | 126.4 bytes | ±0.5, +1.6 from the dB/byte constant |
+
+**Difference 4.8 ± 4.3 bytes = 1.1σ. Not significant.**
+
+Both are consistent with 127. They are also consistent with each other. And they
+are consistent with a ~4% difference. **The measurement does not choose**, and
+saying so is the result.
+
+The rate figure's error bar is not noise: its residuals run +0.43, −0.42, −0.45,
++0.44 — a symmetric U, so the cord's own response to amount has slight curvature.
+Quoting it as ± is a convenience; the shape is real and would need more rungs to
+characterise.
+
+### What this section is actually for
+
+Three sections have now been written about one number. §139 asserted 127 because
+it was tidy. §140 leaned to a difference because 132.2 landed near §133's 132.
+Both times a measurement got attached to whichever story it sat nearest, and both
+times the interval would have said *not yet*.
+
+**The useful output of a measurement whose uncertainty spans the candidates is
+the interval, not the nearest candidate.** For a converter: the choice between
+127 and 132 changes a cord depth by 4%, which is below what the rest of the
+conversion chain justifies — use either, note which, and do not spend more bench
+time here. If it ever matters, the measurement that would settle it is more cord
+rungs (to pin the cord's own curvature) rather than more calibration.
+
+VinSamLib's standing rule from tonight, with the amendment this section earned:
+*a measurement with its uncertainty propagated beats a tidy number — and check
+whether the uncertainty is uncertainty, or a result you have not recognised yet.*
+Here it was both: §140's spread was unrecognised curvature, and what remains
+after removing it is genuine and still too wide to choose with.
