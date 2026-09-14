@@ -13035,3 +13035,67 @@ arithmetic; which of the three envelopes a given `a1` block belongs to is not
 established here, and the table may be shared by all of them. **That is a
 question about the caller, not about the table**, and it is answerable the same
 way — by reading the code — rather than on the bench.
+
+## §128 — The filter cutoff law is measured, and it is NOT a table in the OS (2026-09-14)
+
+Jan asked for the filter cutoff table to be checked against our measured curves.
+**The curve is now measured properly; the table is not there, and the negative is
+informative.**
+
+### The measured law
+
+P013 v0 (flat noise, note 24 root-matched, LP2, Q 0), corner = highest frequency
+within 3 dB of the passband of `H = S/S_open`:
+
+```
+  FMORPH   20     40     60     80    100    120    140    160    180    200    220    235
+  corner  199.2  252.0  351.6  498.0  685.5  949.2 1224.6 1634.8 2039.1 3082.0 5173.8 8109.4 Hz
+```
+
+**It is not a single exponential.** Log-slope per byte runs ~0.0165 at the bottom,
+settles near 0.013–0.016 through the middle, and then **accelerates sharply above
+byte 180** — 0.0207, 0.0259, 0.0300 over the last three segments. The panel reads
+**18334 Hz at FMORPH 251**, which needs ~0.051/byte from 235 and confirms the
+acceleration continues to the top. Span 20→235 is **40.7:1**.
+
+### No matching table exists in the decompressed 4.70 image
+
+Searched u16 and u32, big- and little-endian, every alignment. **3,336 strictly
+ascending 256-entry runs exist**; every one was fitted against the twelve
+measured points in log space, where a table proportional to the cutoff frequency
+must give slope 1.0 and a small residual.
+
+**The best fit is rms 0.069 in ln (7%) at slope 2.04** — and it is one smooth
+data region, the same match reappearing at every 2-byte shift, which is what any
+smooth monotone ramp does against any smooth monotone curve. **Nothing in the
+image behaves like a per-byte cutoff table.**
+
+### Why that is the expected answer, and what it says about the machine
+
+**The envelope rate table IS in the OS and IS read by OS code** (§127: a segment
+stepper indexes it and multiplies by elapsed ticks). Envelope stepping is
+software. **Filter cutoff is not**: the byte goes to E-mu's filter hardware,
+which does the mapping itself, so the OS never needs a byte→frequency table and
+does not carry one.
+
+**That is a structural fact about where the two laws live**, and it has a
+practical consequence: the envelope rate law can be read from firmware and
+checked against captures (§122, §126), and **the cutoff law can only ever be
+measured.** No amount of further firmware work will produce it.
+
+**The one thing the OS would still need is a display conversion** — the panel
+shows Hz. That is either computed rather than tabulated, or stored in a form
+this search would not recognise, and it was not found. It is also the least
+interesting of the three, since a display law is what the machine *says* and the
+captures are what it *does*.
+
+### And the measured law is the deliverable
+
+`docs/data/` now has what a firmware table would have given: twelve points across
+the byte range on identified material, with the detector convention stated. Its
+weakness is the opposite of the envelope table's — **no independent confirmation
+exists or can exist**, so it stands on the measurement alone, and the honest
+caveat is that it is one filter type (LP2) on one preset at one note. LP4 and LP6
+give systematically *lower* corners at the same byte (§125's captures: 257.8 vs
+287.1 at FMORPH 50), so the byte→corner map is filter-type dependent and this
+table is LP2's.

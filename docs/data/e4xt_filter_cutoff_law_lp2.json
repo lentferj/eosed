@@ -1,0 +1,65 @@
+{
+ "parameter": "E4_VOICE_FMORPH (id 83) -> measured -3 dB filter corner",
+ "device": "E4XT Ultra, EOS 4.70",
+ "measured": "2026-09-14",
+ "subject": "P013 v0 of the flat-noise calibration bank: sample 11, origkey 24, voice keys 24-84, note 24 (root-matched, nothing resampled), amp and filter envelopes flat rectangles, Q 0, filter type LP2",
+ "method": "H(f) = S(f)/S_open(f) with the open reference at FMORPH 251 and the SAME filter type; corner = highest frequency still within 3 dB of the passband (passband taken as the median of H over 110-240 Hz)",
+ "FILTER_TYPE_DEPENDENT": "This is LP2. LP4 and LP6 give systematically LOWER corners at the same byte (at FMORPH 50: LP2 287.1, LP4 257.8, LP6 246.1 Hz). Do not apply this map to another filter type.",
+ "NOT_IN_FIRMWARE": "RESOLUTION_NOTES 128. No per-byte cutoff table exists in the decompressed EOS 4.70 image: 3336 strictly ascending 256-entry runs were fitted against these points in log space and the best was rms 0.069 in ln at slope 2.04, i.e. nothing. Filter cutoff is done in E-mu's filter hardware, not in OS software, so unlike the envelope rate law this one can only ever be measured.",
+ "NOT_A_SINGLE_EXPONENTIAL": "log-slope per byte is ~0.013-0.016 through the middle and accelerates above byte 180 (0.0207, 0.0259, 0.0300 over the last three segments). The panel reads 18334 Hz at FMORPH 251, which needs ~0.051/byte from 235.",
+ "rows": [
+  {
+   "fmorph": 20,
+   "corner_hz": 199.2
+  },
+  {
+   "fmorph": 40,
+   "corner_hz": 252.0
+  },
+  {
+   "fmorph": 60,
+   "corner_hz": 351.6
+  },
+  {
+   "fmorph": 80,
+   "corner_hz": 498.0
+  },
+  {
+   "fmorph": 100,
+   "corner_hz": 685.5
+  },
+  {
+   "fmorph": 120,
+   "corner_hz": 949.2
+  },
+  {
+   "fmorph": 140,
+   "corner_hz": 1224.6
+  },
+  {
+   "fmorph": 160,
+   "corner_hz": 1634.8
+  },
+  {
+   "fmorph": 180,
+   "corner_hz": 2039.1
+  },
+  {
+   "fmorph": 200,
+   "corner_hz": 3082.0
+  },
+  {
+   "fmorph": 220,
+   "corner_hz": 5173.8
+  },
+  {
+   "fmorph": 235,
+   "corner_hz": 8109.4
+  }
+ ],
+ "panel_reference": {
+  "fmorph": 251,
+  "panel_reads_hz": 18334,
+  "note": "read off the front panel by Jan, not measured from audio"
+ }
+}
