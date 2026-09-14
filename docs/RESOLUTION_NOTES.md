@@ -13167,3 +13167,51 @@ be a factory preset cannot be distinguished from a leftover bank. The
 verification was designed so that a wrong answer could not look like a right one
 — which is the thing this project spent the whole day failing to do by accident
 and mpc2emu did here on purpose.
+
+### §129 addendum — the fourth row, and the difference between a rule and a mechanism
+
+**The amount law's fourth row is the only part of it that is evidence.**
+
+```
+  file  99 -> 78    98 -> 77    97 -> 76        planted for this test
+  file  28 -> 22                                NOT planted, NOT used to fit
+```
+
+The first three are three points on a line through the origin, and any line
+through the origin fits three points chosen to lie on it. **The fourth is
+mpc2emu's EOS template default — the `+0.220` from their corpus histogram, an
+unrelated source — and `round(28 x 100/127) = 22` was a prediction, not a fit.**
+
+That is the same instrument as the a-priori pitch check (§121 addendum 3) and the
+no-attack control (§121): **a quantity whose true value comes from somewhere that
+shares none of the measurement's assumptions.** Three of them today, in three
+different domains, and each time it was the thing that turned a plausible result
+into a checked one.
+
+It also retroactively confirms `cord_byte_to_amount`'s `/127`, which had been an
+assumption in mpc2emu's writer since it was written.
+
+### The day's actual shape, stated once
+
+Most of what went wrong today was not a reasoning error. **It was a correct rule,
+already written down, not invoked at the moment it mattered:**
+
+- `tools/load_bank.py` had a three-state screen classifier, written this morning
+  for this exact popup. A bare threshold was used instead, and the merge sat
+  unanswered behind a dialog the classifier would have named.
+- §123's own addendum identified weak fixed-field LZ77 as the better candidate,
+  and the headline claiming "not compressed" was left standing above it.
+- §112's rectangle test exists to *qualify* material. It was built into the run
+  and then read as a measurement, so the material was screened after the ladder.
+- §110's rule — an absence is worth only as much as the statement of where you
+  looked — was recorded weeks ago, and §116 still concluded the decompressor
+  "lives in the boot ROM" after looking in two files.
+
+**The fix is not more rules.** It is the shape mpc2emu used for the cord test and
+that `row_schema_required` and `tools/carrier_check.py` use here: put the check
+where it cannot be skipped. The uniqueness requirement was a line of code that
+had to pass before the file could be written. `carrier_check.py` refuses rather
+than reports. A required column cannot be omitted and then regretted.
+
+**A rule can be not-reached-for. A mechanism cannot.** That distinction is worth
+more than any measurement in this file.
