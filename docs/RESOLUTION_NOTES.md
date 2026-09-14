@@ -14440,3 +14440,90 @@ VinSamLib's standing rule from tonight, with the amendment this section earned:
 whether the uncertainty is uncertainty, or a result you have not recognised yet.*
 Here it was both: §140's spread was unrecognised curvature, and what remains
 after removing it is genuine and still too wide to choose with.
+
+## §142 — The assignable MIDI controller sources: eight of them, CC number stored directly, and it is a GLOBAL setting (2026-09-14, live)
+
+Asked by mpc2emu, who needed a second continuous-controller source to carry the
+K2000's data-entry slider alongside the mod wheel. Answered from the parameter
+table plus a read-only hardware query; nothing was written.
+
+### There are eight, and their ids are not contiguous
+
+`MidiA` 20, `MidiB` 21, then `MidiC`–`MidiH` 32–37. (Also in the same family but
+fixed in meaning: `MidiVl` 26 volume, `MidPn` 27 pan, `Pedal` 19, `FtSw1/2` 22/23,
+`Thumb` 38.)
+
+### The CC assignment is a MASTER parameter, not a preset one
+
+Ids **208–215**, `MIDIGLO_MIDI_A_CONTROL` … `_H_`, category `master.midi`.
+`MIDIGLO` is MIDI *global*. So **a preset file cannot carry it** — it is a machine
+setting the user configures once, and any conversion that relies on a particular
+letter must document the required assignment rather than write it.
+
+The same applies to ids 201–207: Pitch, Mod, Pressure, Pedal, Switch 1/2, Thumb.
+
+### The stored value IS the CC number
+
+The declared range is −1..33, which is not a CC range, and the table the
+parameter notes point at — `MIDI_CONTROL_DISPLAY` — **is referenced by ten
+parameters and defined nowhere in this tree.** A transcription gap, now closed by
+measurement instead.
+
+Read from the machine (read-only; these are Jan's settings):
+
+| id | name | value |
+|---:|---|---:|
+| 201 | Pitch | 32 |
+| 202 | Mod | 1 |
+| 203 | Pressure | 33 |
+| 204 | Pedal | 3 |
+| 205 | Switch 1 | 0 |
+| 206 | Switch 2 | 1 |
+| 207 | Thumb | 2 |
+| 208–215 | MIDI A–H | 21, 7, 23, 24, 25, 26, 27, 28 |
+
+**MIDI F = 26 and MIDI G = 27**, which Jan independently described as "MIDI F
+(CC 26) and G (CC 27)", and §133 drove CC 26 through `MidiF` and got the expected
+modulation. `Mod = 1` is CC 1, the canonical mod wheel. So:
+
+> **value 0–31 = MIDI CC 0–31; 32 = pitch wheel; 33 = channel pressure; −1 = off.**
+
+Which means EOS restricts assignable controllers to **CC 0–31 only** — the
+continuous-controller MSB range — not arbitrary CC numbers. Anything at CC 32 or
+above cannot be reached by these sources at all. That is a real constraint on any
+converter mapping controllers in.
+
+### `C_nAmt` — a cord can modulate another cord's amount, for any n
+
+`CORD_DESTINATIONS` documents `C00Amt`–`C03Amt` at **168–171**, and §95/§98
+measured `ModWheel → 176` driving the amount of **cord 8** on hardware.
+168 + 8 = 176, so the rule is:
+
+> **destination `168 + n` sets cord *n*'s amount.**
+
+The spec transcribes only n = 0–3; hardware confirms n = 8. So the "gate a depth"
+cord shape is available for any cord, not just the first four.
+
+### The factory mod-wheel pattern, read off a loaded preset
+
+On P009 voice 0:
+
+    cord 1   PitWl  (16) -> Pitch      (48)   amount 6
+    cord 2   Lfo1~  (96) -> Pitch      (48)   amount 0
+    cord 3   ModWl  (17) -> C02Amt    (170)   amount 13
+
+Cord 3 gates cord 2's depth: **the mod wheel brings in LFO vibrato**, which is the
+classic template and confirms mpc2emu's reading that the wheel's job is gating a
+depth range rather than driving a parameter.
+
+**On their +8 versus +16 divergence.** SysEx amounts are ±100 where file bytes are
+±127, so file byte = SysEx × 127/100:
+
+- `PitWl → Pitch` reads 6 → 7.6 file bytes ≈ **8**, matching their corpus exactly.
+- `ModWl → C02Amt` reads 13 → **16.5 file bytes**, matching their template's +16,
+  not their corpus's +8.
+
+One preset on one machine is not a factory default, and this bank's provenance is
+unknown — so this is a data point, not a ruling. But it does mean the template's
++16 is not obviously wrong, and that the two values may be different generations
+of the same template rather than an error.
