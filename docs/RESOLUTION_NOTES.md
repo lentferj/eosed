@@ -14078,3 +14078,93 @@ non-default values, and no pitch-envelope field in the data model at all.
 
 **The question that found it was "what does this constant mean?", asked about
 something that had looked maintained for months.**
+
+## §138 — Is the level-law slope a property of the material? Mostly not (2026-09-14, live)
+
+§136 left the measured slope 1.0–1.3% below mpc2emu's `0.7718 dB/byte`, with a
+rep-to-rep repeatability of 0.035 dB — far too large to be scatter. Two candidate
+explanations: the material (one preset, one voice, one sample) or the law.
+
+### Carrier frequency: no effect
+
+Same preset and voice, three notes over two octaves:
+
+| note | f0 | slope | byte 0 | r² |
+|---:|---:|---:|---:|---:|
+| 40 | 41.02 Hz | 0.7575 | 95.98 | 0.999931 |
+| 52 | 82.76 | 0.7599 | 96.24 | 0.999933 |
+| 64 | 163.33 | 0.7601 | 96.26 | 0.999917 |
+
+Spread 0.35%; byte-0 spread 0.28 dB. A 4:1 change in f0 is the thing that would
+expose a detector-aim or carrier-dependent artefact, and it exposes nothing.
+
+### Different material: about 1% of spread, all of it below 0.7718
+
+Three different samples (the preset scan's f0 groupings separate P005–P009,
+P010–P012 and P022–P023), floors taken before the note, carriers verified
+against their own bin:
+
+| preset | note | f0 | slope | byte 0 | r² |
+|---|---:|---:|---:|---:|---:|
+| P009 | 52 | 82.76 Hz | 0.7592 | 96.18 | 0.999952 |
+| P012 | 64 | 327.39 | 0.7647 | 96.75 | 0.999891 |
+| P023 | 64 | 329.59 | 0.7680 | 97.17 | 0.999858 |
+| P009 | 52 | 82.76 | 0.7599 | 96.24 | 0.999939 |
+
+Mean **0.7630 ± 0.0036** (0.47%), spread 1.15%. Byte-0 mean 96.59 ± 0.40.
+
+So the material does contribute — 1.15% across samples against 0.35% across notes
+of one sample — but it does not close the gap: **mpc2emu's 0.7718 sits above all
+four measured values**, 0.5% above even the highest. Their `ENV_FULL_SPAN_DB`
+97.82 likewise sits above every measured byte-0 intercept (96.18–97.17).
+
+The practical size of the disagreement is under 1 dB everywhere in the byte
+range, and their fit came from bytes 80–116 where the two laws are closest. The
+constants are not being changed on this: one machine, one evening. But the
+"it is probably the material" hypothesis is now tested and only partly true.
+
+### The r² gate earned its place on its first run
+
+Two of six configurations produced a slope and were rejected by r²:
+
+- P010 note 64: slope **0.1863**, r² 0.747
+- P022 note 52: slope 0.7461, r² 0.9989 (just under the 0.999 threshold)
+
+Without the gate, 0.1863 would have entered the average. This follows the failure
+in the previous run where **a configuration with no signal at all produced a fit**
+— P009 voice 1 returned slope 0.0017 over ten rungs that each passed a >15 dB SNR
+test, because the "floor" they were compared against was itself a mains line.
+Only r² = 0.13 gave it away, and slightly noisier material would have returned a
+plausible r² on a fit of nothing.
+
+### The unifying failure, stated as a mechanism
+
+Three separate failures tonight were one failure:
+
+1. the floor located by `argmax` on silence (found 93.75 Hz mains hash, +19.97 dB)
+2. the "carrier prominence" gate measured against the **median** bin — the median
+   is −136 dBFS and a mains line at −86 clears it by 50 dB, so on a preset that
+   did not sound the detector aimed at hum and passed its own sanity check
+3. the floor-power over-correction that manufactured the §136 cliff
+
+**`argmax` finds the largest thing in the band, and the question is always
+whether the largest thing is the thing being measured.** The fix is never "use
+argmax more carefully"; it is to compare against a reference taken through the
+same bin with the signal absent — which turns *what is loudest* into *what
+changed when I played a note*.
+
+mpc2emu observed that this generalises past detectors: every measurement tonight
+that held up was a difference against a reference through the same path, and
+every one that failed was an absolute read.
+
+### Rig properties worth reusing
+
+- Presets 0–23 scanned at three notes for usable carriers; slot numbers only, no
+  names read or logged.
+- A carrier must clear **its own bin's pre-note floor by 60 dB** to be measured.
+- The floor is captured **before** the note. Capturing it after let the previous
+  configuration's release tail into it, and every preset but the first failed its
+  own floor gate as a result.
+- A note left sounding by a killed script raises the carrier bin ~11 dB while
+  moving a broadband meter 0.4 dB (§136); All Notes Off belongs on every exit
+  path including signal handlers.
