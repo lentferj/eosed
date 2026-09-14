@@ -12889,3 +12889,86 @@ correctly and meant nothing.
 Final state of P013 voice 0: FTYPE LP2 (panel), FMORPH 251, Q 0, GEN_VOLUME 0,
 amp and filter envelopes both flat rectangles — matching the state it was merged
 in.
+
+## §126 — EOS 4.70 is open, the table is byte-identical to 4.62, and §123 was wrong (2026-09-14)
+
+Jan suggested searching for public work on the container, and it exists:
+**`eosflash` by Nkrypth/Madlabz** — a cross-platform CLI that inspects,
+converts, compresses and decompresses EOS firmware. Jan had it cloned at
+`~/git-repos/eosflash` within minutes.
+
+```
+  eosflash verify eos470.img
+    type      : Raw 1.44MB floppy image, 4MB FlashROM
+    version   : EOS v4.70
+    hardware  : E-MU E4 Ultra (gen3, ColdFire MCF5206E)
+    magic     : 0x76543211  (Ultra OS compressed)
+    total used: 1965696 bytes (uncompressed), 1374037 bytes (compressed)
+    checksum  : stored 0x08860e57, computed 0x08860e57  OK
+
+  eosflash export eos470.img --eos eos470.eos
+  eosflash flash  eos470.eos --eos eos470_plain.eos --4mb    ->  1,965,696 bytes
+```
+
+**The decompressed 4.70 is plaintext**: entropy **6.333** against 4.62's 6.335,
+40.7% of 4 kB windows below 6.0 against 41.9%, and every crib that had been
+absent from the packed payload all day — `Fatal: Bus Address error`,
+`0123456789abcdef`, `Floppy CRC Error`, `Preset`, `Sample`, `Envelope` — present.
+
+### The result that closes the version caveat
+
+**The 128-entry envelope rate table is BYTE-IDENTICAL between EOS 4.62 and EOS
+4.70.** The 4.62 table's 256 bytes appear verbatim in the decompressed 4.70
+image, twice, at `0x41490` and `0x1da390`.
+
+```
+  log-slope over bytes 60-100 : 0.05638   r2 0.99994
+  ENV_RATE_SWEEP_K (ours)     : 0.0565    ->  -0.2%
+  ENV_RATE_K       (ours)     : 0.0581    ->  -3.0%
+```
+
+**So the firmware cross-check now stands on the version the bench actually runs**,
+by direct comparison rather than by inference from a manual addendum. §122's
+version caveat — the one that survived every other argument today, and that
+§122 addendum 5 correctly refused to let a document close — is closed by
+measurement.
+
+### §123 IS RETRACTED
+
+§123 concluded the payload was **not compressed**, from two arguments. Both were
+wrong and the retraction is more instructive than the section was.
+
+**It is compressed, 1,965,696 -> 1,374,037, a ratio of 1.43:1.**
+
+- **The bit-density argument assumed strong compression.** "Compression drives
+  bit density to 0.5" is true of a coder near the entropy limit — zlib on this
+  content reaches 0.514 at 2.34:1. **A 1.43:1 coder leaves a great deal of
+  redundancy and its output is nowhere near balanced.** 0.336 is exactly what a
+  weak LZ77 with fixed-width fields produces, which is the alternative §123's own
+  addendum raised and then did not act on.
+- **The size argument's premise was false.** It assumed 4.62's content is
+  comparable to 4.70's. It is not: 4.62 is 1,244,160 bytes and 4.70 is
+  **1,965,696**, 58% larger — the RFX plug-ins the 4.7 addendum says ship with
+  the OS. The addendum had flagged this premise as unestablished and the section
+  still leaned on it.
+- **And the ISA was wrong too.** E4 Ultra is a **ColdFire MCF5206E**, not 68020.
+  68020 merely decoded with fewer invalid words than 68000, and I read a
+  minimum over a two-point comparison as an identification.
+
+**The pattern is the day's, in its purest form.** A measurement that could not
+distinguish three hypotheses was reported as having picked one; then the
+alternative was correctly identified in an addendum and the headline was left
+standing anyway. **Writing the correction is not the same as applying it.**
+
+### What actually opened it
+
+Not analysis. **Somebody else had already done the work, and the search that
+found them took four queries.** A day of parameter sweeps, crib tests, entropy
+statistics and ISA counting produced a partly-wrong characterisation of a format
+that a public tool already handles correctly — and the tool also settles the
+processor, the checksum algorithm, the compressed/uncompressed magic pair, and
+the `.dli` variant in one run.
+
+**The search should have come first.** It is the cheapest possible test of
+"is this problem already solved", it costs minutes, and this project reached for
+it only after being told to.
