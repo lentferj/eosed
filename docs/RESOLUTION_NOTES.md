@@ -14168,3 +14168,97 @@ every one that failed was an absolute read.
 - A note left sounding by a killed script raises the carrier bin ~11 dB while
   moving a broadband meter 0.4 dB (§136); All Notes Off belongs on every exit
   path including signal handlers.
+
+## §139 — Cord full scale measured with a constant source: it is the destination's own range, and §133's 132 is retracted (2026-09-14, live)
+
+§137 left the sharpest open question of the evening: §133 put cord modulation
+full scale at **132 bytes** measured into a *rate* field, while the LFO→AmpVol
+depth into a *level* field extrapolated to ~125 bytes. Either one constant does
+not generalise across destinations, or two constants were being treated as one.
+
+### The measurement, with the LFO taken out of it
+
+`DC` (cord source 160) is a **constant** source. Routed to `AmpVol` it shifts the
+level by a fixed amount, so there is no sine to fit, no period, no LFO shape and
+**no detector smearing** — every complication that cost the LFO route its last
+few percent. Sweep the cord amount, read the level shift, convert with §138's
+0.7630 dB/byte.
+
+P009 v0, note 52, sustain at SysEx 53 so the shift has room both ways (45.1 dB up
+to the sustain-100 level, 53.5 dB down to the floor), amounts swept across both
+signs:
+
+| amount | level | shift | SNR | implied bytes |
+|---:|---:|---:|---:|---:|
+| −45 | −111.61 | −58.95 | −5.4 | *in the floor* |
+| −30 | −82.24 | −29.58 | 24.0 | −38.76 |
+| −20 | −71.92 | −19.26 | 34.3 | −25.24 |
+| −10 | −62.68 | −10.02 | 43.5 | −13.13 |
+| 0 | −52.66 | −0.01 | 53.5 | −0.01 |
+| +10 | −43.24 | +9.42 | 63.0 | +12.34 |
+| +20 | −33.72 | +18.94 | 72.5 | +24.82 |
+| +30 | −24.19 | +28.47 | 82.0 | +37.32 |
+| +45 | −9.54 | +43.12 | 96.7 | +56.52 |
+| +60 | −3.21 | +49.45 | 103.0 | *at the clamp* |
+
+Over the 8 rungs that are neither clamped nor in the floor:
+
+**shift = 0.96442 dB per unit of cord amount, r² 0.999917**, offset −0.29 dB.
+
+At +100%: **96.44 dB = 126.4 bytes** of level field.
+
+### The simpler reading: full scale is the destination's own 0–127 range
+
+126.4 bytes against the destination's full range of 127 is a **0.5% agreement**.
+The LFO route's ~125 bytes agrees too, by a method sharing nothing but the
+destination. So the natural statement is:
+
+> **A ±100% cord moves its destination across the whole of its own range.**
+
+That also dissolves a puzzle §133 raised about itself. §133 noted that "132 bytes
+slightly exceeds the 0–127 index range" and used the excess to explain why a
+±100% cord saturates at every note. It does not exceed the range — **it is the
+range**, and the excess was extrapolation error.
+
+### Why §133's 132 is the number to doubt, not this one
+
+§133's figure came from a full-span source sweep at **cord amount 10%**, giving
+−13.20 bytes, multiplied by ten. A ×10 extrapolation carries any error in the
+10% measurement ten times over, and 132/127 = 1.04 is well inside what a 4%
+error at 10% amount would produce. This measurement extrapolates ×2.2 from its
+furthest clean rung, over eight rungs spanning both signs at r² 0.999917.
+
+**So §133's 132 bytes is retracted in favour of 127 (the destination range),
+pending a re-measurement of the rate destination by this method.** What is NOT
+established is that rate and level destinations share the scaling — that needs
+`DC → FilFreq` or `DC → an envelope rate` measured the same way. The
+per-destination question is still open; what has changed is that the evidence
+for a *difference* was an extrapolation artefact, not a measured difference.
+
+Note the direction is robust to which dB/byte is used: with mpc2emu's 0.7718
+instead of ours, the figure becomes 125.0 bytes — further from 132, closer to
+nothing else. Choosing their constant strengthens the retraction.
+
+### Two guards failed and both were about restoring state
+
+1. **The 60 dB carrier-prominence gate fired at 59.6 dB on a good carrier**,
+   because it was applied to a reference deliberately set 45 dB *below* the top.
+   The gate asks "is there a signal here" and belongs at sustain 100; applied to
+   a reduced reference it asks a different question. Moved.
+2. **A gate that fires before the restore line leaves the machine modified.**
+   The failed run exited at the prominence check with the scratch cord still set,
+   and — worse — with cord 5's amount still zeroed. The *next* run then read that
+   zero as the original value and faithfully restored it. **State loss cascaded
+   through a restore that was working correctly**, because "the original" was
+   read from a machine a previous run had already changed.
+
+   Fixes: restore registered with `atexit` so it runs on every exit path
+   including a gate's `SystemExit`; the scratch cord cleared *before* asserting
+   it is free rather than asserting and dying; and known-good values taken from a
+   **verified record** rather than from the machine when a previous run may have
+   touched it. Cord 5 was restored to `FEnv+ → FilFreq` amount 100 from the 22:31
+   verification.
+
+   This is the same lesson as the killed-script stuck note (§136), one level up:
+   there, a crash left the *machine* wrong; here, a crash left the *idea of what
+   is correct* wrong, which survives longer and is harder to see.
