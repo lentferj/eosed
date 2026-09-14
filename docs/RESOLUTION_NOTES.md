@@ -14262,3 +14262,95 @@ nothing else. Choosing their constant strengthens the retraction.
    This is the same lesson as the killed-script stuck note (§136), one level up:
    there, a crash left the *machine* wrong; here, a crash left the *idea of what
    is correct* wrong, which survives longer and is harder to see.
+
+## §140 — §139's retraction of §133 is itself withdrawn: the rate destination measures 132, and the method cannot tell 132 from 127 (2026-09-14, live)
+
+§139 retracted §133's 132-byte cord full scale in favour of 127, on the strength
+of a level destination measuring 126.4. **That retraction was premature and is
+withdrawn.** §133's figure stands.
+
+### The rate destination, measured by §139's own clean method
+
+`DC → VEnvDcy` (destination 74, an envelope *rate*), base rate byte 72, cord
+amounts ±5 and ±10. A rate destination is read through the byte↔dB/s mapping,
+which tonight's four decay slopes (§136) supply:
+
+| rate byte | 60 | 72 | 80 | 90 |
+|---|---:|---:|---:|---:|
+| dB/s | 47.35 | 23.00 | 14.78 | 8.47 |
+
+Log-linear fit: **d(ln rate)/d(byte) = −0.05728**, r² 0.999510.
+
+| amount | rate / base | byte shift |
+|---:|---:|---:|
+| −10 | 0.4852 | +12.63 |
+| −5 | 0.7262 | +5.59 |
+| +5 | 1.5560 | −7.72 |
+| +10 | 2.2021 | −13.78 |
+
+**byte shift = −1.3223 per amount unit, r² 0.99945 → 132.2 bytes at ±100%.**
+
+That is §133's 132 to 0.2%, by a method sharing nothing with it — §133 swept a
+*source* at 10% amount and multiplied by ten; this holds a *constant* source and
+sweeps the amount. Two independent routes to a rate destination both land on 132.
+
+### But the method cannot resolve the question it was built to answer
+
+The rate figure passes entirely through that calibration constant, and it is far
+more sensitive to it than the r² suggests:
+
+| d(ln rate)/d(byte) | implied full scale |
+|---|---:|
+| −0.0553 | 137.0 bytes |
+| −0.0556 | 136.2 |
+| −0.05728 *(fitted)* | 132.2 |
+| −0.0603 | 125.6 |
+
+The three alternatives are the *interval* slopes between adjacent calibration
+points — all defensible readings of the same four measurements. They span
+125.6–137.0, which **straddles both 127 and 132**. So this measurement supports
+132 but cannot exclude 127, and the spread is the same size as the effect being
+measured.
+
+The level destination has no such problem: 126.4 bytes comes from dB read
+directly against the level law, with no rate calibration in the path.
+
+### Where this actually leaves it
+
+| destination | full scale at ±100% | how direct |
+|---|---:|---|
+| `AmpVol` (level) | 126.4 bytes | direct; dB → bytes via the level law |
+| `VEnvDcy` (rate) | 132.2 ± ~5 | via a 4-point byte↔dB/s calibration |
+| §133, a rate destination | 132 | source sweep at 10% amount, ×10 |
+
+**Two rate measurements sit near 132 and one level measurement sits at 126.4**, so
+a per-destination difference of ~4.6% is *supported* — but it is not established,
+because the rate number's uncertainty overlaps the level number. §139's clean
+story ("a cord moves its destination across its own 0–127 range") is attractive
+and may be right for level destinations; it is not demonstrated for rate ones.
+
+**For a converter: keep §133's 132 for rate destinations and use 126.4 for level
+destinations, and treat the difference as provisional.** Closing it needs the
+byte↔dB/s calibration measured properly — more rate bytes, and slow ones where
+§136's smearing does not flatten the fall — not more cord sweeps.
+
+### The error, which is the fourth of its kind today
+
+`−0.0565` was a **hand-average of three interval slopes** read off a table, where
+`−0.05728` is the least-squares fit of the same four points. A 1.38% difference,
+which propagated straight into the byte shift.
+
+That is the same failure as §137's withdrawn `0.0241 dB/unit`: a number arrived at
+by arithmetic I performed rather than by a fit or a measurement, then used as
+though it carried the authority of the data behind it. Here it was worse than
+cosmetic — it turned 132.2 into 134.0, which read as "not 132", which is what
+prompted §139's retraction of a correct value in the first place.
+
+**And the shape of the mistake: §139 retracted a measured number in favour of a
+rounder one that fitted a nicer story.** 127 is the destination's own range and
+explains saturation neatly; 132 explains nothing and looks like an error. The
+tidier hypothesis was wrong, and it was believed because it was tidier. VinSamLib
+had already observed the converse of this today — an anomaly that gets an
+explanation built on top of it stops being an anomaly. This is the same trap
+entered from the other side: an anomaly *dissolved* by a tidier reading is just
+as dangerous, and neither §139 nor §133 had the measurement needed to choose.
