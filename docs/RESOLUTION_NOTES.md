@@ -12194,3 +12194,66 @@ against §113's convex attack. **It is not being read that way**, because nothin
 identifies what it is — a velocity curve, a volume law, a pan law and an envelope
 shape would all look like this, and the day already contains one fork built on an
 effect that turned out not to exist.
+
+### §122 addendum — the corpus weights the defect, and corroborates the identification sideways
+
+§122's second finding — our law is right where it was fitted and wrong outside
+it — is a statement about the table. **What it costs depends on where real
+presets actually sit, and that number exists only in mpc2emu's corpus.** 380
+banks, 285,396 amp-envelope rate bytes:
+
+```
+  byte 0 ("instant", not on the curve at all)       191,464   67.1%
+
+  of the 93,932 that DO go through the law:
+    1-19     firmware slope 0.128  vs ours 0.0565     1,571    1.7%
+    20-59    firmware 0.0596                         84,860   90.3%
+    60-100   firmware 0.0564   <- the fitted range     7,421    7.9%
+    101-127  firmware 0.0778                              77    0.1%
+```
+
+**The headline is right and the consequence is small.** Our law is fitted over a
+band holding 7.9% of real usage — but the band holding 90% differs in slope by
+only 5.5%, and integrating the piecewise table against our single exponential:
+
+```
+  byte 46 (commonest in the corpus)   firmware/ours  0.959
+  byte 44 (second commonest)                         0.953
+  byte 20                                            0.884
+  byte 12                                            0.499
+  byte  5                                            0.302
+  byte 125                                           1.661
+```
+
+**Where the corpus lives we are 4–5% out; where we are out by 2–3x, almost
+nothing lives.** So it is a real defect that does not force a writer change, and
+if one is made it should be **piecewise**, not a refit — a refit would trade a 4%
+error over 90% of the corpus for a better fit over 8% of it.
+
+### A fourth caveat, and it changes where the hardware check should point
+
+mpc2emu's, and it is the one this project would not have thought of: **aim the
+confirmation at bytes 20–59, not at the fitted range.** That is where 90% of real
+presets sit and where nobody has measured — the fitted range is where we already
+know the answer, so confirming there tests the least informative part of the
+curve. §115's rule, arriving as a choice of where to point an instrument rather
+than as a choice of what to test hardest.
+
+### And the corpus corroborates the identification from a direction of its own
+
+The table descends from 65535 at index 0 to 4 at index 127, so index 0 is the
+largest increment — the fastest envelope, i.e. **instant**. The corpus says
+**67.1% of all rate bytes are byte 0**, which is exactly what a value meaning
+"instant" would attract.
+
+That is weak on its own and it is *independent*: it comes from what preset
+authors chose, not from firmware bytes or from our captures. Nothing about a
+geometric run's slope predicts that its first entry should be the single
+commonest value in a corpus of 285,396 — and it is the kind of agreement the
+shape test cannot manufacture.
+
+**Which is also why it earns the sentence it prompted.** Agreement at 0.2%
+between a firmware table and a fitted law is the outcome needing the least
+explaining and therefore the most care: two of today's errors survived precisely
+because agreement went unexamined — a law fitted to a detector reproducing that
+detector (§121), and a cross-check whose 11% was recorded as agreement (§119).
