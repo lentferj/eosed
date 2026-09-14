@@ -12257,3 +12257,39 @@ between a firmware table and a fitted law is the outcome needing the least
 explaining and therefore the most care: two of today's errors survived precisely
 because agreement went unexamined — a law fitted to a detector reproducing that
 detector (§121), and a cross-check whose 11% was recorded as agreement (§119).
+
+### §122 addendum 2 — three strands, and what each one can and cannot say
+
+s3ked's framing on closing, and it is the day's epistemics stated cleanly enough
+to keep:
+
+```
+  the firmware  says what the machine INTENDS
+  the captures  say what LEFT THE CONVERTERS
+  the corpus    says what the parameter is FOR
+```
+
+**They are not interchangeable, and the third cannot confirm a slope — it can
+confirm you have found the right table.** The corpus's 67.1% at byte 0 against a
+table whose index 0 is its largest value is worth exactly that much: not evidence
+about the rate law, decisive-ish evidence about identity, and independent of both
+other strands because it comes from what preset authors chose.
+
+**A third strand sharing no assumptions with the other two** is what this whole
+day kept arriving at from different directions — the a-priori pitch check against
+a note number, the no-attack control against a rise that does not exist, two runs
+that must differ by zero. It is also the strand hardest to arrange, and here it
+came the only way it could: from somebody else's data.
+
+### An open item the duplicate creates
+
+s3ked's table appears once; ours appears twice, byte-identically, 261,396 bytes
+apart. **The duplicate is the more awkward position, not the more redundant
+one.** A unique table makes the consumer set closed by construction — whatever
+references it is all there is. Two identical copies means two sites to reconcile,
+and **nothing in the image says which one the envelope code actually reaches.**
+
+That matters if the copies ever diverge between versions: reading the wrong one
+would give a table that is real, correct-looking, and not the one in use. Not
+resolvable without following the references, and not needed for §122's result —
+recorded so that nobody later assumes the redundancy is reassuring.
