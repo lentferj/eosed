@@ -11213,3 +11213,31 @@ states and the notes should not let them blur.
 
 The remaining route is a boot-ROM dump off the machine, which is a hardware read
 and Jan's call, not ours to plan around.
+
+### §118 addendum — neither result would have survived the other's method
+
+mpc2emu named the symmetry, and it is a stronger statement than the ordering it
+comes from:
+
+- **§116's negative is airtight because the expected agreement was computed
+  before the XOR was run.** A falsifier fixed in advance is what makes a null
+  result binding rather than merely disappointing.
+- **k2kremote's positive is airtight because 65 independent hardware readings
+  reproduced a table derived without them.** External agreement is what makes a
+  decode binding rather than merely plausible.
+
+**Swap the methods and both collapse.** Entropy would never have caught a
+reversed jump table — the forward decode is high-quality plaintext either way.
+Sixty-five panel readings would never have proved a packed image contains
+nothing — there is nothing to read off a panel that speaks to the container.
+
+So "entropy first, behavioural agreement last" is not a preference about
+thoroughness. **The two checks answer different questions, and the cheap one
+cannot be made to answer the expensive one's question by running it harder.**
+
+**And the reason the §117 credit correction mattered more than the sentence it
+was about**, in mpc2emu's framing: the arithmetic survives either attribution,
+but *who is answerable for the call* does not. Recording a colleague's
+deliberate non-action as an error averted transfers the judgement to whoever
+reads it next — the same failure as a wrong recorded reason (§117), one level
+up.
