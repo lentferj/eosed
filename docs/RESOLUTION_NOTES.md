@@ -12491,3 +12491,84 @@ examined with the same suspicion, and it was the one that needed it, because a
 source's silence is only as good as its completeness — which nobody had asked
 about. **"Zero occurrences of thirteen terms" is a measurement of the document,
 not of the firmware**, and the distinction was available from the start.
+
+## §123 — The 4.70 payload is not compressed at all, and the 4.62 plaintext is what proves it (2026-09-14)
+
+Jan's question — *"knowing the changes from 4.62 to 4.7 are not too fundamental,
+wouldn't that help us crack the 4.7 image? The envelope tables, LFOs etc have to
+be in there"* — turns out to be the right lever, and it does something better
+than help decode the image. **It shows the image was never compressed.**
+
+### The size argument
+
+```
+  4.62 PLAIN                     1,244,160 bytes
+  4.61 "packed"                  1,262,014 bytes   +1.4% vs the PLAIN 4.62
+  4.70 "packed"                  1,374,037 bytes
+  what zlib -9 achieves on the 4.62 plaintext:  532,404 bytes  (2.34:1)
+```
+
+A real LZ77+Huffman on this content gives **2.34:1**. If 4.61 were that, it would
+hold 2.95 MB of OS — against 4.62's 1.24 MB, one point release away. **A packed
+image that is 1.4% LARGER than the neighbouring plain one is not a compression of
+comparable content.**
+
+### The bit-density argument, which settles it
+
+Compression drives bit density to 0.5 — it must, or there is redundancy left.
+XOR/stream encryption does the same, since a keystream is balanced.
+
+```
+                          bit density   entropy   max entropy AT that density
+  4.62 plaintext OS          0.3396      6.335        7.396    (85.7% of it)
+  4.70 "packed" payload      0.3358      7.275        7.366    (98.8%)
+  4.61 "packed" payload      0.3359      7.270        7.367    (98.7%)
+  zlib of the plaintext      0.5144      7.993        7.995    (100.0%)
+```
+
+**The packed payloads sit at the plaintext's own bit density — 0.336 against
+0.340 — and at ~98.8% of the maximum entropy available at that density.**
+
+That is not compression and not XOR encryption. Both would move the density to
+0.5, and zlib demonstrably does. **Bit count conserved, bit positions scrambled
+so the bits read as independent: that is a bit PERMUTATION.**
+
+### What this explains, retrospectively
+
+- **Why 36 byte-aligned LZSS variants, bit-aligned LZSS, LZW at four settings,
+  zlib/deflate/gzip/bz2/lzma and a canonical-Huffman search all failed** (§116,
+  §122). They were looking for a decoder for a code that was never applied.
+- **Why the crib test found nothing at any gap** (§122). A permutation scatters a
+  string's bits across the image; no gap size recovers them.
+- **Why no decompressor was found in the Primary Loader** (§122). There is none
+  to find. The inverse of a bit permutation looks like data-line or bit-order
+  remapping — a few mask-and-shift operations on words during the flash path,
+  which matches no LZ idiom and is exactly what our searches were blind to.
+- **And the "Lz77" label is now doubtful.** It was read from five bytes the
+  loader writes on the packed branch (`4C 7A 37 37 0A`). The bytes are certain;
+  that they mean a compression scheme is an inference, and the measurement says
+  no compression is present. Either the label is for a format variant not used
+  here, or those five bytes are something else.
+
+### What it does NOT establish
+
+Which permutation. Simple families are already excluded: de-interleaving the
+byte stream 2/3/4/8 ways leaves entropy at 7.27; 8x8, 16- and 32-byte bit
+transposition *raises* it to 7.40; bit-stream de-interleave at strides 2–32
+across block sizes 64–8192 produces no crib and no entropy drop. **The
+permutation is not one of the obvious ones, and it may be long-range.**
+
+### The method point, which is the transferable part
+
+The 4.62 plaintext is not useful here as a *crib* — no crib survives. It is
+useful as a **calibration of what the plaintext's statistics are**, and that is
+what made a negative decidable. Bit density is a property of the content that a
+transform either preserves or destroys, and knowing the content's true value
+turned "high entropy, therefore probably compressed" — an inference this project
+carried all day from §116 — into a measurement that says otherwise.
+
+**§116's entropy reasoning was not wrong so much as under-determined.** 7.19
+bits/byte is consistent with compression, with encryption, and with a bit
+permutation, and nothing in §116 distinguished them because there was nothing to
+compare against. The discriminator needed a known plaintext of the same content,
+and Jan supplied the route to one.
