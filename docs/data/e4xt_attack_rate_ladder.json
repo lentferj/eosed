@@ -7,10 +7,11 @@
  "shape_ratio": {
   "rise_10_90 / t_peak": 0.619,
   "sd": 0.041,
-  "note": "measured on the E4XT itself. A sibling project's 0.704 is the MPC One's figure; the machines have different ramp shapes and the difference propagates into any converted time."
+  "note": "measured on the E4XT itself. A sibling project's 0.704 is the MPC One's figure; the machines have different ramp shapes and the difference propagates into any converted time.",
+  "scope": "0.619 is measured on one preset. RESOLUTION_NOTES 119: the analogous ratio varies 7.6% between programs on a sibling machine, so treat this as a one-preset figure with unmeasured spread, not a machine constant."
  },
  "range_limit": "NOT to be read below ~2 s without a re-take. The three sub-second points drift (see flags/ratios); at byte 48 the 30 ms window is only ~3.5% of the rise, so quantisation is a real fraction of the measurement.",
- "cross_check": "a preset whose panel showed Atk1 rate 89 measured t_peak ~10.1 s; byte 89 on a different preset with different material gave 9.10 s. The timing follows the byte across programs, which a material artefact could not.",
+ "cross_check": "a preset whose panel showed Atk1 rate 89 measured t_peak ~10.1 s; byte 89 on a different preset with different material gave 9.10 s. The timing follows the byte across programs, which a material artefact could not. SCOPE CORRECTION 2026-09-14 (RESOLUTION_NOTES 119): the two figures differ by 11.0%, and that was recorded as agreement. A sibling project has since shown the same envelope byte giving a 33% different attack AND a different shape between two programs of one machine, with every readable envelope parameter identical or ruled out. So 11% is the size of a real program-dependent effect, not only noise. The cross-check shows the BYTE IS THE MAIN TERM (9.1 s at byte 89 against 0.18 s at byte 20); it does NOT show the byte is the only term, which is what it has been cited for.",
  "rows": [
   {
    "byte": 20,
@@ -93,7 +94,7 @@
    "flags": []
   }
  ],
- "interpolation": "ln(t_peak) is near-linear in byte: slope 0.0525-0.0656 per byte across all seven intervals. USE LOG INTERPOLATION. Linear interpolation over the widest gap (87->96) differs by 0.4 s: byte 91 gives 11.63 s linear against 11.22 s log-linear. The rule was unstated once and the two models were quoted interchangeably -- see RESOLUTION_NOTES \u00a7105 addendum.",
+ "interpolation": "ln(t_peak) is near-linear in byte: slope 0.0525-0.0656 per byte across all seven intervals. USE LOG INTERPOLATION. Linear interpolation over the widest gap (87->96) differs by 0.4 s: byte 91 gives 11.63 s linear against 11.22 s log-linear. The rule was unstated once and the two models were quoted interchangeably -- see RESOLUTION_NOTES §105 addendum.",
  "additional_points": [
   {
    "byte": 91,

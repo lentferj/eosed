@@ -11117,7 +11117,10 @@ said so.
 
 - Targeting the **−3 dB crossing**: `SLOWDOWN = 1.0`. Correct as it stands.
 - Targeting the **full traversal**, which is what `intends` denotes:
-  `SLOWDOWN ≈ 1.17` (floor 1.11 without extrapolation).
+  `SLOWDOWN ≈ 1.17` (floor 1.11 without extrapolation). **SUPERSEDED IN SCOPE by
+  §119: that 1.17 is five notes of ONE preset at ONE byte, and the ratio is now
+  known to vary 7.6% between programs on a single machine. Read it as "~1.17 on
+  one preset, spread across presets unmeasured."**
 
 **Nothing in the measurements picks between those.** It is a question of which
 point of the curve the conversion should match, and §113 says it cannot match
