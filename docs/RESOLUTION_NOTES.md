@@ -13480,3 +13480,64 @@ the law is exponential: one byte is x1.0598 in envelope time, so 14 bytes is
 becoming 0.40 s. **That default sits on most voices in their corpus and their
 reader drops it**, which makes the exposure larger than the authored-cord share
 alone.
+
+## §133 — The modulation scale, closed with a source whose value is known (2026-09-14, live)
+
+§132 measured `Key+ -> VEnvAtk` and got two estimates of the full-scale constant
+that disagreed by 1.56x — 140 bytes from the absolute shift, 90 from the slope
+across notes. **The disagreement was the finding: `Key+` is not `note/127`**, and
+every figure derived from it carried an unestablished normalisation.
+
+**Fixed by changing the source rather than the analysis.** `MidiF` (src 35) is
+CC 26, whose value is exactly what we send. One note, one rate byte, CC swept:
+
+```
+  P017 v0, note 72, Atk1 rate 72, cord MidiF -> VEnvAtk at amount +10%
+
+  CC 26      0      32      64      96     127
+  t90     3.020   2.380   2.040   1.740   1.440 s
+  shift       0   -4.30   -6.99   -9.88  -13.20 bytes
+```
+
+### The constant
+
+```
+  full span, CC 0 -> 127 at amount 10%:  -13.20 bytes
+  => at amount 100%, full source:        -132 bytes
+  => one index byte = 32 internal units  (127, the >>5)
+  => full scale = ~4224 internal units
+  => 1% of cord amount at full source    = 1.32 bytes = 42 internal units
+```
+
+**132 bytes slightly exceeds the 0-127 index range**, which is why a +/-100% cord
+saturates at every note (§132) and is consistent with the >= 127 floor that
+saturation established. **Two methods, one an inequality from clipping and one a
+measurement from an unsaturated sweep, agreeing.**
+
+mpc2emu's corpus median amount of 0.110 is therefore **14.5 bytes**, matching
+their own ~14 estimate from the other direction.
+
+### The limit, stated rather than smoothed
+
+**The response is not linear in the source.** Per-CC-unit slope runs -0.0841
+(CC 32-64), -0.0903 (64-96), -0.1071 (96-127) — accelerating by 27% across the
+range, so the low-CC estimate of the constant (170 bytes from CC 32 alone) is an
+outlier and the full-span figure is the one to use. Whether that curvature is in
+the source scaling, the amount scaling, or in the `t90 ~ 1/T[index]` assumption
+is not established. **132 bytes is a full-span figure, not a local slope.**
+
+### And the bench check that remains, in its corrected form
+
+§132's withdrawn cross-check left one outstanding measurement, and mpc2emu added
+the constraint that makes it work:
+
+> Set rate byte 60, measure. Set rate byte 100, measure. Take the ratio.
+> **No table, no cord, no fit** — and **two rungs, not one**, because a single
+> rung gives a time and only a ratio discriminates between two candidate slopes.
+> **Both rungs must sit well inside one piecewise segment**, not straddle a
+> boundary: the table is piecewise (0.128 / 0.0596 / 0.0564 / 0.0778) and a ratio
+> taken across a break measures a blend and adjudicates neither.
+
+That is materially different from "confirm the table at bytes 20-59", which is
+what the list said this morning and which would have spent a bench hour without
+separating `ENV_RATE_K` from the firmware constant.
