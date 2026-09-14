@@ -11850,3 +11850,58 @@ number said 1046.50.
 
 **Two measurements agreeing is much weaker than one measurement matching a value
 that was never measured**, and only the second kind is free.
+
+### §121 addendum 4 — the rule used to eliminate, and something survives it
+
+The carrier-cycle rule earns its keep twice on the sibling machines, once
+quantitatively and once as an elimination. mpc2emu supplied both.
+
+**It sizes a correction that had been made from first principles.** Their
+`ATTAK1` ladder was re-read this morning on the argument that a 5 ms window on a
+33 Hz tone is "0.16 of a cycle, so it measured the waveform and not the
+envelope" — true, and qualitative. 33 Hz is **0.165 cycles per window**, which
+falls between this project's 20.6 Hz (14.5 dB swing) and 41.2 Hz (8.3 dB) rows,
+so roughly **11 dB of swing against a −3 dB threshold**. Their old reading ran
+17–33% short of the same capture measured with a Hilbert envelope, and an early
+threshold crossing is what 11 dB of swing produces. **A synthetic tone put a
+number on a correction that had been right and unsized.**
+
+**And it eliminates itself as the explanation for a surviving anomaly.**
+s3ked's remaining open item is a 47 ms floor at the fastest envelope setting,
+note-independent across notes 48/72/96. Their subject's carrier there:
+
+```
+  note 48    131 Hz    0.65 cycles / 5 ms window   mildly exposed
+  note 84   1046 Hz    5.23 cycles                 immune
+  note 96   2093 Hz   10.47 cycles                 immune
+  measured floor       0.0525 / 0.0515 / 0.0518 s  -- flat to 2%
+```
+
+**The carrier changes 16× across that sweep and the floor does not move.** A
+carrier-cycle artefact would have to shrink by more than an order of magnitude
+over that span. So the 47 ms is **not** this mechanism, and it stands as a real
+property of something — the first thing today that has survived elimination
+rather than dissolved.
+
+**That is the more valuable use of a rule like this.** Most of today it has been
+demolishing results. Here it does the other job: it removes a candidate
+explanation and leaves an anomaly with fewer places to hide. A mechanism that
+can only ever explain things away is not much of a mechanism; one that can be
+ruled *out* by a measurement is.
+
+### The a-priori pitch check becomes a required row
+
+mpc2emu's argument, and it is `row_schema_required`'s exactly: **the cost of a
+missing check is never visible when you decide not to run it.** So it stops
+being a habit.
+
+Every capture contains a quantity whose true value is fixed before anything is
+measured — the pitch of the note played. One FFT validates sample rate, wav
+header, analysis scaling and tuning together, against a value nobody measured.
+It caught a sibling's hardcoded 44100 against a 48000 rig (carrier read as
+961 Hz where the note number said 1046.50), and here it caught an octave nobody
+was looking for, which changed what note 16's rate ratio meant.
+
+Added to the ladder's `row_schema_required` as `carrier_hz_measured` and
+`carrier_hz_expected_from_note`, with `cycles_per_smoothing_window` beside them,
+since that last number is what says whether the row is trustworthy at all.
