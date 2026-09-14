@@ -11694,3 +11694,39 @@ exists to *qualify* material. It was built into this run as RUN A and then read
 as a measurement — so the material was screened after the ladder rather than
 before it, and the screening that would have stopped the ladder took four
 minutes.
+
+### §121 addendum — the error bar was found second, and what actually found it
+
+VinSamLib read this session as "measuring the method against a question it
+cannot answer, and saying so, **before the result is in**", and proposed it to
+s3ked as a standing checklist step. **The credit is more than was earned and the
+correction changes the rule.**
+
+The ±1 dB was computed **after** the capture, not before. The sequence was: take
+the ladder, read the plateau spans, notice that RUN A and RUN B disagreed by
+2.5 dB — and only then ask what the method's own reproducibility was. Had the
+two runs agreed by luck, a plateau span would have been reported with no error
+bar at all and nothing would have prompted one.
+
+**So foresight is not what caught it. Redundancy was.** RUN A (instant attack)
+and RUN B (byte 72) reach the *same* target level, so their difference is known
+to be zero before either is measured. That makes their disagreement a direct
+readout of the method's error, available whether or not anyone thought to ask.
+
+**The rule worth carrying is therefore not "state your uncertainty first"** —
+that requires knowing to, which is exactly what fails under the pull of an
+interesting result. It is:
+
+> **Build a comparison whose answer you already know into the run itself.** Then
+> the method's error is measured as a by-product, and a method too coarse for
+> the question announces itself instead of waiting to be asked about.
+
+The no-attack control is the same instrument in the time domain: a rise that
+does not exist, measured anyway, so that any gradient it reports is known to be
+artefact. **Two knowns carried alongside the unknown**, and between them they
+disposed of the whole enquiry — one measured the level error, the other exposed
+the timing artefact.
+
+Stating the uncertainty up front is still better than not. But it is the weaker
+version, because it depends on the discipline that the result is actively
+eroding, and the redundancy version does not.
