@@ -11241,3 +11241,82 @@ but *who is answerable for the call* does not. Recording a colleague's
 deliberate non-action as an error averted transfers the judgement to whoever
 reads it next — the same failure as a wrong recorded reason (§117), one level
 up.
+
+## §119 — The shape ratio varies between programs, so §117's 1.170 is an n=1 figure (2026-09-14)
+
+**Stated before it is explained, because it weakens a number this project issued
+three hours earlier.**
+
+s3ked measured the full/−3 dB ratio **twice on one Akai in one session**:
+
+```
+  ATKCAL program, ATTAK1 60        1.396   (ladder mean 1.4156, sd 0.011)
+  a different resident program     1.298   same byte, same machine, same hour
+                                   ------- spread 7.6%
+  our E4XT, one preset, byte 72    1.170
+  a straight amplitude ramp needs  1.4125
+```
+
+§117 said "a convention factor is a property of the *shape*, and the two machines
+do not share one." **That is now too weak in a way that matters: one machine does
+not share one with itself.** The ratio is a shape diagnostic, and envelope shape
+varies between programs on the same sampler — demonstrated across two machines
+and two programs of one machine, not argued.
+
+### What that does to our own number
+
+§117's 1.170 is the median of five notes **of a single preset at a single byte**.
+Five notes is a population on the dimension we sampled and n=1 on the dimension
+s3ked just showed is live. That is §114's first failure mode — not looking at a
+population you can see — arriving in a section written the same day as the
+warning about it.
+
+**§117's fork stands; its coordinates do not.** Which point of the curve the
+conversion should match is still the real question, and matching at half power is
+still the better answer for the reasons given. But "the alternative is 1.17"
+should read **"the alternative is ~1.17 as measured on one preset, and the
+spread across presets is unmeasured."** Corrected in place rather than left to
+be inherited, per §117's own rule.
+
+### And it forces a re-reading of §105's cross-check
+
+The ladder's cross-check reads: a preset whose panel showed Atk1 rate 89
+measured `t_peak` ~10.1 s; byte 89 on **a different preset with different
+material** gave 9.10 s — "the timing follows the byte across programs, which a
+material artefact could not."
+
+**That is an 11.0% disagreement, and we recorded it as agreement.** Against
+measurement noise it is agreement. Against s3ked's §236 — same byte, two
+programs, **33% different attack and a different shape**, with every readable
+envelope parameter identical or ruled out — 11% is the same size as the effect
+they just characterised, and our reading of it assumed the effect does not exist.
+
+It does not overturn the ladder: the byte plainly dominates, 9.1 s against 0.18 s
+at byte 20. **It does mean the cross-check proved less than it was quoted for.**
+It showed the byte is the main term. It was cited as showing the byte is the only
+term.
+
+### The firmware route was closed twice over
+
+s3ked's method needs **published anchors** — four exact integers Akai release,
+confirmed by endianness and a `0x7FFF` clamp. Every EOS envelope number we hold
+is a fit to captures, so there is nothing to anchor a search on. **Even with a
+plain image the search would have been much weaker here**, and their image had no
+container at all: a raw 256 KB binary. They did not solve a packing problem; they
+did not have one.
+
+So §116's structural close is the second reason the route fails, not the first.
+
+### The caution, now with a live example rather than a principle
+
+The warning issued before any of this was agreed — *firmware says what the
+machine intends, captures say what left the converters, and a disagreement is not
+automatically the measurement being wrong* — has a case attached to it an hour
+old. s3ked's §236 is a 33% attack difference between two programs that **no
+firmware table would have predicted**, found only because the audio disagreed
+with the intent. Their own conclusion: with a table in hand they would probably
+have trusted it over the audio and been wrong.
+
+**A table is a stronger form of evidence about intent and a weaker one about
+output.** Our position — captures and no table — is worse for settling
+0.0565 vs 0.0581 and better for noticing this.
