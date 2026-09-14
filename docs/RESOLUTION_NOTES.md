@@ -12572,3 +12572,59 @@ bits/byte is consistent with compression, with encryption, and with a bit
 permutation, and nothing in §116 distinguished them because there was nothing to
 compare against. The discriminator needed a known plaintext of the same content,
 and Jan supplied the route to one.
+
+### §123 addendum — "bit permutation" was stated too strongly, and one alternative fits better
+
+§123 concluded the payload is a **bit permutation** because its bit density
+matches the plaintext's. Two checks since say that conclusion outran its
+evidence, and it is corrected here rather than quietly amended.
+
+**A within-block permutation is excluded at every block size tested.** If the
+permutation acted inside blocks of B bytes, each block's bit count would be
+conserved and the payload's block-to-block density spread would match the
+plaintext's. It does not — and it does not collapse to the iid reference either:
+
+```
+   B       4.62 plaintext     4.70 payload     iid at the payload's density
+      8    2.717 +- 1.091    2.686 +- 0.550        +- 1.336
+    256    2.717 +- 0.760    2.686 +- 0.212        +- 0.236
+  16384    2.741 +- 0.391    2.688 +- 0.101        +- 0.030
+```
+
+The payload sits **between** the two everywhere: far more uniform than the
+plaintext, but with real long-range density variation the iid reference does not
+have (0.101 against 0.030 at 16 kB). So the transform mixes over long ranges and
+does not conserve block-level structure. A global permutation is consistent with
+that; it is no longer the *only* thing consistent with it.
+
+**And a better candidate has appeared: LZ77 bit-packed into fixed-width fields
+with no entropy coding.** Offsets and lengths are small numbers, so their high
+bits are mostly zero — which produces exactly what is measured: density well
+below 0.5, high per-byte entropy from the bit-packing misalignment, and residual
+long-range variation where the data matches well or badly. **A 1990s in-house
+coder is far more likely to be that than to be a bit-scrambler**, and it is what
+the name on the tin says.
+
+**Which also weakens §123's size argument**, and that should be said plainly. It
+assumed the 4.62 prep image is content-comparable to 4.61 and 4.70. That is
+unestablished: the 4.7 addendum states RFX plug-ins ship *with the OS*, so the
+full images may carry plug-in binaries the prep disk does not, and the size
+difference would then be content rather than an absence of compression.
+
+**What survives, and it is still worth having:**
+
+- **The payload is not a well-formed entropy-coded stream.** Bit density 0.336
+  against zlib's 0.514 on the same content. Whatever it is, it leaves
+  substantial redundancy, which rules out the modern LZ+Huffman/arithmetic
+  family that most of §116's sweep assumed.
+- **That is why the earlier sweeps failed in the direction they did**, and it
+  narrows the target rather than identifying it.
+
+**What does not survive: the claim that no compression is present.** It is not
+established, and §123 asserted it.
+
+**The error is the day's own, one more time.** A measurement that could not
+distinguish three hypotheses was reported as having picked one — the same
+under-determination §123 had just diagnosed in §116, committed in the paragraph
+that diagnosed it. The check that caught it was available before the claim was
+made and took two minutes.
