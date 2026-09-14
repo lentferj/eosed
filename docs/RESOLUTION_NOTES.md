@@ -11874,8 +11874,28 @@ note-independent across notes 48/72/96. Their subject's carrier there:
   note 48    131 Hz    0.65 cycles / 5 ms window   mildly exposed
   note 84   1046 Hz    5.23 cycles                 immune
   note 96   2093 Hz   10.47 cycles                 immune
-  measured floor       0.0525 / 0.0515 / 0.0518 s  -- flat to 2%
+  measured floor       0.0111 / 0.0104 / 0.0108 s  -- flat to 6%
 ```
+
+**THE FLOOR IS 11 ms, NOT 47 — corrected 2026-09-14 12:15, twenty minutes after
+this passage was written.** s3ked withdrew the 47 ms: the same hardcoded 44100
+that scaled their times by 8.8% also opened their analysis window at
+`int(0.4 x 44100)` samples, which is 0.3675 s at 48000 — **32.5 ms before the
+note**, an offset every measured time carried. Re-measured at the true rate with
+the window at the note, the floor is 11.1 / 10.4 / 10.8 ms.
+
+**The elimination survives, and now by two independent routes.** The carrier-cycle
+argument above is unaffected — the carrier still changes 16x and the floor is
+still flat. And s3ked ran a detector-width sweep on the suggestion: **flat to
+~2 ms over a hundredfold change in width, in two different detector families**
+(Hilbert 0.1-10 ms decimation, and RMS 0.5-10 ms window). Not a detector floor,
+not carrier leakage, real.
+
+**What does NOT survive is the analogy this project offered.** 11 ms no longer
+sits inside our 20-60 ms no-attack control range, so "it might be the same thing
+as your detector floor" is dead — correctly, and it was the weaker half of the
+argument. The half that held is the one that used a measurement rather than a
+resemblance.
 
 **The carrier changes 16× across that sweep and the floor does not move.** A
 carrier-cycle artefact would have to shrink by more than an order of magnitude
@@ -11905,3 +11925,49 @@ was looking for, which changed what note 16's rate ratio meant.
 Added to the ladder's `row_schema_required` as `carrier_hz_measured` and
 `carrier_hz_expected_from_note`, with `cycles_per_smoothing_window` beside them,
 since that last number is what says whether the row is trustworthy at all.
+
+### §121 addendum 5 — the check that refuses, and it refuses today's own ladder
+
+s3ked, having read the pure-tone table: *"Mine would have read 0.165 and I would
+still have taken the measurement, because nothing told me what the number
+meant."* **A recorded number with no verdict attached is a number that gets
+recorded and ignored** — §108's "a check that certifies", one step earlier.
+
+So `tools/carrier_check.py` does not report, it **refuses**, and the threshold
+carries the swing it implies rather than being a bare constant:
+
+```
+  cycles/window   0.05   0.10   0.165   0.25   0.33   0.41   0.50   0.66   1.0   5.2
+  swing (dB)     21.20  14.81  10.34    6.64   3.93   1.87   0.04   1.79  0.01  0.00
+
+  < 0.41   REFUSE    a pure tone swings > 3 dB; a -3 dB threshold can fire early
+  < 2.0    WARN      swing is NON-MONOTONE here -- 0.50 gives 0.04 dB and 0.66
+                     gives 1.79 dB, because it depends on the fractional part of
+                     window/period, not on how many cycles fit. So "more than
+                     half a cycle" is not a safe rule; require whole ones.
+  >= 2.0   OK
+```
+
+**Pointed at this session's own captures it refuses them**: note 16 at 0.051
+cycles REFUSE, note 40 at 0.204 REFUSE, note 64 at 0.820 WARN. **Every rung of
+today's ladder would have been stopped before it was recorded**, including the
+one whose 1.655x ratio took three analyses and a synthetic control to dismantle.
+
+It carries the a-priori pitch check in the same pass, with one detail that cost
+something here: the FFT floor is 8 Hz, not 20. **A preset tuned an octave below
+its note numbers puts its fundamental under a naive 20 Hz floor, and the peak
+then found is a harmonic** — which reads as a clean measurement of the wrong
+thing. That is how note 16's rate ratio first came out 8x instead of 16x.
+
+### Why the a-priori check is different in kind
+
+s3ked's account of their own day is the argument: *every check I ran compared
+one of my measurements against another, so a common-mode error in my analysis
+was invisible to all of them — nine eliminations, five sections, two peer
+projects.* What broke it was the probe note's own frequency, which had been in
+the file the whole time, recorded under a heading about something else.
+
+**Two measurements agreeing is much weaker than one measurement matching a value
+that was never measured.** Agreement between measurements shares every
+assumption the analysis makes; a note number shares none of them. And only the
+second kind is free.
