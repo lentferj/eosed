@@ -10920,3 +10920,111 @@ with a `main()` and an exit code, **ran and exited 0 having done nothing** — a
 file whose entire purpose is catching checks that cannot fail, delivered in a
 form that could not fail. One question before writing would have caught it, and
 running it caught it in ten seconds where reading it had not.
+
+## §116 — The EOS OS floppy images are packed, and the unpacker is not in them (2026-09-14)
+
+s3ked read an envelope rate table straight out of an Akai firmware image, and
+mpc2emu sent over a scanner to repeat it here. Jan supplied `EOS470.zip` and
+`EOS_V461.EXE` for the purpose. **The route does not exist on this machine, and
+the reason is structural rather than a matter of trying harder.**
+
+### What the files are
+
+```
+EOS470.EXE / EOS_V461.EXE   1,480,228 bytes each, same shell, different payload
+  0x0000  5,668-byte DOS loader, LZEXE v0.91 ("LZ91" at offset 0x1c)
+  0x1624  1,474,560 bytes appended = one 1.44 MB floppy image
+```
+
+The loader's own strings say what it is: `Restoring Image `, `Head `, `Track `,
+` #1-18`, `==> 100% `, `SelF-eXtractor`. It is a generic DOS disk-imaging
+self-extractor. **It writes the image to a floppy verbatim and does nothing
+else.** 18 sectors per track, two heads, 80 tracks — standard 1.44 MB geometry.
+
+The image carries an E-mu header in sector 0, big-endian:
+
+```
+  0x00  0x76543211                 magic, identical in both
+  0x04  0x08860E57 / 0x07D2C274    differs; not a sum8/sum16/sum32 of the body
+  0x08  0xF779F1A8 / 0xF82D3D8B    differs; likewise
+  0x0c  0x00020602                 IDENTICAL in both -- format version
+  0x10  0x0014F755 / 0x001341BE    1,374,037 / 1,262,014 -- payload length
+  0x18  "EOS v4.70" / "EOS v4.61"  24-byte banner
+  0x200 payload; 0xF6 fill (the DOS format filler) after the data
+```
+
+### Why no scan of it can find a table
+
+Everything from 0x200 to the fill is packed. Establishing that took four
+probes, and the order matters because the cheap ones are the ones that mislead:
+
+**Entropy alone proves nothing.** 7.19 bits/byte mean over 4 kB windows is
+consistent with compression *and* with encryption *and* with a large block of
+sample data. It is a reason to look further, not a finding.
+
+**Structure: none.** Autocorrelation over the payload shows no peak above 0.02
+— one continuous stream, not a sectored or chunked container. Nothing to index
+into.
+
+**Plaintext: none, anywhere.** 256-byte windows across all 5,367 windows of the
+payload: 85 fall below 6.0 bits/byte, which is the statistical floor for
+windows that short — small windows under-estimate entropy even on uniform data.
+68k code sits near 5.0 and there is not one such region. **So there is not even
+a plaintext bootstrap on the disk.**
+
+**The one hypothesis worth testing, and how it died.** Both payloads *begin*
+with identical byte runs that diverge at the same offsets:
+
+```
+  4.70  3b1506 41 0042181c577b9e5e2a80 0008 0c0200 07 5fc8 8004040c8a4f29880ec34170d c6 02080874701203ffcdcd08202
+  4.61  3b1506 41 003b4984747c0b47a8b0 0008 0c0200 06 d5a7 8004040c8a4f29880ec34170d 86 22080874701203ffcdcd08202
+```
+
+Position-preserving agreement like that is the signature of a **byte-wise
+scramble** (XOR keystream), not of compression — compressed streams of similar
+inputs desync within a few bytes and never re-align. If it were a scramble,
+XORing the two images cancels the keystream and leaves plaintext-vs-plaintext,
+which for two point releases of one OS should be mostly zero.
+
+It is not. Outside the trailing fill, agreement runs **1.0–1.3% per 64 kB
+block** — and that is what two *uncorrelated* streams of this skew give, since
+collision probability for a distribution at 7.19 bits/byte is about 1%, not the
+0.39% of uniform bytes. **The excess over 1/256 was the skew, not a signal.**
+The matching head bytes are a coincidence of a short prefix. Scramble refuted;
+compression confirmed.
+
+**And no standard scheme reads it.** Byte-oriented LZSS across window 2^10–2^13
+× length+2/+3 × both flag-bit orders × both offset byte orders (16 combinations,
+scored by printable-string yield, not eyeballed): nothing. Bit-oriented LZSS at
+six parameter sets × both bit orders, and LZW at 9–12 bits × both bit orders ×
+both early-change conventions: every one desyncs inside 8 kB. Not zlib, deflate,
+gzip, bz2 or lzma either.
+
+### The structural conclusion
+
+The DOS stub only moves bytes to a floppy. The disk holds no plaintext. So
+**the decompressor runs on the E4XT, out of its boot ROM** — which we do not
+have and cannot read over either SysEx protocol. The packing scheme is E-mu's
+and lives in silicon on the other side of the MIDI cable.
+
+**This is not "we failed to identify the format". It is that the format's
+decoder was never in the files.** Jan's two OS images are exactly as far as this
+line goes, and a better scanner, a longer parameter sweep, or a third OS version
+would all fail for the same reason.
+
+### What this costs, and what it does not
+
+mpc2emu's scanner is sound and its controls pass; it simply has no substrate
+here. The choice it was built to settle — whether the envelope rate law is
+`ENV_RATE_SWEEP_K` 0.0565 or `ENV_RATE_K` 0.0581, a 2.8% difference that is
+inside the noise of both fits — **does not get settled from firmware.** It stays
+where it was: a question for the captures, which means it stays open until
+something measures it more finely than the fits that produced the disagreement.
+
+**The general form.** s3ked's method transferred as an idea and not as a
+procedure, and the part that did not transfer was not the search — it was the
+assumption that the firmware file contains the firmware. On the Akai it did. A
+technique borrowed from a sibling machine carries the sibling's platform
+assumptions silently, and the cheapest place to find that out is before the
+search, by asking what the container is, rather than after, by concluding a
+table is absent when the whole image is.
