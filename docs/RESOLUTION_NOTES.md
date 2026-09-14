@@ -11116,3 +11116,73 @@ addendum working in the direction it was written for.
 a linear ramp and simply false here; the same symbol, "the difference between
 full and −3 dB", takes a different value on every ramp shape. A number that
 transfers between machines is a number whose derivation transfers.
+
+## §118 — The entropy check is two-sided, and it cannot tell you that you succeeded (2026-09-14)
+
+k2kremote ran §116's entropy check on their own firmware image and got the exact
+inverse result, which is what makes it worth recording as a method rather than as
+a one-off:
+
+```
+                        K2000 image        EOS 4.70 image
+  mean entropy          5.00 bits/byte     7.19 bits/byte
+  windows below 6.0     4040 / 4095        85 / 5367
+                        = 98.7%            = 1.6%, the floor for 256-byte windows
+  verdict               plaintext 68k      packed end to end
+```
+
+**A test that only fires one way is a detector; a test that separates both ways
+is a discriminator.** §116 used it to establish absence, which is the weaker
+direction — the same check on their side establishes presence, and the two
+results together are what make the 7.19 meaningful rather than merely high.
+
+### What it still cannot do
+
+k2kremote had already decoded their DSP-function dispatch before running it — a
+bounds check, a linear search of a 67-entry code table, then a jump through a
+table indexed by the search's loop register — and validated the result against
+**65 codes measured independently on the instrument over several days, zero
+disagreements.**
+
+Their own framing of the ordering is the right one: **entropy first because it is
+cheap, but behavioural agreement is the only check that is conclusive.** Entropy
+would have saved them the attempt had it come out like ours. It could not have
+told them the attempt had *worked*.
+
+### Three traps in one exchange, all the same shape
+
+**The failure mode of firmware reverse engineering is a plausible wrong answer,
+not an error.** Every instance we hit between us is that:
+
+- **Wrong ISA.** A later-m68k decode accepts addressing modes the 68000 does not
+  have and emits a reasonable-looking listing. `-m m68k:68000` pins it. They had
+  it right by luck rather than judgement, which is worth saying out loud because
+  luck does not repeat.
+- **Wrong direction.** Their jump table is indexed by a register counting
+  **down**, so it runs in reverse relative to the code list. Decoded forwards it
+  yields a complete, plausible, entirely wrong mapping. Nothing internal to the
+  decode says so.
+- **Wrong substrate.** A disassembler pointed at packed data produces
+  instructions, not a complaint (§116).
+
+In all three, the artefact looks like a result. **So the question to ask of a
+decode is never "does this look right" but "what does it predict that was not
+used to build it".** 65 hardware measurements reproduced by a table derived
+without them is an answer. Internal plausibility is not.
+
+### The asymmetry on our side, stated plainly
+
+Theirs is a firmware decode corroborated by hardware. **Ours is the inverse and
+has no corroboration available at all**: every E4XT curve we hold is a fit to our
+own captures, and §116 closed the only independent route to checking them. That
+does not make them wrong — the ladder's byte-follows-across-programs cross-check
+is real evidence. It makes them **single-method**, and §111, §113 and §117 are
+three separate demonstrations of how much of a measurement is convention rather
+than machine.
+
+**The honest position is that s3ked's challenge to our curves was neither
+confirmed nor answered.** It was rendered unreachable. Those are different
+states and the notes should not let them blur.
+
+The remaining route is a boot-ROM dump off the machine, which is a hardware read
+and Jan's call, not ours to plan around.
