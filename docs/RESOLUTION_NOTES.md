@@ -13432,6 +13432,44 @@ it comes from the saturation rather than from either fit.
 +10%, not 2.00x, and -10% gives 0.84x the magnitude of +10%. Small, real, and
 uncharacterised.
 
+### A cross-check that looked independent and was not — WITHDRAWN
+
+This section originally offered: *"the rate law predicts the measured time to 1%
+on a cord it was never fitted to"* — `exp(0.0581 x 7.94) = 1.58` against a
+measured `3.020/1.940 = 1.56`. mpc2emu extended it, found the **firmware**
+constant 0.0565 fitting three times better, and — correctly — asked whether the
+byte shift had passed through a law anywhere, since the whole thing collapses if
+it had.
+
+**It had. The law was the table itself.**
+
+```
+  idx = index_for( T[72] * t_base / t_measured )   # log-interpolates THE TABLE
+  162 * 3.020/1.940 = 252.2  ->  index 64.06,  shift -7.94 bytes
+```
+
+The shift is **by construction** the table displacement that reproduces the
+measured ratio. Feeding it back through a candidate `k` tests only whether that
+`k` matches the table's local log-slope, which over bytes 64-72 is **0.05572**.
+So 0.0565 "fitting" and 0.0581 not is a restatement of the table's contents, not
+a measurement.
+
+**And the reasoning that was meant to detect this pointed the wrong way.** The
+test was: an exact reproduction would prove circularity, a 1.9% miss would rule
+it out. But the miss is the *table's own deviation from a pure exponential* over
+that span. **A circular derivation through a non-exponential table produces an
+inexact-looking agreement — which is the most convincing possible disguise.**
+
+So the independent support for 0.0565 remains **two** lines, not three: the
+table's slope over bytes 60-100, and the corpus's byte-0/instant agreement. This
+experiment contributes the saturation floor and the sign, and nothing about
+`ENV_RATE_K`.
+
+**What would be non-circular**, and it changes the shape of the outstanding bench
+check: a byte shift obtained without the table. Set rate byte 60, measure; set
+byte 100, measure; take the ratio. **Two rungs, not one** — a single rung gives a
+time, and only a ratio discriminates between two candidate slopes.
+
 ### What it means downstream
 
 mpc2emu's open question was whether a corpus median amount of 0.110 is "~14 bytes
