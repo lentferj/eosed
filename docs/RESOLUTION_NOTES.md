@@ -13359,3 +13359,86 @@ prompt, not an internal trigger.
 Select preset and voice; select a zone only around the zone-scoped reads that
 need it, and re-select the voice afterwards. Any helper that sets 226 as part of
 a generic preamble is wrong.
+
+## §132 — `Key+ -> VEnvAtk` measured: full scale is the whole rate range, and the sign was backwards (2026-09-14, live)
+
+With §131's zone-selector fault removed, the cord measurement §130 could not
+take now runs. Subject P017 (`NOISE XP R72`): flat looped noise, origkey 72,
+zone keys 72-96, Atk1 rate 72, plateau envelope, note root-matched.
+
+### The data
+
+```
+  amount    note 72      80      88      96
+      0%     3.020    2.960   3.000   2.980 s     (flat -- 131's null)
+    +10%     1.940    1.800   1.780   1.740       faster, and faster with pitch
+    +20%     1.300    1.200   1.100   1.040
+    -10%     4.400    4.620   4.640   4.900       slower, and slower with pitch
+   +100%     0.040    0.020   0.020   0.020       SATURATED at every note
+   -100%     20.5     20.5    20.5    20.5        SATURATED at every note
+```
+
+### The sign was backwards, and the reason is worth more than the correction
+
+§130 predicted from firmware that a positive modulation raises the index and so
+makes the attack **slower**. **A positive amount measures FASTER**, and the table
+direction is not in doubt (`T[0]=65535`, `T[72]=162`, `T[127]=4`; index 0 is
+instant, confirmed independently by 67% of corpus rate bytes sitting at 0).
+
+**The disassembly was right about the structure and could not have been right
+about the sign.** `(field + term) >> 5`, the clamp, the two branches — all
+correct. But the sign lives in whatever produced `term`, three routines earlier,
+which was never read. **A disassembly gives the shape of a computation, not what
+a register held before it arrived.** The claim should have been marked as
+structure-only when it was made.
+
+Musically the measured direction is the expected one: `Key+` at a **positive**
+amount shortens attacks as pitch rises.
+
+### Full scale: an inequality from saturation, then a constant
+
+**The floor needs no calibration.** At +/-100% the index clamps at *every* note,
+including note 72 where `Key+` is only 0.567 of its own scale. Going 72 -> 0 is
+72 bytes = 2304 internal units, so `0.567 x full >= 2304` gives
+**full scale >= 127 bytes**. That is an event that either happened or did not —
+no detector convention, no fit, no repeat takes — and any other normalisation of
+`Key+` makes it *smaller* at note 72 and therefore pushes the floor **up**.
+
+The unsaturated runs then give the constant, by converting each `t90` through the
+firmware table (`t90 ~ 1/T[index]`) to an index and differencing against byte 72:
+
+```
+  index shift (bytes)      note 72     80      88      96
+        amount +10%          -7.94   -8.90   -9.34   -9.64
+        amount +20%         -15.02  -16.12  -17.88  -18.77
+        amount -10%          +6.68   +7.86   +7.70   +8.89
+
+  full scale, from the absolute shift:   118 - 136 bytes
+  full scale, from the slope in note:     90 - 117 bytes
+  slope at 100% amount:              ~0.8 bytes of rate per semitone
+```
+
+**So a 100% cord spans essentially the whole 0..127 rate range**, and one
+internal unit is 1/32 byte, making full scale ~3200-4100 internal units.
+
+### Two honest limits
+
+**The two estimators disagree by about 20%**, which means `Key+` is not simply
+`note/127` — an offset or a different reference (root key, voice key range) would
+reconcile them, and none has been established. The *floor* is unaffected, because
+it comes from the saturation rather than from either fit.
+
+**And the response is not quite linear in amount**: +20% gives 1.89x the shift of
++10%, not 2.00x, and -10% gives 0.84x the magnitude of +10%. Small, real, and
+uncharacterised.
+
+### What it means downstream
+
+mpc2emu's open question was whether a corpus median amount of 0.110 is "~14 bytes
+and matters" or "a few internal steps and is nothing". **It is the first.** And
+converted through the rate law it is worse than the byte count suggests, because
+the law is exponential: one byte is x1.0598 in envelope time, so 14 bytes is
+**x2.25** and the EOS template default at 0.220 is **x5.07** — a 2.03 s attack
+becoming 0.40 s. **That default sits on most voices in their corpus and their
+reader drops it**, which makes the exposure larger than the authored-cord share
+alone.
