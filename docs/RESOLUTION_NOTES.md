@@ -11389,3 +11389,77 @@ material that has to be reloaded anyway, and it belongs to whoever holds the
 lead. The note-dependence itself — 1.25x across 55 semitones, in the direction of
 *slower at higher pitch* — is unexplained and worth a section of its own once
 someone measures it deliberately rather than reading it out of a spread.
+
+## §120 — The level test would locate the convexity, and it is the third test in half an hour blocked by a missing column (2026-09-14)
+
+mpc2emu's candidate for §119's note-dependence: "slower at higher pitch" is not
+key-follow (which runs the other way), but it is exactly what a **fixed-rate ramp
+climbing to a note-dependent level** looks like. Nothing about the rate changes;
+the plateau is simply a little higher up the keyboard. Their prediction: a
+**+1.92 dB** level offset across 55 semitones, 0.035 dB/semitone — too gentle to
+notice by ear and large enough to read off a capture.
+
+### The prediction depends on where the convexity lives, and that makes it better
+
+Their arithmetic takes `t90 ∝ plateau`, which holds for a ramp whose *amplitude*
+climbs at a fixed rate. §113 measured the amplitude rise as convex, `level ~
+t^2.28`, so there are two placements and they predict different numbers:
+
+```
+  convexity in the RAMP        plateau ratio = t ratio         = 1.248  -> +1.92 dB
+    (amplitude climbs convexly to L, time-to-plateau ∝ L)
+  convexity in the OUTPUT MAP  plateau ratio = (t ratio)^2.28  = 1.657  -> +4.39 dB
+    (internal generator ramps linearly at fixed rate, audible level = internal^n)
+```
+
+**2.47 dB apart, on a quantity measurable to a few tenths.** So the measurement
+does not merely confirm or kill the level hypothesis — **it says whether the
+E4XT's convex attack is produced by a convex ramp or by a linear ramp through a
+non-linear output stage.** That is a fact about the machine, and it would be the
+first one we hold about the envelope generator's internals rather than its
+behaviour.
+
+There is a third reading in which `t90` is self-normalising — a fraction of
+whatever the plateau is, hence invariant to it — and that one predicts **0.00 dB**
+and is also distinguishable. Three placements, three separated predictions, one
+capture.
+
+### And it cannot be run
+
+`peak_db` is a column of the ladder, but the ladder's rows vary **byte at one
+unrecorded note**: −40.59, −48.72, −52.77, then flat at −53.9 ± 0.1 from byte 72
+up. §113's five-note table records `t10`, `t50`, `t90` and **no level at all**.
+
+**That is the third test blocked in half an hour by the same cause:**
+
+```
+  mpc2emu's sample-rate test   needs the preset per row   not recorded (§119)
+  the uncontrolled-note reading needs the note per row     not recorded (§119)
+  the level test                needs the level per note   not recorded (here)
+```
+
+Each was a lookup in data we already had. Each cost nothing to have recorded and
+cannot now be recovered without re-taking the measurement on material that no
+longer exists in RAM.
+
+### The rule, in mpc2emu's framing, which is better than the one §111 had
+
+§111 recorded the unidentified material as a reproducibility gap — a thing that
+would be awkward *if* someone wanted to extend the ladder. That undersold it.
+**The cost of a missing column is never visible when you decide not to add it,
+and it is never paid by the session that omitted it.** It is paid by whoever
+arrives with a question the columns would have answered, and they find out only
+after the question exists.
+
+So the fix is not "identify the material next time". It is a fixed minimum row:
+**`preset`, `note`, and the measured level, on every row of every ladder, always
+— including when no current question needs them.** Recorded in the ladder JSON
+itself as `row_schema_required`, because the JSON is what gets quoted and the
+prose is what gets skipped.
+
+### Honest state of the hypothesis
+
+A candidate, not a conclusion, and the corroboration is ambiguous: s3ked's second
+Akai program was a *higher* note and also measured *slower* — same direction,
+which is either support or two instances of one confound. And per §119's own
+lesson, the confound is the reading to exclude first.
