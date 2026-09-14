@@ -12351,3 +12351,71 @@ does not reach the sounding preset's *display*, and that voice-level parameters
 (id 39) do reach the audio while preset-level ones (`E4_PRESET_VOLUME`) do not.
 Whether a filter parameter reaches a **sounding voice** on 4.70 is a one-note
 experiment and has not been run.
+
+### §122 addendum 4 — E-MU's own 4.7 addendum settles the version caveat, and corrects half the premise
+
+Jan supplied the primary source: **"EOS 4.7 Operation Manual Addendum", E-MU PN
+FI12529 Rev. A**. It is E-MU's own enumeration of what 4.7 changed, and it
+answers §122's remaining exposure directly.
+
+**What 4.7 actually added**, by its own table of contents:
+
+```
+  To Install EOS version 4.7
+  Number-naming convention specification
+  EOS FAT                     -- "The major feature in this upgrade ... based on
+                                 the FAT32 disk file system"
+  Applications                -- renaming banks on a PC, .wav/.aiff transfer
+  Miscellaneous Bug Fixes     -- SEVEN items, ALL plug-in / RFX / effects /
+                                 Import Wave / MM List
+  plus: the RFX Compressor plug-in, and a changed plug-in structure
+```
+
+**The whole document contains ZERO occurrences of** `filter`, `envelope`,
+`attack`, `decay`, `release`, `voice`, `oscillator`, `pitch`, `LFO`,
+`modulation`, `sound` or `tuning`. Every listed change is filesystem, plug-in or
+effects.
+
+**So the version caveat is as answered as a document can answer it.** That is far
+stronger than the structural argument in addendum 3, because it is the
+manufacturer enumerating the change rather than us reasoning about which
+subsystem a feature lives in.
+
+**It is not proof.** A manual addendum documents *user-visible* changes and is
+not a changelog; absence from it does not establish absence in code, and the
+confirmation mpc2emu asked for — hardware, bytes 20–59 — is still the thing that
+would settle it. But the prior has moved a long way.
+
+### And it corrects half of the premise it was offered to support
+
+The recollection that prompted this was "FAT32 **and dynamic filters** — on 4.62
+a filter parameter change took effect only on the next note; on 4.70 it is
+audible on a held note."
+
+**FAT32 is confirmed by E-MU. The dynamic-filter change is not in this document
+at all** — not as a feature, not as a bug fix, not as a mention. So it belongs to
+a different version, or it is a community misattribution. **Addendum 3's
+"capability, not just a version note" therefore rests on nothing** and is
+withdrawn as stated: a held-note filter experiment may still work on 4.70, but
+there is no documented basis for expecting it to, and it must be established by
+the one-note test rather than assumed.
+
+**Worth naming the shape.** The evidence offered to close a caveat closed it, and
+disconfirmed the other half of the same sentence. Taking the supporting half and
+not checking the rest would have left a withdrawn capability sitting in the notes
+as a planned experiment — and it was the more interesting half, which is exactly
+why it needed checking first.
+
+### A free confirmation of §122's loader identification
+
+The addendum's install procedure quotes the machine's own prompts:
+
+```
+  "Update FLASH from floppy?"   "Loading OS..."   "Burn to flash?"
+```
+
+**All three are strings this project extracted from
+`EMU_FLASHPREP_OMNIFLOP.IMG`.** So E-MU's documentation independently confirms
+that image is the boot loader — an identification that had rested entirely on
+our own disassembly, now corroborated by a source that shares none of its
+assumptions. The third strand again, arriving free.
