@@ -11730,3 +11730,46 @@ the timing artefact.
 Stating the uncertainty up front is still better than not. But it is the weaker
 version, because it depends on the discipline that the result is actively
 eroding, and the redundancy version does not.
+
+### §121 addendum 2 — the sibling's null was measured on material immune to the mechanism
+
+mpc2emu supplied the half that cannot be seen from this bench. s3ked swept the
+same envelope byte across notes 48/72/96 on the AKAI and got **0.5% across 48
+semitones** — against a document of their own citing **941 ms** of note-dependence
+in the same quantity, read with a fixed-width detector on transposed material.
+
+The obvious reading is that the AKAI does not have the effect. **It is the wrong
+reading, and the reason is the material: their subject was a looped pure tone.**
+
+This artefact needs the sample's *own* amplitude modulation to stretch with
+playback rate. A pure tone has none. **So the null does not test the mechanism —
+the subject was immune to it.** Any AKAI ladder run on real sampled material is
+exposed exactly as ours was, and a reader taking the 0.5% as "this machine
+doesn't do that" would generalise from a control that could not have failed.
+
+**This is §110's rule arriving from the other direction.** There, an absence was
+worth only as much as the statement of *where* we looked. Here it is worth only
+as much as the statement of *what we looked at* — and a clean null on a subject
+chosen for its cleanliness is the most persuasive possible way to learn nothing.
+
+**The general form, which is worth more than either result:** a control is only
+a control against the specific failure it is capable of exhibiting. A pure tone
+is an excellent control for detector linearity and a worthless one for a
+material-coupled artefact, and nothing in the number distinguishes those two
+uses. **Choosing the cleanest available subject actively removes the thing under
+test**, which is the opposite of the instinct it comes from.
+
+### And the detector floor is the same question one scale down
+
+s3ked's remaining open item is a **47 ms floor** at the fastest envelope setting
+on that pure tone, note-independent. Note-independence rules out this
+mechanism — but our own no-attack control puts a number beside it: at the
+fastest setting, with nothing to measure, this rig reports **20–60 ms** at fixed
+5 ms smoothing and 16–159 ms rate-scaled. **That is a detector floor, by
+construction, since there is no rise there at all.**
+
+Whether theirs is a detector floor or a real envelope minimum is decided the
+same way: **change the detector and see whether the floor moves.** A machine's
+minimum attack time does not care about the smoothing width; a detector's floor
+is roughly proportional to it. One sweep of the analysis parameters over
+captures they already hold separates them, with no hardware.
