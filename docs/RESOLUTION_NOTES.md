@@ -13763,3 +13763,206 @@ less reason to believe it.
 run**, and it took one capture session. The question *"has anyone measured the
 thing this claim is actually about?"* was available at every step and was asked
 by neither participant.
+
+## §136 — The amp-envelope LEVEL law measured to byte 25, and mpc2emu's factor of two resolved (2026-09-14, live)
+
+Two questions arrived from mpc2emu the same evening, and one capture session
+answered both. Neither answer is the one I reported first.
+
+### The task, and the floor that had to come first
+
+mpc2emu asked for the amp-envelope level law — attack 0, decay fast, sustain
+held at a swept level, plateau depth below attack peak — and asked for the
+achievable noise floor *before* any rungs, as a result rather than an obstacle.
+Their existing law, `dB below peak = 97.82 − 0.7718 × level_byte`, was fitted
+over bytes 80–116 only, so `ENV_FULL_SPAN_DB = 97.82` is that line extrapolated
+nearly three times past its data.
+
+Broadband RMS on a noise source gave 59 dB of headroom and put sustain level 0
+**0.04 dB above the chain floor** — the full-span point unmeasurable, and the
+error direction flatters the existing law, because a noise floor *adds* power to
+a plateau so a deep sustain reads higher and the span reads shorter.
+
+A tonal source with a narrowband detector changed the picture: at 82 Hz, a
+2^16 FFT has 0.73 Hz bins against 24 kHz of broadband noise. That is where the
+reach comes from, and it is the difference between "impossible with this rig"
+and a measured law.
+
+### Four instrument failures in one evening, all the same shape
+
+Each returned a confident number for a quantity other than the one asked for.
+
+1. **The floor located by `argmax`.** The silence floor was found by taking the
+   maximum bin above 40 Hz and the plateaus were read at a *fixed* bin. Those are
+   two different statistics and both were labelled "the floor". The argmax landed
+   on 93.75 Hz, a line standing 28.5 dB over its local median — mains hash, not
+   the tallest noise (50 Hz sits +21.7 dB, 150 Hz +27.1 dB over local median).
+   Inflation: **+19.97 dB**. Read at the signal bin, silence is −106.34 dBFS, not
+   −86.37, and sustain 0 sits 2.62 dB below it — about one standard deviation for
+   a 7-bin power estimate, so no contradiction and no evidence of a gate.
+   The "92.76 dB span, 5 dB from the predicted 97.82" reported on the strength of
+   it was floor-limited and is **withdrawn**. There was never a disagreement.
+
+2. **The detector bin hardcoded across an FFT size change.** Bin 112 is 82 Hz at
+   2^16. The FFT was then raised to 2^18, where bin 112 is 20.5 Hz. The detector
+   aimed at nothing and reported the top rung **62 dB low**. Fix is mechanism, not
+   rule: the bin is computed from frequency and FFT size at every call.
+
+3. **A note left sounding by a killed script.** It raised the 82 Hz bin **11.4 dB
+   while moving the broadband meter 0.44 dB** — a quiet stuck tone is invisible to
+   a broadband meter and lands squarely in the narrowband detector's own bin, so
+   the only meter that can see this failure is the one being calibrated. Guards
+   added: a floor gate that refuses to proceed until the floor comes down, and
+   All Notes Off on every exit path including signal handlers.
+
+4. **The correction for a known bias, noisier than the bias.** This one is new
+   and is the reason for the retraction below. Subtracting floor *power* from
+   plateau power over-corrects near the floor on a noisy floor estimate, driving
+   the result down and the apparent "dB below peak" up. In the broadband run the
+   raw floor added power and made spans read short; the correction for it removed
+   too much and made them read long. **A correction for a known bias is itself an
+   estimator, and near the limit its error can exceed the bias it removes.**
+
+### The cliff that was not there — RETRACTED
+
+The first narrowband ladder showed rungs from byte 127 down to 32 on a clean
+line and everything below byte 32 in the noise, with byte 25 reading ~11 dB
+*below* where the line predicted — predicted −94.66 dBFS at 12.9 dB above the
+floor, which would have been comfortably measurable. That was reported as a
+discontinuity between bytes 32 and 25, and mpc2emu matched it against their
+corpus: 59 voices at bytes 26 and 29, the densest cluster below byte 32.
+
+**There is no cliff.** Repeating the rungs with +10 dB more output gain
+(`E4_GEN_VOLUME`, id 39) walks the law straight through the region:
+
+| byte | gain 0 | gain +10 | 97.78 − 0.7720×byte |
+|-----:|-------:|---------:|--------------------:|
+| 51 | 58.15 | 57.30 | 58.42 |
+| 43 | 64.18 | 63.51 | 64.59 |
+| 38 | 68.40 | 67.49 | 68.44 |
+| 36 | 69.96 | 68.76 | 69.99 |
+| 33 | 72.92 | 71.63 | 72.30 |
+| 30 | 76.96 | 73.59 | 74.62 |
+| 28 | 81.11 *(read as "floor")* | 75.37 | 76.16 |
+
+Every flagged rung came back into agreement once there was headroom under it,
+and **the discrepancy at each rung shrank monotonically with its distance above
+the floor** — the signature of a floor artefact, since a property of the machine
+would not know how far a rung sat above our noise. The gain test was the whole
+experiment: a digital gate stays at the same *byte* when output gain rises; a
+converter or chain floor moves down in byte. It moved.
+
+Also withdrawn with it: the argument that sub-cliff scatter proved *silence*
+rather than a stuck internal level. The reasoning was sound; its premise is gone.
+If the machine has a floor in its level representation, it is below byte 25 and
+nobody has reached it.
+
+### What the level law actually measures to
+
+Three sweeps, pooled (29 rungs, bytes 25–127): `96.98 − 0.7641 × byte`,
+r² 0.99957. Per sweep:
+
+| sweep | rungs | bytes | fit | rungs above byte 60 |
+|---|---:|---|---|---:|
+| first ladder | 9 | 32–127 | 97.78 − 0.7720 b | 6 |
+| gain 0 | 8 | 33–127 | 97.55 − 0.7688 b | 1 |
+| gain +10 | 12 | 25–127 | 96.48 − 0.7608 b | 1 |
+
+The 1.5% spread on slope is larger than any single sweep's internal scatter, and
+the last column is why: the two later sweeps were laid out to bracket a cliff, so
+their slope is levered off a single top rung. **The headline "0.03% agreement"
+reported from the first sweep alone is not the accuracy of the measurement** —
+the honest figure is 0.764 ± 0.006 dB/byte and 97.0 ± 0.7 dB at byte 0.
+mpc2emu's constants sit at the top of that range, about 1% out, well inside it.
+They should not be changed on these numbers.
+
+### mpc2emu's factor of two: their `ENV_RATE_SWEEP` is right
+
+Two hardware-derived laws in their writer disagreed by exactly a factor of two
+about one quantity — a duration law (bytes timed to a fall, 2026-06-08) and a
+slew law in dB/s (2026-08-24). Three readings: (a) the slew law is 2× too small,
+making every E4B decay and release byte wrong since August; (b) `ENV_FULL_SPAN_DB`
+is 2× too big; (c) the June timings were taken to an audible threshold near
+−48 dB and only the comment claiming "a full fall to silence" is wrong.
+
+(b) died on the span measured above. The remaining two were separated by
+measuring a decay's dB/s **directly**, which depends on neither law:
+
+| rate byte | measured dB/s | `ENV_RATE_SWEEP` | ratio |
+|---:|---:|---:|---:|
+| 60 | 47.35 | 46.59 | 1.016 |
+| 72 | 23.00 | 23.65 | 0.973 |
+| 80 | 14.78 | 15.05 | 0.982 |
+| 90 | 8.47 | 8.55 | 0.991 |
+
+Mean 0.991 ± 0.016. **(a) predicts 2.000 — off by 63σ. (c) predicts 1.000 — off
+by 0.6σ.** A second observable from the same captures, the full fall time, lands
+on (c) at all four bytes independently (byte 72: 4.25 s measured, (c) 4.07 s,
+(a) 2.03 s). The two observables agree with each other, so the linear-accumulator
+picture survives the test that could have broken it.
+
+The implied threshold of the June timings, computed from these slopes, is
+**47.9 dB, 48.9% of the span**, wandering 47.8–50.1% with no resolvable drift.
+mpc2emu's own sharpest contribution was insisting this mattered: an arithmetic
+10·log10-for-20·log10 slip must sit on **exactly** 50.00% at every byte, and a
+measurement threshold need not. 48.9% with 2.3 points of wander is a threshold.
+Their laws are both fine; the comment is wrong.
+
+Caveat, and it is the rig's: the decay fits give r² 0.956–0.982 and the two fast
+rates curve (rate 72 reads 29.5 dB/s in the first half of the fall and 15.5 in
+the second). That is detector smearing — an 8192-sample window is 0.17 s, and at
+47 dB/s the level moves 8 dB inside one window. The slow rates, where the window
+is a small fraction of the fall, are straight to 4–9%. Smearing a straight line
+preserves its mean slope while ruining its r², which is why the slopes survive.
+
+### A structural link, and a claim retracted from inside it
+
+§127's segment stepper walks a level accumulator by a fixed increment per tick.
+Since the level field is now measured to be linear in dB, a fall to sustain 0
+must be **straight in dB against time** — which is what the slow rates show. The
+two laws are therefore not independent: `dB/s = dB-per-byte × bytes-per-second`,
+and a full fall takes `span / (dB/s)`.
+
+**Retracted from that argument: "the internal level resolution is 0.7720/32 =
+0.0241 dB per unit".** The `>> 5` in `index = (field + modulation) >> 5` is on
+the *rate* path — it truncates a fine rate-plus-modulation sum to a 128-entry
+table index, so the fine bits are consumed and discarded there and never reach
+the accumulator. The 32 bounds how finely modulation can steer the *rate*, not
+how finely a *level* is held. `table[index] × ticks` constrains the accumulator's
+width not at all. Worse than a wrong number: it was produced by arithmetic on two
+correct numbers, in units nothing had been measured in. It never reached a
+tracked file. (Caught by mpc2emu.)
+
+### The amp gain table is not in the image
+
+If the level byte indexed a gain lookup, consecutive entries would differ by a
+constant ratio 10^(0.772/20) = 1.0929. A vectorised sliding log-linear fit over
+every 64-entry window, as u16 and u32, big and little endian, at every byte
+offset, across both the 4.62 and 4.70 bodies, finds **nothing** at 0.772 ± 3%
+dB/entry with r² > 0.999 — while the same scan on equal-sized noise also finds
+nothing, so the threshold is selective rather than merely strict. The gain is
+computed, not tabulated. (A first pass at ±6% on the ratio returned dozens of
+hits; ±6% admits 0.23–1.28 dB per entry, which is most smooth monotone data in a
+2 MB image. A loose gate in a scanner is the same failure as a loose gate
+anywhere else.)
+
+### What the technique can and cannot do
+
+The narrowband reach is bounded by the *source*, not the detector. This preset's
+level wobbles ~1.5 dB/s, so widening the FFT past 2^16 spreads its energy across
+more bins than the narrower bins remove noise from. Below byte ~20 would need a
+synthetic steady tone. mpc2emu's corpus puts 132 voices (6.2%) in the unmeasured
+non-zero tail with no single byte carrying more than 27, plus 485 (22.7%) at byte
+0 where the conversion is silent either way — a tail, not a cluster, and not
+worth a campaign.
+
+### Units, still open
+
+These sweeps drive the SysEx level parameter (0–100%); the writer writes the E4B
+0–127 byte, and `SysEx% = byte × 100/127`. The lattice is real and visible: SysEx
+90 and 80 are bytes 114 and 102, a 12-step where the neighbours are 13, and that
+rung carries the largest residual in the first fit (1.21 dB). Fitting in the
+units actually driven and converting the fitted law once is the right order, but
+a few points driven **both** ways — SysEx parameter and preset-body byte — still
+need to confirm the two paths land together before anything is fitted in byte
+units for the writer.
