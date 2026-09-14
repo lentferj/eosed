@@ -11323,3 +11323,69 @@ have trusted it over the audio and been wrong.
 **A table is a stronger form of evidence about intent and a weaker one about
 output.** Our position — captures and no table — is worse for settling
 0.0565 vs 0.0581 and better for noticing this.
+
+### §119 addendum — the 11% has a simpler candidate, and we cannot run the test that would settle it
+
+mpc2emu proposed a free test for a multiplicative mechanism: if the envelope
+generator is clocked off playback rate, envelope times scale with sample rate
+exactly multiplicatively, and 44100/39062.5 = 1.129 sits near our 1.110. They
+were explicit that the arithmetic behind it is weak — 8 rates is 56 pairs and a
+2% match is near-guaranteed by chance, fitted after seeing the answer — and that
+the point is that it is a **prediction**: read the two presets' sample rates and
+see whether the ratio is 1.110.
+
+**We cannot run it.** The ladder's rows carry `byte, intended, hold, window,
+peak_db, t_peak, rise_10_90, flags` and **no preset and no note**. The
+cross-check names neither of its two presets. §111 recorded that the material was
+unidentified as a reproducibility gap; this is the first time it has cost a
+specific answer, and the answer it cost was to a test that takes a minute.
+
+**But the E4XT's own data kills the clocking half of the hypothesis outright.**
+§113 measured `t90` at byte 72 across five notes on one preset:
+
+```
+  note   t90     ratio      playback rate vs note 24
+    24  2.110   1.000              1.00x
+    38  2.188   1.037              2.24x
+    52  2.214   1.049              5.04x
+    65  2.500   1.185             10.68x
+    79  2.633   1.248             23.97x
+```
+
+55 semitones is a **23.6x** change in playback rate. If the envelope were clocked
+off it, `t90` would fall by 23.6x. It **rises by 1.25x**. Wrong magnitude by a
+factor of 19 and wrong sign. The envelope generator is not clocked off
+instantaneous playback rate. It could still be clocked off a sample's *declared*
+rate, which is constant under transposition — untested, and untestable on this
+data for the reason above.
+
+### And this is where §119 was itself too quick
+
+§119 read the 11% cross-check gap as "the size of the effect s3ked
+characterised". True, and incomplete: **11% is also the size of an effect we had
+already measured and did not control for.** Notes 52 to 65 on a single preset
+give 2.500/2.214 = **1.129**, against the cross-check's 10.1/9.10 = **1.110**.
+
+The two cross-check measurements record no note. **So the simplest explanation
+for the entire gap is that they were taken at different pitches on the same
+machine with the same byte** — no program-dependence required at all.
+
+That is a candidate and not a conclusion: the note-dependence is measured at byte
+72 on one preset and the gap is at byte 89 on two others. But it is a mechanism
+we have *already observed on this machine*, and program-dependence is one we have
+only observed on a different machine. **The known effect should be excluded
+before the imported one is invoked**, and §119 invoked the imported one first
+because that was the message that had just arrived.
+
+**mpc2emu's instinct to keep the two results apart was right and did not go far
+enough.** They separated our multiplicative case from s3ked's additive one. The
+third possibility is that ours is neither — that it is an uncontrolled variable
+in our own procedure, which is the one explanation that requires no mechanism at
+all.
+
+**What would settle it:** re-take two points at byte 89 on one preset at two
+known notes, and the same two notes on a second preset. That is RAM-only work on
+material that has to be reloaded anyway, and it belongs to whoever holds the
+lead. The note-dependence itself — 1.25x across 55 semitones, in the direction of
+*slower at higher pitch* — is unexplained and worth a section of its own once
+someone measures it deliberately rather than reading it out of a spread.
