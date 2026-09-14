@@ -12734,7 +12734,58 @@ as putting `0x00` at *4-Pole Lowpass*; `FILTER_TYPE_NAMES` puts FTYPE 0 at
 `FILTER_TYPE_NAMES`: FTYPE 0 delivers 12 dB/oct. The other table indexes
 something else and should not be read as an FTYPE map.
 
-### LP4 and LP6 are NOT obtained, and the blocker is the FTYPE write
+### CORRECTION: LP4 IS obtained — 4.05 poles — and both earlier failures were mine
+
+**LP2 = 2.07 poles, LP4 = 4.05 poles, both corner-independent.** With the filter
+type set from the front panel and the slope taken as the classical asymptotic
+measure — the drop between **2x and 4x the −3 dB corner**, one octave, checked
+clear of the floor:
+
+```
+            FMORPH 50    70      90     110     mean   spread
+  LP2         2.10     2.08    2.10    2.01     2.07    0.09
+  LP4         4.01     4.11    4.07    4.01     4.05    0.10
+```
+
+**The E4XT's lowpass delivers the pole count it names.** For the parked
+pole-count-versus-resting-corner question, this closes our half: a cascade that
+measures 4.05 poles at four corners is not where a slope discrepancy comes from.
+
+**Two analysis errors, and both produced plausible wrong numbers rather than
+failures.**
+
+1. **A fixed dB window is a biased estimator of slope.** `−6..−35 dB of the
+   passband` spans ~3 octaves on a 2-pole and under 1 octave on a 4-pole, so on
+   the steep filter it sat in the *knee* and read too shallow — and less so at
+   higher corners, because the window is wider in Hz there. That is precisely
+   the "varies with corner" signature, and it was manufactured by the estimator.
+   It reported 1.79 → 3.40 poles for a filter that is 4.05.
+2. **A Butterworth magnitude fit was worse.** `|H|² = 1/(1+(f/fc)^2n)` returned
+   1.8–2.5 poles at **8–13 dB residual**, because LP4 has a **+3.4 dB passband
+   bump** the model has no term for and floors at −65 dB, which it cannot
+   represent. The residual was the tell and it was printed from the start.
+
+**What found it was reading the response**, third-octave by third-octave, instead
+of fitting it: 1000 Hz → 2000 Hz is −13.2 → −37.1 dB on LP4, which is −23.9 dB
+per octave and needs no estimator at all.
+
+### The FTYPE parameter does not reflect the live filter
+
+With the panel showing **LP4**, `E4_VOICE_FTYPE` (id 82) **reads back 0
+(2-Pole)**. Not stale by a moment — reproducibly, across re-selection, while the
+audio demonstrably behaves as a 4-pole.
+
+So the earlier "enumeration set values 0–11 and read every one back correctly"
+established nothing: it wrote and read an editor-side value with no bearing on
+the filter in the voice. **Id 82 is not a window onto the live filter type**,
+in either direction, and any procedure that sets a filter type over the editor
+protocol and confirms by read-back is confirming itself.
+
+`E4_VOICE_FMORPH` is not like this — it reaches the voice (the corner moves with
+it) and the panel shows the value written. So this is a property of id 82, not of
+the protocol.
+
+### LP6 remains open
 
 `E4_VOICE_FTYPE` cannot be set reliably over the editor protocol once voices have
 sounded. The evidence is contradictory in a specific way:
