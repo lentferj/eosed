@@ -12293,3 +12293,61 @@ That matters if the copies ever diverge between versions: reading the wrong one
 would give a table that is real, correct-looking, and not the one in use. Not
 resolvable without following the references, and not needed for §122's result —
 recorded so that nobody later assumes the redundancy is reassuring.
+
+### §122 addendum 3 — what changed between 4.62 and 4.70, and a capability it implies
+
+§122's remaining exposure is that the table is read from **4.62** and the bench
+runs **4.70**. Jan supplies the only kind of evidence that bears on it directly:
+what the two versions differ by.
+
+> 4.70 added **FAT32 support** and **dynamic filters** — on 4.62 a filter
+> parameter change took effect only on the next note; on 4.70 it is audible on a
+> note already held. Envelopes should not have changed. *(Jan, from the
+> community; he flagged the sourcing himself.)*
+
+**This is a fourth strand and it answers a question none of the other three
+can.** Firmware says what the machine intends, captures say what left the
+converters, the corpus says what the parameter is for — **none of them can say
+what changed between two versions.** Only documentation, or someone who has
+followed the machine, can.
+
+**What could be checked, was.** The plaintext 4.62 image contains no `FAT32`,
+`FAT16` or `FAT12` strings (`FAT` appears 5 times). Consistent, and weak on its
+own: FAT type is normally determined from BPB fields rather than named. The
+`E-mu EOS 470 Updater` archive turns out to hold only the four binaries already
+in hand — **no release notes**, so no documentary confirmation is available from
+the files.
+
+**The substantive argument is stronger than its sourcing.** Both named changes
+sit in subsystems adjacent to but distinct from the envelope generator: FAT32 is
+the filesystem layer, dynamic filters are the filter-coefficient update path.
+Neither has any reason to touch an envelope rate table. That is a structural
+argument rather than a recollection, and it is what actually carries the weight.
+
+**So the version caveat moves from "unknown" to "probably fine, and here is how
+to settle it"**, without being removed: community recollection is evidence, not
+verification, and this is precisely the distinction the day has been about.
+mpc2emu's aim point stands — confirm at bytes **20–59**, where 90% of real
+presets sit.
+
+### And the dynamic-filter change is a capability, not just a version note
+
+On 4.70 a filter parameter change is audible on a **held** note. That is
+directly useful here, and it is new relative to everything in these notes.
+
+**Every filter measurement this project has taken re-triggers the note**, so each
+one carries the amplitude envelope's attack and the filter envelope's own sweep
+on top of whatever the parameter change did. §113's static-vs-static work went to
+some trouble to flatten envelopes precisely to get around that.
+
+A held-note parameter change removes the confound at source: **one note, one
+sample, one envelope state, and the only thing that moves is the parameter.**
+That is the cleanest available form of the pole-count-versus-resting-corner
+question left open in the bench notes, which has been stuck on needing "built
+static material with both corners known and equal".
+
+Worth testing before relying on: §34 established that an editor-protocol write
+does not reach the sounding preset's *display*, and that voice-level parameters
+(id 39) do reach the audio while preset-level ones (`E4_PRESET_VOLUME`) do not.
+Whether a filter parameter reaches a **sounding voice** on 4.70 is a one-note
+experiment and has not been run.
