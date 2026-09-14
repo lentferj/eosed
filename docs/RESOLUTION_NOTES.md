@@ -11412,7 +11412,20 @@ t^2.28`, so there are two placements and they predict different numbers:
     (internal generator ramps linearly at fixed rate, audible level = internal^n)
 ```
 
-**2.47 dB apart, on a quantity measurable to a few tenths.** So the measurement
+**The `n = 2.28` in row 2 is a band, not a value** — §113's five notes fit 1.66
+to 2.36 — so the honest separation is the worst case rather than the headline
+one (mpc2emu's check, arithmetic reproduced here):
+
+```
+  n 1.66  -> +3.19 dB      row 1 is n-INDEPENDENT (time-to-plateau ∝ L)  +1.92 dB
+  n 1.84  -> +3.54         row 3                                          0.00 dB
+  n 2.28  -> +4.39
+  n 2.36  -> +4.54
+                           closest approach, row 2 to row 1:              1.27 dB
+```
+
+**1.27 dB at worst, on a quantity measurable to a few tenths.** So the
+measurement
 does not merely confirm or kill the level hypothesis — **it says whether the
 E4XT's convex attack is produced by a convex ramp or by a linear ramp through a
 non-linear output stage.** That is a fact about the machine, and it would be the
