@@ -11029,6 +11029,24 @@ assumptions silently, and the cheapest place to find that out is before the
 search, by asking what the container is, rather than after, by concluding a
 table is absent when the whole image is.
 
+### §116 addendum — what makes a negative result reusable
+
+mpc2emu's reading of the above, which is the part worth keeping: the value is
+not in "I tried and it didn't work" but in the falsifiers attached to each step
+— entropy quoted **with the statistical floor for the window size**, autocorrelation
+**with a threshold**, 36 schemes scored by a **metric rather than by eye**, and a
+live hypothesis killed by a test **whose expected agreement was computed before
+it was run**.
+
+**A negative result with a falsifier attached is worth more than most
+positives.** It closes the question for every future EOS version rather than for
+the two images in hand — whereas "no luck with the formats I tried" would have
+had to be redone by the next person, who would have tried the same formats.
+
+The converse is the failure this same day nearly produced twice: a positive
+without a falsifier (§118's forward-decoded jump table, §117's inflated credit)
+looks finished and is not.
+
 ## §117 — The attack constant is probably right and its recorded reason is wrong (2026-09-14)
 
 mpc2emu flagged that the sentence justifying `_E4XT_ATK_SLOWDOWN` 1.838 → 1.0
@@ -11068,6 +11086,15 @@ the Akai's 1.4125 — which s3ked confirmed to three decimals on *their* linear
 ramp — is the wrong correction to carry across, and carrying it would have
 overshot by 21%. A convention factor is a property of the *shape*, and the two
 machines do not share one.
+
+**Credit where the first draft of this section misplaced it.** mpc2emu did not
+carry 1.4125 across and said so when they raised the flag — "the Akai ramp is
+linear and yours is strongly convex, so the Akai argument does not carry over
+and this needs your own convention audit, not my inference." They named the
+non-transfer before the audit existed and declined to act without it; the solve
+above is the audit they asked for, not a correction of them. Writing it as
+though a live error had been headed off inflated the finding and took the
+judgement off the person who made it.
 
 ### So the 1.838 was the detector, and the arithmetic is checkable
 
