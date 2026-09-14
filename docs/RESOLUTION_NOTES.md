@@ -11551,3 +11551,146 @@ existed, and a velocity-to-*level* field sat in the same header. So it is an
 tells you about the field you read and says nothing about the one you did not
 think to. A measurement is how you find the route you did not enumerate — which
 is why it substitutes for the read, not because reads are unreliable.
+
+## §121 — The attack's note-dependence is a detector artefact, and §120's fork has nothing left to explain (2026-09-14, live)
+
+Jan freed the E4XT and asked for §120's capture. It was taken, and it destroys
+the premise it was built on. **There is no note-dependence in the attack time.**
+
+### What was measured
+
+E4XT Ultra, EOS 4.70, one bank loaded from disk. One preset, **one voice, and
+every note inside a single zone** — the loaded presets are three-zone (one
+sample on keys 12–66, a second on 67–91, a third on 92–108), so notes
+16/28/40/52/64 were chosen to sit entirely on the first. **§113's ladder used
+24/38/52/65/79, and 79 is in a different zone from the other four** — a
+different sample with its own level, on a test whose prediction was 1.9–4.4 dB.
+
+Amp envelope: Atk1 rate under test, Atk1 level 100 (single segment, no knee),
+all later segments rate 0 / level 100 so the note holds at full. Detector: 5 ms
+smoothing, threshold-crossing, −3.0 dB, per the agreed convention.
+
+### Two controls, both of which passed
+
+**The write reaches the audio.** §34 recorded a parameter that reads back
+correctly and does not sound, so this was checked rather than assumed: t90 at
+Atk1 rate 0 is 0.025 s and at rate 72 is 2.34 s, SNR 55 dB. *It first caught a
+genuinely silent capture* — `PRESET_SELECT` (223) aims the **editor**, Bank
+Select + Program Change changes what **sounds**, and setting only the former
+edits a preset that is not playing.
+
+**Velocity does not move the plateau on this material** — −0.12 dB from
+velocity 40 to 127. s3ked's protocol requirement (their plateau moved 16.5 dB
+on a program with velocity-to-level depth 20) is satisfied here, measured
+rather than read off the depth parameter.
+
+### The result that looked clean
+
+```
+  note     16      28      40      52      64     ratio 64/16
+  t90   1.725   2.175   2.315   2.660   2.855      1.655
+```
+
+One zone, one sample, 48 semitones, every column recorded. It reads as a
+stronger confirmation of §113's 1.25× than §113 itself.
+
+### And it does not survive being tested
+
+**Smoothing sweep.** The ratio is a function of the detector, not of the machine:
+
+```
+  smoothing    5 ms    25 ms   100 ms   400 ms
+  t90 ratio    1.655   1.149   0.889    0.889
+```
+
+**The no-attack control.** RUN A has an *instant* attack, so any note-dependence
+it reports is manufactured. At the same 5 ms it reports **0.060 s at note 16
+against 0.020 s at note 64** — a 3× apparent note-effect on a rise that does not
+exist.
+
+**And it is not one bad sample.** All 12 presets of the bank were screened with
+§112's rectangle test, at the detector's own 5 ms scale rather than at the 0.2 s
+scale the figure had previously been quoted at:
+
+```
+  sd of 12 sub-window medians     note 20    note 40    note 60
+  every preset, without exception  2.1-2.3    0.5-1.8    0.6-2.5
+  5 ms max/min swing, note 20      27-41 dB
+```
+
+Monotone in pitch, across three different sample sets. **That is transposition,
+not material.** A ladder across notes plays ONE sample at many rates, so the
+sample's own amplitude modulation is stretched by 2^((origkey−note)/12) — and a
+fixed 5 ms detector therefore resolves a different number of sample-periods at
+every note.
+
+### The fix, stated before the answer was known
+
+**Scale the detector with the playback rate:** `smoothing(note) = 5 ms ×
+2^((origkey−note)/12)`, so every note is measured over the same number of
+sample-periods. 31.7 ms at note 16, 2.0 ms at note 64.
+
+```
+  rate-scaled   note 16   28      40      52      64     ratio
+  t90            2.570   2.521   2.351   2.628   2.472   0.962
+  t50            1.745   2.093   2.098   1.821   1.775   1.017
+
+  robustness, base width 2 / 5 / 10 / 20 ms:
+    ratio     0.980   0.962   0.795   0.808
+    max/min   1.174   1.118   1.282   1.311
+```
+
+**Flat, at every base width tried.**
+
+### Why this direction and not the other
+
+A fit that produces the desired answer deserves the question "would it have
+produced any answer I asked for". Here it could not, and the asymmetry is
+physical:
+
+- The widest rate-scaled window is **31.7 ms against a 2.570 s measurement —
+  1.24%**. A 1.655× note-dependence is **1.7 s** of difference. **A 32 ms window
+  cannot hide 1.7 s.**
+- It *can* manufacture one, because what it fails to reject is a **30 dB**
+  ripple whose peaks cross a −3 dB threshold early, and which shrinks with pitch.
+
+**Smoothing can create a spread it cannot remove.** That asymmetry is what makes
+the flat reading the trustworthy one, not the fact that it is tidier.
+
+### What this costs
+
+**§120's three-way fork is void.** It asked where a note-dependence comes from;
+there is none to explain. The plateau-level hypothesis, the ramp-versus-output-
+mapping placement, the 1.27 dB separation — all of it was machinery built to
+explain an artefact, and mpc2emu and I refined it through six exchanges without
+either of us asking whether the effect was real. **The plateau measurements
+agree**: span +1.70 ± 1.12 dB (instant attack) and +0.73 ± 1.36 dB (byte 72),
+both consistent with zero, which is what "no note-dependence" predicts.
+
+**The ±1 dB is not assumed.** RUN A and RUN B reach the *same* target level, so
+their difference must be zero and measures the method: mean +0.74 dB, sd 0.99,
+worst 2.61. A test needing 1.27 dB was never going to be settled on this
+material, and that was knowable before the capture.
+
+**§113 is in doubt, and §105 with it.** Both were taken at fixed 5 ms on
+transposed material, which is the exact mechanism. §113's material is
+unidentified (§111, §120), so this is not a direct refutation — it is the
+demonstration that the mechanism exists, is large, and was present in their
+method. §113's 1.25× over 55 semitones sits inside what this artefact produces.
+
+### The rule
+
+**A note ladder plays one sample at many rates, so a detector with a fixed
+timescale measures a different thing at every rung — and the bias it introduces
+varies with note, which is indistinguishable from a note-effect.** Scale the
+detector with the playback rate, or measure at one note only.
+
+This is §105's "the analysis window must scale with the value being measured",
+one level deeper: the window must scale with **the material's** timescale as
+well as the envelope's, and on a sampler those two are decoupled by the keyboard.
+
+**And the procedural error, which is the cheaper lesson.** §112's rectangle test
+exists to *qualify* material. It was built into this run as RUN A and then read
+as a measurement — so the material was screened after the ladder rather than
+before it, and the screening that would have stopped the ladder took four
+minutes.

@@ -119,9 +119,11 @@
    "window",
    "detector",
    "smoothing_ms",
-   "threshold_db"
+   "threshold_db",
+   "smoothing_scaled_to_playback_rate"
   ],
   "why": "RESOLUTION_NOTES 120. The rows below carry byte and times but no preset, no note and no per-note level, and that blocked three separate retrospective tests within half an hour on 2026-09-14 -- a sample-rate test (needs preset), an uncontrolled-note reading (needs note) and a test locating the envelope's convexity (needs level per note). Each was a lookup in data already taken; none can be recovered without re-measuring on material no longer in RAM. 'velocity' added 2026-09-14: hold velocity fixed AND demonstrate the plateau is insensitive to it BY MEASUREMENT on the material actually used. Do not size the test against any borrowed number: a sibling machine showed 16.5 dB of plateau movement across velocity 40-127, but that is a property of one program with its velocity-to-level depth set to 20, NOT of that machine -- a program with the depth at 0 should show almost none. The magnitude is a property of the subject; only the instruction transfers. And the reason a parameter read cannot substitute: reading the velocity-to-ATTACK fields as 0 was CORRECT there; a velocity-to-LEVEL field in the same header was non-zero and unexamined. The failure is an incomplete enumeration of routes, not a wrong read -- a read tells you about the field you read and nothing about the one you did not think to.",
   "rule": "Record every column on every row ALWAYS, including when no current question needs it. The cost of a missing column is never visible when you decide not to add it, and it is never paid by the session that omitted it."
- }
+ },
+ "DETECTOR_WARNING_2026_09_14": "RESOLUTION_NOTES 121. This ladder's times were taken with a FIXED 5 ms detector on transposed material. A note ladder plays ONE sample at many rates, so the sample's own amplitude modulation is stretched by 2^((origkey-note)/12) and a fixed-timescale detector resolves a different number of sample-periods at every note. Measured live 2026-09-14 on identified single-zone material: a fixed 5 ms detector reports an attack ratio of 1.655x across 48 semitones, and the SAME captures measured with smoothing scaled to the playback rate report 0.962x -- flat. A no-attack control (instant attack, nothing to measure) reports 0.060 s at note 16 against 0.020 s at note 64 at fixed 5 ms. The rows below are single-note (the note is not recorded) so they are NOT affected across rungs, but any note-dependence derived from this method is suspect, including 113's 1.25x. Scale the detector with the playback rate, or measure at one note only."
 }
