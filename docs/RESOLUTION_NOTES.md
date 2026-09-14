@@ -12692,3 +12692,76 @@ equal" that has blocked it.
 better material was found, but because a withdrawn claim was reinstated by
 someone who had heard the machine do it. The instrument was available all along
 and the notes said it was not.
+
+## §125 — The first direct pole-count measurement on the E4XT: FTYPE 0 is 2 poles (2026-09-14, live)
+
+Jan merged the §69 calibration bank (flat looped white noise) and the filter
+slope became measurable for the first time. **The result is solid for one filter
+type and not obtained for the other two, and the reason is a protocol problem
+rather than a measurement one.**
+
+### Subject and method
+
+P013 voice 0: sample 11, origkey 24, **voice key range 24-84**, amp and filter
+envelopes both flat rectangles (rate 0 / level 100 on every segment), Q 0, note
+24 so nothing is resampled. `H(f) = S(f) / S_open(f)`, the open capture taken at
+the same filter type, which divides out the noise draw, the sampler's
+reconstruction roll-off and the capture chain together (§69's method).
+
+The skirt is fitted where `H` lies between **-6 and -35 dB of the passband** —
+that selects the roll-off itself and excludes both passband and noise floor
+without an SNR constant that has to be right. An earlier gate keyed to the
+reference's own top-octave roll-off rejected **every point at every corner**, and
+printed `nan` rather than failing.
+
+### The result
+
+```
+  FTYPE 0, nominal "2-Pole Lowpass"
+    FMORPH  50   corner  287.1 Hz   skirt -12.01 dB/oct   implied poles 2.00
+    FMORPH  70   corner  398.4 Hz   skirt -12.18            2.03
+    FMORPH  90   corner  562.5 Hz   skirt -12.19            2.03
+    FMORPH 110   corner  761.7 Hz   skirt -11.98            2.00
+```
+
+**Four corners spanning 1.4 octaves, slope constant to 1.5%.** A pole count must
+be corner-independent and this one is — which is the property that makes it a
+pole count rather than a number that happens to come out near 12.
+
+**It also settles a naming ambiguity in our own notes.** §2's table was read here
+as putting `0x00` at *4-Pole Lowpass*; `FILTER_TYPE_NAMES` puts FTYPE 0 at
+**2-Pole Lowpass**, 1 at 4-Pole, 2 at 6-Pole. The measurement agrees with
+`FILTER_TYPE_NAMES`: FTYPE 0 delivers 12 dB/oct. The other table indexes
+something else and should not be read as an FTYPE map.
+
+### LP4 and LP6 are NOT obtained, and the blocker is the FTYPE write
+
+`E4_VOICE_FTYPE` cannot be set reliably over the editor protocol once voices have
+sounded. The evidence is contradictory in a specific way:
+
+- an enumeration pass set values 0-11 and read every one back correctly;
+- later runs had the write **refused** by read-back confirmation on 12 retries
+  with re-selection between attempts;
+- and one earlier run reported `FTYPE 2 refused` while the value was **later
+  found to be 2** — so the write had taken and the read-back had lagged.
+
+Writing without gating on read-back then produced slopes that are **not
+corner-independent** — 1.79 / 2.41 / 3.03 / 3.41 implied poles across four
+corners for a nominal 4-pole, and a single 6.35 followed by 1.75 / 2.40 / 3.36
+for a nominal 6-pole. **A pole count cannot vary with corner, so those numbers
+are not a pole count** — most likely the reference capture and the measurement
+captures were not taken at the same filter type. They are recorded as
+uninterpretable rather than as a result.
+
+### What would finish it
+
+**The filter type set from the front panel, which is known to work**, and the
+measurement taken from here — the same division of labour that made §124 work
+once Jan set up the cords. Nothing about the analysis needs to change: LP2 came
+out at 2.00 poles with the machinery exactly as it stands.
+
+**And the general point, which is §124's again one turn later.** A parameter that
+reads back correctly is not the same as a parameter that can be written, and
+neither is the same as a parameter that reaches the voice. Three distinct
+properties, three different failures seen today on three different parameters,
+and the editor protocol reports success for all three.
