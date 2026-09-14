@@ -14527,3 +14527,75 @@ One preset on one machine is not a factory default, and this bank's provenance i
 unknown — so this is a data point, not a ruling. But it does mean the template's
 +16 is not obviously wrong, and that the two values may be different generations
 of the same template rather than an error.
+
+### §142 addendum — the factory defaults, from the firmware image
+
+The table in §142 above is **Jan's configuration, not the factory defaults** — a
+distinction that nearly got baked into mpc2emu's format doc. The defaults are in
+the firmware, byte-identical in 4.62 (body `0x12dfa2`) and 4.70 (body `0x1dcff8`):
+
+```
+32  1  33  4  5  6  20  21  22  23  24  25  26  27  28
+```
+
+Exactly fifteen values, matching the fifteen assignment parameters 201–215 and the
+manual's "up to 15 controllers". Read in parameter order:
+
+| parameter | firmware default | Jan's machine | |
+|---|---|---|---|
+| 201 Pitch | pitch wheel | pitch wheel | |
+| 202 Mod | CC 1 | CC 1 | |
+| 203 Pressure | chan pressure | chan pressure | |
+| 204 Pedal | CC 4 | CC 3 | changed |
+| 205 Switch 1 | CC 5 | CC 0 | changed |
+| 206 Switch 2 | CC 6 | CC 1 | changed |
+| 207 Thumb | CC 20 | CC 2 | changed |
+| 208 MIDI A | CC 21 | CC 21 | |
+| 209 MIDI B | CC 22 | **CC 7** | changed |
+| 210–215 MIDI C–H | CC 23–28 | CC 23–28 | |
+
+The next five bytes are `29, 91, 92, 93, 94` — 91–94 are the MIDI effects-send
+controllers, so the block continues into other global defaults.
+
+**MIDI A–H = CC 21–28 is the factory assignment.** mpc2emu predicted exactly that
+from the read-back, reasoning that seven values sat on a contiguous run and the
+one break landed on CC 7 (MIDI Volume), which no factory block would do. The
+firmware confirms it, and also shows Jan has moved Pedal, both switches and Thumb
+onto CC 0–3.
+
+This also validates the value encoding independently: `32` and `33` appear in the
+default block exactly where Pitch and Pressure are, which is what the
+"32 = pitch wheel, 33 = channel pressure" reading predicts.
+
+**Note the trap avoided.** A read-back from one machine looks exactly like a
+factory table until something in it is obviously hand-set. Seven of eight values
+agreeing with the firmware would have made the eighth look like a firmware
+variation rather than a user edit, had the image not been available.
+
+### §142 addendum — EOS does not appear to implement RPN/NRPN
+
+The open question on the CC 6 mapping was whether EOS consumes it as Data Entry
+MSB. RPN and NRPN cannot be implemented without recognising **both** selector
+pairs — CC 98/99 (NRPN LSB/MSB) and CC 100/101 (RPN LSB/MSB). In the 4.70
+disassembly:
+
+| controller | immediate compare sites |
+|---|---:|
+| CC 1 | 271 |
+| CC 7 | 53 |
+| CC 27 | 26 |
+| CC 98 | 1 (a 32-bit `cmpl`, not a controller test) |
+| **CC 99** | **0** |
+| CC 100 | 17 (all 32-bit `cmpl #100` — percentage comparisons) |
+| **CC 101** | **0** |
+
+EOS dispatches controllers by comparison (CC 1 alone has 271 sites), so the total
+absence of 99 and 101 is meaningful rather than an artefact of table-driven
+dispatch. **CC 6 should therefore fall through to the generic continuous-controller
+path**, making it safe to recommend for an assignable source.
+
+Stated as the weaker evidence it is: this is a negative from a linear disassembly
+whose data regions decode as noise, and a jump-table dispatch would leave no
+compares at all. A controller sweep on hardware would be stronger. But a
+*positive* — CC 6 special-cased — would have killed the recommendation, and it is
+not there.
