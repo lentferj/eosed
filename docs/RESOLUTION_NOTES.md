@@ -12728,11 +12728,36 @@ printed `nan` rather than failing.
 be corner-independent and this one is — which is the property that makes it a
 pole count rather than a number that happens to come out near 12.
 
-**It also settles a naming ambiguity in our own notes.** §2's table was read here
-as putting `0x00` at *4-Pole Lowpass*; `FILTER_TYPE_NAMES` puts FTYPE 0 at
-**2-Pole Lowpass**, 1 at 4-Pole, 2 at 6-Pole. The measurement agrees with
-`FILTER_TYPE_NAMES`: FTYPE 0 delivers 12 dB/oct. The other table indexes
-something else and should not be read as an FTYPE map.
+**RETRACTED: it settles no naming ambiguity, and there was none to settle.**
+
+This section originally claimed the measurement showed `FILTER_TYPE_NAMES`
+right and §2's table wrong. **Both halves were mistakes of this session.**
+
+**There is no conflict between the two tables — they are different encodings.**
+§2's is the **E4B file byte** (0x00, 0x02, 0x08, 0x09, 0x10, 0x11, 0x12, 0x20…,
+grouped by high nibble), confirmed 16 of 16 against the machine's own display.
+`FILTER_TYPE_NAMES` is the **SysEx parameter id** (0, 1, 2, 3…, sequential).
+A file byte and a parameter id need not share a numbering, and here they do not.
+mpc2emu's `_XPM_FILTER_TYPE` writes the file bytes — `0x00` 4-Pole, `0x01`
+2-Pole, `0x02` 6-Pole — i.e. §2's table, display-confirmed. **Nothing in the
+conversion path is implicated.**
+
+**And the measurement could not have adjudicated anyway.** `E4_VOICE_FTYPE`
+(id 82) read back **0 in all three runs** — with the panel on LP2, on LP4, and on
+LP6. A reading that never changes identifies nothing, so no id-to-pole-count
+mapping was established at any point.
+
+**What the measurement actually establishes is about the machine's labels, not
+about any table**: the panel's LP2 / LP4 / LP6 deliver 2.07 / 4.05 / 5.96 poles.
+The instrument's own naming is accurate. That is worth having and it is a
+different claim.
+
+**The error is worth keeping because it had two stages.** First a table was
+misread — two encodings taken as one. Then a stuck read-back was used as
+corroboration for the misreading, and a stuck value agrees with whatever it is
+pointed at. **A confirmation drawn from a channel that never varies is not weak
+evidence, it is no evidence**, and nothing in the number said so: `0` is a
+perfectly plausible filter type.
 
 ### CORRECTION: LP4 IS obtained — 4.05 poles — and both earlier failures were mine
 
@@ -12785,7 +12810,27 @@ protocol and confirms by read-back is confirming itself.
 it) and the panel shows the value written. So this is a property of id 82, not of
 the protocol.
 
-### LP6 remains open
+### LP6: 5.96 poles
+
+Floor-limited at 4x the corner (the response is within 8 dB of the −64 dB floor
+there), so the octave is taken lower, past the knee and clear of the floor:
+
+```
+  FMORPH  50   315 ->  630 Hz   −9.0 -> −45.9   −36.9 dB/oct   6.15 poles
+  FMORPH  70   400 ->  800 Hz   −6.3 -> −41.8   −35.4          5.90
+  FMORPH  90   630 -> 1250 Hz  −11.9 -> −47.4   −35.6          5.93
+  FMORPH 110   800 -> 1600 Hz  −10.1 -> −43.4   −33.3          5.55
+```
+
+**Mean 5.96 over the three best-placed windows.** So the full lowpass family:
+
+```
+  panel LP2   2.07 poles      panel LP4   4.05      panel LP6   5.96
+```
+
+Windows placed too close to the corner or too near the floor read low (4.62,
+5.28, 5.55) — the same estimator bias as before, now understood and visible in
+the printed band rather than hidden in a fit.
 
 `E4_VOICE_FTYPE` cannot be set reliably over the editor protocol once voices have
 sounded. The evidence is contradictory in a specific way:
