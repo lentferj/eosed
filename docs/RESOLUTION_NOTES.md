@@ -12861,3 +12861,31 @@ reads back correctly is not the same as a parameter that can be written, and
 neither is the same as a parameter that reaches the voice. Three distinct
 properties, three different failures seen today on three different parameters,
 and the editor protocol reports success for all three.
+
+### §125 addendum — the restore is also a repeatability check
+
+Jan set voice 0 back to LP2, its original. Re-measuring rather than assuming:
+
+```
+  FMORPH    corner then / now      poles then / now
+     50    287.1 / 287.1 Hz          2.10 / 2.10
+     70    398.4 / 398.4             2.08 / 2.06
+     90    562.5 / 568.4             2.10 / 2.06
+    110    761.7 / 767.6             2.01 / 2.03
+```
+
+**Corners reproduce to within one FFT bin and pole counts to 0.04**, across three
+front-panel filter-type changes and several dozen parameter writes in between.
+That is a stronger statement than either individual run: the whole chain —
+selection, FMORPH write, capture, reference division, slope measure — returns the
+same numbers after being disturbed and put back.
+
+**A restore that is verified by re-measuring costs one capture and answers two
+questions at once**: whether the machine is back where it started, and whether
+the instrument still reads what it read before. Reading the parameters back only
+answers the first, and §125's whole problem was a parameter that read back
+correctly and meant nothing.
+
+Final state of P013 voice 0: FTYPE LP2 (panel), FMORPH 251, Q 0, GEN_VOLUME 0,
+amp and filter envelopes both flat rectangles — matching the state it was merged
+in.
