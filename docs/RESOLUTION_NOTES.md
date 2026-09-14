@@ -12371,10 +12371,30 @@ answers §122's remaining exposure directly.
   plus: the RFX Compressor plug-in, and a changed plug-in structure
 ```
 
-**The whole document contains ZERO occurrences of** `filter`, `envelope`,
-`attack`, `decay`, `release`, `voice`, `oscillator`, `pitch`, `LFO`,
-`modulation`, `sound` or `tuning`. Every listed change is filesystem, plug-in or
-effects.
+**The sound-generation vocabulary was enumerated BEFORE searching** — thirteen
+terms, fixed in one list and not narrowed afterwards. That matters, and mpc2emu
+is right that a reader cannot tell the two cases apart from the result: a list
+fixed in advance and wide is strong evidence; three words chosen after reading
+are worth almost nothing, and both print as "zero occurrences".
+
+```
+  filter 0   envelope 0   attack 0   decay 0    release 0   voice 0   oscillat 0
+  pitch  0   LFO      0   modulat 0  sound   0  tuning  0
+  cord   1   <- "Plug-in MIDI Mod is now set to default when a Cord Destination
+                 is changed" -- a modulation cord inside an RFX plug-in bug fix
+```
+
+**Twelve of thirteen zero; the thirteenth is in a plug-in line.** Every listed
+change is filesystem, plug-in or effects.
+
+**And a correction to this project's own first report of it.** The message that
+carried this result to Jan listed the twelve zeros and **silently dropped
+`cord`** — the one term that returned a hit. The hit is innocuous and the
+conclusion is unchanged, but the reporting was exactly the post-hoc pruning being
+argued against, committed in the act of arguing against it and caught by
+mpc2emu asking whether the list was fixed in advance rather than by any care of
+ours. **A fixed list reported selectively is a chosen list**, and nothing in the
+output says which one it was.
 
 **So the version caveat is as answered as a document can answer it.** That is far
 stronger than the structural argument in addendum 3, because it is the
