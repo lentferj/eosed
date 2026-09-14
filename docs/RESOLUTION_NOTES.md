@@ -13215,3 +13215,76 @@ than reports. A required column cannot be omitted and then regretted.
 
 **A rule can be not-reached-for. A mechanism cannot.** That distinction is worth
 more than any measurement in this file.
+
+## §130 — Key -> attack is a CORD, the direction comes from firmware, and the writes are unreliable (2026-09-14, live)
+
+Jan's correction to §121: **"no note-dependence in attack time" is a statement
+about a preset with no key-to-rate routing, not about the machine.** EOS
+implements that as a modulation cord, and he set one up on P019 CORDMAP —
+**cord 15: `Key+` (src 8) -> `VEnvAtk` (dst 73), amount +100%** — verified here
+by eight consecutive agreeing reads.
+
+### The control result, which is the solid half
+
+P017 (`NOISE XP R72`), noise, origkey 72, zone keys 72-96 — 24 semitones on
+material with no carrier, so §121's fixed-timescale artefact cannot apply. Atk1
+rate 72, no cord:
+
+```
+  note      72      80      88      96
+  t90    3.020   2.940   3.000   2.980 s      spread 2.7%
+```
+
+**Flat.** That is §121's null reproduced on a different preset, different
+material and a different octave. **"No intrinsic note-dependence in the attack"
+now rests on two independent subjects**, and the qualifier Jan supplied is the
+right one: intrinsic, absent; via a cord, available by design.
+
+### The direction, from firmware rather than from the bench
+
+§127's stepper computes `index = (field + modulation) >> 5`, and the rate table
+**descends** — `table[0] = 65535` is the largest per-tick increment, i.e. the
+fastest segment. So **a positive modulation raises the index and makes the attack
+SLOWER.** `Key+` rises with pitch, so `Key+ -> VEnvAtk` at **+100% makes high
+notes slower** — the opposite of the usual musical intent.
+
+**And there is no `Key-` source.** The source table has only `+`, `~` and `<`
+forms (`Key+` 8, `Key~` 9; `Vel+` 10, `Vel~` 11, `Vel<` 12; and the same triple
+for each envelope). So shortening attacks as pitch rises requires **`Key+` with a
+NEGATIVE amount**, or `Key~` (bipolar, centred) with one — not a different
+source. Jan's reading was right and the firmware says why.
+
+### What was NOT obtained, and why
+
+**The cord-on measurement.** Two attempts failed at the parameter write, not at
+the measurement:
+
+- the cord's `SRC`/`DST` were refused by read-back confirmation on 12 retries,
+  then on 10 unconditional pushes — the amount took (100), the source and
+  destination did not (read back 0 / 127);
+- on the retry the **envelope rate write also failed silently**, and the result
+  was four notes at `t90 = 0.020 s` — an instant attack at every note. Return
+  values were not checked, so it measured a preset it had not configured.
+
+**This is the third parameter today that cannot be reliably written over the
+editor protocol** — `E4_VOICE_FTYPE` (§125), the cord `SRC`/`DST` here, and
+intermittently the envelope rate. `E4_VOICE_FMORPH`, `E4_GEN_VOLUME` and the cord
+`AMT` write reliably. **Read-back confirmation is not a solution**: §125 showed a
+write that succeeded while the read-back disagreed, and §129's cord test showed
+reads that were stable and correct. The failure is in the write path for
+particular ids, and it is not yet characterised.
+
+**The practical rule until it is:** for those ids, set from the front panel and
+read over SysEx — the division of labour that produced §125's pole counts and
+§129's cord result. And **check every write's return value**, which this section
+did not.
+
+### And the internal-units question is still open
+
+The cord contribution's full scale was not found. What was established:
+the stepper's caller passes the envelope block as `a5@(90)` with a tick count of
+1; the block's second term is at `+4`; and **`>> 5` recurs elsewhere** (an
+unrelated accumulator at `0x5fcca` uses the same `base + mod>>5` idiom), so a
+32x-finer modulation store is a firmware-wide convention rather than an envelope
+quirk. The routine that computes a cord's contribution from source x amount was
+not located.
