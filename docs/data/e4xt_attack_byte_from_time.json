@@ -1,6 +1,6 @@
 {
  "purpose": "Convert a desired amp-envelope attack time to an E4XT rate byte WITHOUT fitting an exponential. The SHAPE comes from the machine's own table; only the SCALE is fitted.",
- "model": "t90(byte) = t0 + C / T[byte]",
+ "model": "t90(byte) = C / T[byte]      -- NO offset term",
  "C_seconds_times_table_units": 441.0,
  "t0_seconds": 0.0174,
  "fitted_on": "bytes 25 and 100 only; the other rungs are held out",
@@ -163,5 +163,8 @@
   5,
   4,
   4
- ]
+ ],
+ "t0_seconds_REMOVED": "mpc2emu's correction, adopted: t0 = 17.4 ms is the DETECTOR's floor (130's no-attack control reports 20-60 ms with no rise present), so it belongs to the measurement and not to the law. Subtract it from measured times when calibrating C; do not carry it into a converter. With t = C/T[byte] and nothing else, this project's detector convention survives in exactly ONE multiplicative constant -- every RATIO is the machine's own, so a later re-measurement with a better detector moves one number and cannot change the shape.",
+ "ACCURACY_CLAIM_CORRECTED": "An earlier exchange reported the table reproducing the measured 25->100 ratio to four decimal places. THAT IS CIRCULAR: C and t0 were solved from bytes 25 and 100, so subtracting t0 and taking the ratio of those same two points recovers T[25]/T[100] exactly whatever the table contains. The HELD-OUT rungs are the test, and they are weaker: byte 60 misses by +0.83%, byte 55 by -3.91%, and the 55->60 ratio by +4.93%. So these data confirm the table's shape to about 4-5%, not to four decimals, and nearly all of the residual is the byte-55 wrinkle.",
+ "WHAT_JUSTIFIES_THE_TABLE": "NOT these four rungs -- they all sit mid-range where any exponential does well, and they confirm the shape only to 4-5%. The justification is that the table IS the machine's own data, identified by its consumer (127), and that a single exponential is wrong by a FACTOR OF 2-3 at the ends (firmware/ours = 0.499 at byte 12, 0.302 at byte 5, per 122). Nothing measured on 2026-09-14 samples that region. The argument is 'this is the machine's table', not 'it fits our measurements better'."
 }

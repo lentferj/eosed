@@ -13608,3 +13608,46 @@ version would need: two rungs rather than one, both inside a single segment.
 **The corrected instruction found something the original would have missed** —
 "confirm the table at bytes 20-59" would have produced a single time, which
 cannot separate two slopes at all.
+
+### §134 addendum — the offset belongs to the measurement, and a second circular check
+
+**mpc2emu's correction, adopted.** §133's conversion model carried `t = t0 + C/T[byte]`
+with `t0` = 17.4 ms. **`t0` is the detector's floor** — §130's no-attack control
+reports 20-60 ms with no rise present at all — so it belongs to the measurement,
+not to the law. Subtract it from measured times when calibrating `C`; never carry
+it into a converter.
+
+**The gain is structural, not numerical.** With `t = C/T[byte]` and nothing else,
+this project's detector convention survives in **exactly one multiplicative
+constant**. Every ratio is the machine's own, so a later re-measurement with a
+better detector moves one number and **cannot change the shape**. That is the
+failure mode that cost three days on a sibling's attack law, where a detector was
+baked into an exponent and the shape was wrong everywhere at once.
+
+**And a second circularity, the same shape as §132's.** The correction was
+reported as reproducing the measured 25->100 ratio to **four decimal places**.
+It does — because `C` and `t0` were solved from bytes 25 and 100. Two equations,
+two unknowns; subtracting `t0` and taking the ratio of its own fit points
+recovers `T[25]/T[100]` exactly **whatever the table contains**.
+
+```
+  fitted points     M[25]-t0 = C/T[25]    identical by construction
+                   M[100]-t0 = C/T[100]   identical by construction
+  held-out points   byte 60   +0.83%
+                    byte 55   -3.91%
+                    ratio 55->60  +4.93%
+```
+
+**So these data confirm the table's shape to about 4-5%, not to four decimals.**
+
+**Both of today's circular checks were caught by the same question and by nothing
+else: what was this number computed from?** Neither was caught by inspecting how
+good the agreement looked — and in both cases the agreement looked *better* the
+more circular it was. **An unusually exact agreement between a measurement and a
+model is first evidence that the measurement passed through the model.**
+
+**What justifies the table is not these rungs.** They sit mid-range, where any
+exponential does well. The justification is that the table is the machine's own
+data, identified by its consumer (§127), and that a single exponential is wrong
+by a **factor of 2-3 at the ends** (§122). Nothing measured today samples that
+region. The argument is "this is the machine's table", not "it fits better".
