@@ -159,5 +159,7 @@
    "0x12da6a"
   ],
   "note": "All 42 hits are overlapping windows of ONE table present in two byte-identical copies 261396 bytes apart. One distinct candidate in 5689 monotone runs, at a tolerance 25x looser than the match achieved. Counted rather than hedged, at s3ked's suggestion."
- }
+ },
+ "IDENTITY_CONFIRMED_2026_09_14": "RESOLUTION_NOTES 127. No longer a shape match. With EOS 4.70 decompressed (eosflash), the table's consumer is readable: at body offset 0x3fb38 a routine clamps (rate_field + modulation) >> 5 to 0..127, indexes this table as u16, multiplies by elapsed ticks and adds or subtracts the result from the running envelope level -- the rising and falling branches are the table's only two references. Table[0]=65535 is the largest increment, i.e. instant, matching the 67.1% of corpus rate bytes at byte 0. ALSO: the index is the SUM of a stored field and a modulation term shifted right by 5, so the internal rate resolution is 32x finer than the MIDI byte.",
+ "VERSION_CAVEAT_CLOSED": "The 256 bytes of this table appear VERBATIM in the decompressed EOS 4.70 image at 0x41490 and 0x1da390 (body offsets). Byte-identical between 4.62 and 4.70, so this is a reading of the firmware the bench runs, not of a neighbouring version."
 }

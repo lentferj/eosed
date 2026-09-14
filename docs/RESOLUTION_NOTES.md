@@ -12972,3 +12972,66 @@ the `.dli` variant in one run.
 **The search should have come first.** It is the cheapest possible test of
 "is this problem already solved", it costs minutes, and this project reached for
 it only after being told to.
+
+## §127 — The table is identified from the code that uses it, not from its shape (2026-09-14)
+
+§122's surviving caveat was that the table's identity was **inferred from shape**
+— 128 entries, monotone, log-linear, at the right slope — because E-mu publish no
+anchors to match. **With 4.70 decompressed (§126) that caveat is removable, and
+it is removed here: the consumer is readable.**
+
+The load base is `0x20000` — the 4 MB ROM's OS offset, which `eosflash`'s own
+changelog names. Under it the table sits at `0x00061690` and is referenced
+**exactly twice**, both in one routine at body offset `0x3fb38`. ColdFire decodes
+it with zero invalid words:
+
+```
+  3fb4e:  movew %a1@(20),%d7          ; segment rate field
+  3fb52:  movew %a1@(4),%d1           ; plus a second term (modulation)
+  3fb5a:  addl  %d1,%d7
+  3fb5c:  movel %d7,%d6
+  3fb5e:  asrl  #5,%d6                ; >> 5  ->  a 0..127 index
+  3fb60:  tstl  %d6 / bpl / moveq #0  ; clamp low
+  3fb68:  cmpl  #127,%d6 / ble / moveq #127   ; clamp high
+  3fb72:  movel %a1@(36),%d7          ; the running envelope level
+  3fb7a:  moveal #398992,%a0          ; <- 0x61690, THE TABLE
+  3fb82:  movew %a0@(0,%d6:l:2),%d1   ; table[index], u16, scaled index x2
+  3fb86:  mulsl %d1,%d0               ; x elapsed ticks
+  3fb8a:  subl  %d0,%d7               ; FALLING segment
+  ...
+  3fba4:  addl  %d0,%d7               ; RISING segment
+  3fba6:  tstl  %d7 ...               ; clamp
+```
+
+**That is an envelope segment stepper**: clamp a rate index to 0-127, look up a
+per-tick increment, multiply by elapsed ticks, add or subtract it from the
+running level. **The two references are the rising and falling branches**, which
+is why there are exactly two and not one or many.
+
+### What this settles, and what it adds
+
+**The identification is no longer a shape match.** `docs/data/eos462_env_rate_table_candidate.json`'s
+`IDENTITY_IS_INFERRED` caveat is discharged: the table is indexed by a clamped
+0-127 envelope rate and its value is the level increment per tick. mpc2emu's
+rule — *a hit is a candidate, not a table* — was the right standard, and the
+thing that met it was reading the consumer, not more statistics.
+
+**The semantics confirm the corpus corroboration independently.** Table[0] is
+65535, the largest increment, so index 0 is the fastest possible segment —
+instant. mpc2emu's corpus puts **67.1% of all amp-envelope rate bytes at byte 0**.
+Two unrelated facts agreeing, neither derived from the other.
+
+**And a new fact falls out: the rate index is `(field + modulation) >> 5`.**
+The internal rate resolution is **32x finer than the MIDI byte**, and the index
+is formed by summing a stored field with a second term before clamping. So
+envelope rate modulation moves in steps a parameter read cannot see, and any
+model that treats the byte as the whole story is quantising something the
+machine does not.
+
+### The one caveat that remains, stated precisely
+
+This is the **amp/filter/aux envelope segment stepper** as identified by its
+arithmetic; which of the three envelopes a given `a1` block belongs to is not
+established here, and the table may be shared by all of them. **That is a
+question about the caller, not about the table**, and it is answerable the same
+way — by reading the code — rather than on the bench.
