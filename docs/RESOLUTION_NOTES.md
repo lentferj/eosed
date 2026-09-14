@@ -13651,3 +13651,76 @@ exponential does well. The justification is that the table is the machine's own
 data, identified by its consumer (§127), and that a single exponential is wrong
 by a **factor of 2-3 at the ends** (§122). Nothing measured today samples that
 region. The argument is "this is the machine's table", not "it fits better".
+
+## §135 — The full-range ladder kills the table-based conversion (2026-09-14, live)
+
+Jan: *"measure more points and the ends?"* — because §134's four rungs all sat
+mid-range and the table's entire claimed advantage was in territory nobody had
+measured. **Sixteen rungs, byte 3 to 110, per-rung hold and per-rung smoothing,
+two takes each. The claimed advantage is not there.**
+
+```
+  byte     3      5      8     12     16     20     25     30
+  t90  0.0414 0.0470 0.0592 0.0870 0.1133 0.1598 0.2037 0.2749 s
+  byte    40     55     60     70     80     90    100    110
+  t90  0.5060 1.1900 1.5500 2.7000 4.6600 8.0800 14.490 27.420 s
+```
+
+Repeat spreads 0.000-0.060 s, quantisation 0.1-2.2% — **the measurement is not
+the limiting factor.**
+
+### The comparison, with the exponential given MORE freedom
+
+```
+                              TABLE t=C/T[b]      EXP t=A*exp(k*b)
+                              (1 parameter)       (2 parameters)
+  all 16 rungs, byte 3-110    mean 7.1%  w 31.0%  mean 9.0%  w 20.5%
+  byte >= 12 (13 rungs)       mean 3.9%  w  8.2%  mean 4.0%  w  9.6%
+  byte >= 20 (11 rungs)       mean 3.3%  w  9.2%  mean 2.4%  w  4.5%
+```
+
+**Over the cleanly measurable range a plain two-parameter exponential fits as
+well or better than the table.** And the table's residual is systematic, not
+noise: **-8.2% at byte 20, +0.1% at 30, +4.3% at 80, +7.4% at 110** — a monotone
+drift, which is the signature of a wrong functional form rather than scatter.
+
+### So `t = C / T[byte]` is wrong, and §133/§134's proposal is withdrawn
+
+The table is the machine's own data and §127 identified it by its consumer, so it
+is certainly involved. **What is wrong is the assumed mapping from table value to
+attack time.** Fitting `t = C * T^p` gives p = **-0.961** rather than -1, and
+adding an offset gives `t0` = 8 ms, p = -0.987, mean 2.7% — better, but now two
+and three free parameters, at which point the table has bought nothing an
+exponential does not.
+
+**Candidate reasons, none established**: the stepper may not run at a constant
+tick; the traversal may not be a simple accumulate to a fixed target; or `t90`
+may not be proportional to traversal time. Reading the caller would settle it and
+this session did not get there.
+
+### And the low end is OUR floor, not the machine's
+
+Bytes 3, 5 and 8 measure 41, 47 and 59 ms against a **detector floor of 20-60 ms**
+(§130's no-attack control, with no rise present at all). Those three rungs carry
+the worst residuals in every model (-31% for the table at byte 3) **and they are
+the region the whole argument was about.** Excluding them changes the table from
+"7.1% mean" to "3.9% mean", which is the difference between a broken model and a
+mediocre one — decided entirely by three points we cannot trust.
+
+**So the ends were measured and the answer is that we still cannot see them.**
+The fast end needs a detector with a floor well under 10 ms; the slow end above
+byte 110 needs holds over a minute and was not attempted.
+
+### What this retracts
+
+**The recommendation sent to mpc2emu an hour ago — adopt `t = C/T[byte]` —
+is withdrawn.** It rested on the table being the machine's data, which is true,
+plus an assumed inverse mapping, which the measurement rejects. **`ENV_RATE_K`
+stays where it is**, and the honest position is the one §134 reached: the law is
+piecewise, each constant is right in one band, and nothing measured today
+improves on a fitted exponential over the range we can actually see.
+
+**The general form, and it is the day's shape once more:** a model was proposed
+on the strength of its provenance — *it is the machine's own table* — rather than
+on a fit, and provenance turned out not to be enough. **Being the right data does
+not make it the right model.** The table is real; `C/T[byte]` was mine.
