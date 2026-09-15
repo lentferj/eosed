@@ -14704,3 +14704,104 @@ Reading cords past a preset's actual count returns sentinels, not zeros: P013
 cords 18–23 read `src -1`, `amt 16383` (0x3FFF). A scan that treats those as real
 cords will find nonsense destinations. Stop at the preset's cord count, or reject
 `amt 16383`.
+
+## §144 — mpc2emu's composed Vel<→attack law survives falsification; two artefacts both faked the failure (2026-09-15, live)
+
+mpc2emu built a law by composing two results and asked for it to be broken rather
+than confirmed — the right request, since the composition was of §143 ("a cord
+spans its destination's range") and the exponential attack-byte law, neither of
+which was measured on this route:
+
+```
+span = t(vel 1) / t(vel 127) = exp(ENV_RATE_K × 1.27 × amount)
+       amount 28% -> 7.89×      amount 50% -> 40.0×
+```
+
+The destination id checks out from our own transcription rather than their
+documentary ordering: `73 = VEnvAtk` (0x49) and `74 = VEnvDcy` (0x4A), so the
+manual's order and the independently decoded cord agree with the table.
+
+### Magnitude: confirmed, ~8% low
+
+P013 v0, flat noise, note 24, filter wide open, every cord reaching a Vol-Env
+rate destination zeroed, one cord `Vel< → VEnvAtk`, base attack byte 30:
+
+| amount | t(vel 1) | t(vel 127) | span | predicted |
+|---:|---:|---:|---:|---:|
+| 0 | 0.165 | 0.165 | **1.00** | 1.00 |
+| 10 | 0.379 | 0.165 | 2.29 | 2.23 |
+| 28 | 1.280 | 0.171 | 7.50 | 7.89 |
+| 50 | 6.293 | 0.171 | 36.88 | 40.00 |
+
+The amount-0 control gives exactly 1.00. `t(vel 127)` is constant across all
+amounts, which confirms `Vel<` delivers zero at full velocity and full source at
+velocity 1 — so the span is set by the full source value, as the model assumes.
+
+### Base-independence: holds, but only after two artefacts were removed
+
+This is the half that looked false twice.
+
+**Take 1 (bases 20–75) appeared to show strong base-dependence** — span falling
+8.16 → 6.65 → 3.78. It was truncation: at bases 60 and 75 the envelope never
+reached its plateau inside the capture, so the rise read short. The tell was
+impossible rather than statistical — **base 75 gave `t(vel 1)` SHORTER than base
+60**, which no monotone rate law permits. Plateau equality between the two
+velocities (same envelope target, only the rate differs) rejects both cleanly:
+ratios 0.849 and 0.215 against ~1.01 for the valid rungs.
+
+**Take 2 (bases 10–50) appeared to show it again at the fast end** — span 11.71 at
+base 10 against ~7.2 higher up. That was the *denominator*: `t(vel 127)` is 37 ms
+against a 5.3 ms analysis window, seven samples across the whole rise. The plateau
+gate protected the numerator and nothing protected the divisor.
+
+**Both artefacts bias in the same direction as the hypothesis under test.** A
+truncated numerator makes the span read short at high bases; a quantised
+denominator makes it read long at low bases. Either alone reads as
+base-dependence, and together they manufacture a clean monotone trend across the
+full sweep. That is the configuration to design out rather than correct for.
+
+With both gates applied — plateau ratio ≥ 0.97 **and** denominator ≥ 25 windows:
+
+| base | span |
+|---:|---:|
+| 26 | 7.26 |
+| 34 | 7.74 |
+| 42 | 6.78 |
+| 50 | 7.12 |
+
+**mean 7.23 ± 0.35 (4.8%)**; trend with base −0.017/byte, i.e. −0.41 across the
+range against a scatter of ±0.35. **Base-dependence is not resolved.** The
+composition's surprising half stands, over the range that can be measured.
+
+### The 8.4% shortfall decomposes into the two ingredients
+
+Implied exponent `ln(span)/amount = 0.07064`; predicted `0.0581 × 1.27 = 0.0738`.
+
+- their `ENV_RATE_K` 0.0581 against our measured 0.0576 (§141): 0.9% high
+- their 1.27 bytes/amount-unit against 1.226 implied here: 3.5% high
+
+Compounded over amount 28 that is ~9%, against the ~8% observed.
+
+### A fourth destination for the range rule
+
+`0.07064 / 0.0576 = 1.226` bytes per amount unit → a +100% cord into `VEnvAtk`
+moves **123 bytes, 96.6% of its 127 range.**
+
+| destination | at ±100% | range | ratio |
+|---|---:|---:|---:|
+| `AmpVol` (level) | 126.4 | 127 | 99.5% |
+| `VEnvDcy` (rate) | 131.2 | 127 | 103.3% |
+| `FMORPH` (filter) | 248.5 | 255 | 97.5% |
+| `VEnvAtk` (rate) | 122.6 | 127 | 96.6% |
+
+**Mean 99.2% ± 2.6% across four destinations**, two ranges and three parameter
+families. §143's rule holds on every case tested.
+
+### Why this one is base-independent while §143's filter cord is not
+
+Both are the same cord behaviour — a fixed byte shift. The difference is what the
+byte means downstream. A *ratio of times* against an exponential byte→time law
+cancels the base exactly. A *span in cents* against the filter's byte→Hz law does
+not, because that law is not a uniform number of cents per byte (§125). The cord
+is base-independent in both cases; only the unit the answer is quoted in decides
+whether the base survives.
