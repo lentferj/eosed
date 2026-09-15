@@ -1,0 +1,987 @@
+{
+ "title": "E4XT cord-scaling and envelope measurements, 2026-09-14/15",
+ "device": "E4XT Ultra, EOS 4.70",
+ "why_this_file": "The raw captures lived in a session temp directory that does not survive a reboot. These are the reduced rows behind RESOLUTION_NOTES 136-144, kept so the fits can be re-derived without re-running the bench. Per-sample envelope tracks are stripped; every row here is a reduced measurement.",
+ "subjects": "P009 v0 (tonal, carrier 82.0/164.1/327.4 Hz at notes 52/64/76) and P013 v0 (flat noise, note 24 root-matched). Slot numbers only -- no preset or sample names are recorded anywhere in this file.",
+ "detector_notes": "Narrowband: rfft, Hann, power summed over 7 bins, detector bin computed from frequency and FFT size at every call and frozen at the top rung. Floors are measured AT THE SIGNAL BIN with no note sounding -- an argmax over bins finds mains hash and reads ~20 dB high (SS136). Envelope tracks: RMS or narrowband with the window recorded alongside every rise.",
+ "sections": {
+  "SS137_lfo_to_ampvol": {
+   "note": "LFO->AmpVol depth by sine fit; peak-to-trough 0.95 dB per amount unit. Lfo1~ centres the swing on the unmodulated level, Lfo1+ swings UPWARD. A cord can drive the amp ~8 dB above the envelope's own ceiling, then clamps.",
+   "data": {
+    "floor_dbfs": -106.36,
+    "ref_dbfs": -57.32,
+    "full_dbfs": -12.28,
+    "sustain_pct": 53,
+    "cord2": [
+     96,
+     48,
+     0
+    ],
+    "runs": [
+     {
+      "source": "Lfo1~",
+      "source_id": 96,
+      "amount": 25,
+      "period_s": 1.1733,
+      "window_over_period": 0.1455,
+      "peak_dbfs": -42.72,
+      "trough_dbfs": -71.13,
+      "depth_db": 28.41,
+      "peak_vs_unmod_db": 14.6,
+      "trough_vs_unmod_db": -13.81,
+      "trough_snr_db": 35.23,
+      "ceiling_clipped": false
+     },
+     {
+      "source": "Lfo1~",
+      "source_id": 96,
+      "amount": 50,
+      "period_s": 1.1947,
+      "window_over_period": 0.1429,
+      "peak_dbfs": -31.1,
+      "trough_dbfs": -81.46,
+      "depth_db": 50.37,
+      "peak_vs_unmod_db": 26.22,
+      "trough_vs_unmod_db": -24.15,
+      "trough_snr_db": 24.89,
+      "ceiling_clipped": false
+     },
+     {
+      "source": "Lfo1~",
+      "source_id": 96,
+      "amount": 100,
+      "period_s": 1.1947,
+      "window_over_period": 0.1429,
+      "peak_dbfs": -8.65,
+      "trough_dbfs": -87.82,
+      "depth_db": 79.18,
+      "peak_vs_unmod_db": 48.67,
+      "trough_vs_unmod_db": -30.51,
+      "trough_snr_db": 18.53,
+      "ceiling_clipped": true
+     },
+     {
+      "source": "Lfo1+",
+      "source_id": 97,
+      "amount": 25,
+      "period_s": 1.1733,
+      "window_over_period": 0.1455,
+      "peak_dbfs": -30.55,
+      "trough_dbfs": -58.84,
+      "depth_db": 28.3,
+      "peak_vs_unmod_db": 26.77,
+      "trough_vs_unmod_db": -1.52,
+      "trough_snr_db": 47.52,
+      "ceiling_clipped": false
+     },
+     {
+      "source": "Lfo1+",
+      "source_id": 97,
+      "amount": 50,
+      "period_s": 1.1947,
+      "window_over_period": 0.1429,
+      "peak_dbfs": -8.19,
+      "trough_dbfs": -57.72,
+      "depth_db": 49.53,
+      "peak_vs_unmod_db": 49.12,
+      "trough_vs_unmod_db": -0.41,
+      "trough_snr_db": 48.63,
+      "ceiling_clipped": true
+     },
+     {
+      "source": "Lfo1+",
+      "source_id": 97,
+      "amount": 100,
+      "period_s": 1.1947,
+      "window_over_period": 0.1429,
+      "peak_dbfs": -4.4,
+      "trough_dbfs": -56.36,
+      "depth_db": 51.97,
+      "peak_vs_unmod_db": 52.92,
+      "trough_vs_unmod_db": 0.95,
+      "trough_snr_db": 50.0,
+      "ceiling_clipped": true
+     }
+    ]
+   }
+  },
+  "SS138_level_law_slope_sweep": {
+   "note": "Amp-envelope level law, sweep designed for slope: rungs even in BYTE, each twice.",
+   "data": {
+    "floor_dbfs": -106.14,
+    "peak_dbfs": -8.97,
+    "fit": {
+     "intercept": 96.45,
+     "slope": -0.7618,
+     "r2": 0.999878,
+     "resid_rms": 0.291,
+     "n": 24
+    },
+    "rows": [
+     {
+      "sysex": 100,
+      "byte": 127,
+      "rep": 0,
+      "raw_db": -8.97,
+      "snr_db": 97.17,
+      "below_peak": 0.0
+     },
+     {
+      "sysex": 91,
+      "byte": 116,
+      "rep": 0,
+      "raw_db": -16.97,
+      "snr_db": 89.17,
+      "below_peak": 8.01
+     },
+     {
+      "sysex": 81,
+      "byte": 103,
+      "rep": 0,
+      "raw_db": -27.09,
+      "snr_db": 79.04,
+      "below_peak": 18.13
+     },
+     {
+      "sysex": 72,
+      "byte": 91,
+      "rep": 0,
+      "raw_db": -35.91,
+      "snr_db": 70.23,
+      "below_peak": 26.94
+     },
+     {
+      "sysex": 62,
+      "byte": 79,
+      "rep": 0,
+      "raw_db": -45.2,
+      "snr_db": 60.94,
+      "below_peak": 36.23
+     },
+     {
+      "sysex": 53,
+      "byte": 67,
+      "rep": 0,
+      "raw_db": -54.07,
+      "snr_db": 52.07,
+      "below_peak": 45.1
+     },
+     {
+      "sysex": 43,
+      "byte": 55,
+      "rep": 0,
+      "raw_db": -63.41,
+      "snr_db": 42.72,
+      "below_peak": 54.45
+     },
+     {
+      "sysex": 34,
+      "byte": 43,
+      "rep": 0,
+      "raw_db": -72.31,
+      "snr_db": 33.82,
+      "below_peak": 63.35
+     },
+     {
+      "sysex": 29,
+      "byte": 37,
+      "rep": 0,
+      "raw_db": -77.02,
+      "snr_db": 29.11,
+      "below_peak": 68.06
+     },
+     {
+      "sysex": 24,
+      "byte": 30,
+      "rep": 0,
+      "raw_db": -82.9,
+      "snr_db": 23.23,
+      "below_peak": 73.94
+     },
+     {
+      "sysex": 22,
+      "byte": 28,
+      "rep": 0,
+      "raw_db": -83.47,
+      "snr_db": 22.66,
+      "below_peak": 74.51
+     },
+     {
+      "sysex": 20,
+      "byte": 25,
+      "rep": 0,
+      "raw_db": -86.94,
+      "snr_db": 19.2,
+      "below_peak": 77.97
+     },
+     {
+      "sysex": 100,
+      "byte": 127,
+      "rep": 1,
+      "raw_db": -8.97,
+      "snr_db": 97.16,
+      "below_peak": 0.01
+     },
+     {
+      "sysex": 91,
+      "byte": 116,
+      "rep": 1,
+      "raw_db": -16.98,
+      "snr_db": 89.16,
+      "below_peak": 8.01
+     },
+     {
+      "sysex": 81,
+      "byte": 103,
+      "rep": 1,
+      "raw_db": -27.12,
+      "snr_db": 79.02,
+      "below_peak": 18.15
+     },
+     {
+      "sysex": 72,
+      "byte": 91,
+      "rep": 1,
+      "raw_db": -35.86,
+      "snr_db": 70.27,
+      "below_peak": 26.9
+     },
+     {
+      "sysex": 62,
+      "byte": 79,
+      "rep": 1,
+      "raw_db": -45.23,
+      "snr_db": 60.91,
+      "below_peak": 36.26
+     },
+     {
+      "sysex": 53,
+      "byte": 67,
+      "rep": 1,
+      "raw_db": -54.06,
+      "snr_db": 52.08,
+      "below_peak": 45.09
+     },
+     {
+      "sysex": 43,
+      "byte": 55,
+      "rep": 1,
+      "raw_db": -63.47,
+      "snr_db": 42.67,
+      "below_peak": 54.5
+     },
+     {
+      "sysex": 34,
+      "byte": 43,
+      "rep": 1,
+      "raw_db": -72.34,
+      "snr_db": 33.8,
+      "below_peak": 63.37
+     },
+     {
+      "sysex": 29,
+      "byte": 37,
+      "rep": 1,
+      "raw_db": -77.17,
+      "snr_db": 28.97,
+      "below_peak": 68.2
+     },
+     {
+      "sysex": 24,
+      "byte": 30,
+      "rep": 1,
+      "raw_db": -82.83,
+      "snr_db": 23.31,
+      "below_peak": 73.87
+     },
+     {
+      "sysex": 22,
+      "byte": 28,
+      "rep": 1,
+      "raw_db": -84.44,
+      "snr_db": 21.7,
+      "below_peak": 75.47
+     },
+     {
+      "sysex": 20,
+      "byte": 25,
+      "rep": 1,
+      "raw_db": -86.84,
+      "snr_db": 19.3,
+      "below_peak": 77.87
+     }
+    ]
+   }
+  },
+  "SS138_level_law_across_material": {
+   "note": "Same law on three different samples; slope spread ~1.15%, all below mpc2emu's 0.7718.",
+   "data": [
+    {
+     "preset": 9,
+     "note": 52,
+     "f0_hz": 82.76,
+     "over_floor_db": 95.4,
+     "peak_dbfs": -9.32,
+     "n_clean": 10,
+     "slope": 0.75922,
+     "byte0": 96.182,
+     "r2": 0.999952
+    },
+    {
+     "preset": 12,
+     "note": 64,
+     "f0_hz": 327.39,
+     "over_floor_db": 99.4,
+     "peak_dbfs": -13.31,
+     "n_clean": 10,
+     "slope": 0.76469,
+     "byte0": 96.754,
+     "r2": 0.999891
+    },
+    {
+     "preset": 23,
+     "note": 64,
+     "f0_hz": 329.59,
+     "over_floor_db": 85.7,
+     "peak_dbfs": -23.82,
+     "n_clean": 9,
+     "slope": 0.768,
+     "byte0": 97.167,
+     "r2": 0.999858
+    },
+    {
+     "preset": 9,
+     "note": 52,
+     "f0_hz": 82.76,
+     "over_floor_db": 101.0,
+     "peak_dbfs": -9.34,
+     "n_clean": 10,
+     "slope": 0.75993,
+     "byte0": 96.237,
+     "r2": 0.999939
+    }
+   ]
+  },
+  "SS139_141_dc_to_ampvol": {
+   "note": "DC (constant cord source) -> AmpVol, amount swept both signs. 126.4 bytes at +/-100%.",
+   "data": {
+    "carrier_hz": 82.76,
+    "ref_dbfs": -52.66,
+    "ceiling_dbfs": -7.59,
+    "floor_dbfs": -106.2,
+    "db_per_amount": 0.96442,
+    "r2": 0.999917,
+    "full_scale_db": 96.44,
+    "full_scale_bytes": 126.4,
+    "db_per_byte_used": 0.763,
+    "rows": [
+     {
+      "amount": -60,
+      "level_dbfs": -111.67,
+      "shift_db": -59.01,
+      "snr_db": -5.46,
+      "bytes": -77.34
+     },
+     {
+      "amount": -45,
+      "level_dbfs": -111.61,
+      "shift_db": -58.95,
+      "snr_db": -5.41,
+      "bytes": -77.26
+     },
+     {
+      "amount": -30,
+      "level_dbfs": -82.24,
+      "shift_db": -29.58,
+      "snr_db": 23.97,
+      "bytes": -38.76
+     },
+     {
+      "amount": -20,
+      "level_dbfs": -71.92,
+      "shift_db": -19.26,
+      "snr_db": 34.28,
+      "bytes": -25.24
+     },
+     {
+      "amount": -10,
+      "level_dbfs": -62.68,
+      "shift_db": -10.02,
+      "snr_db": 43.53,
+      "bytes": -13.13
+     },
+     {
+      "amount": 0,
+      "level_dbfs": -52.66,
+      "shift_db": -0.01,
+      "snr_db": 53.54,
+      "bytes": -0.01
+     },
+     {
+      "amount": 10,
+      "level_dbfs": -43.24,
+      "shift_db": 9.42,
+      "snr_db": 62.96,
+      "bytes": 12.34
+     },
+     {
+      "amount": 20,
+      "level_dbfs": -33.72,
+      "shift_db": 18.94,
+      "snr_db": 72.48,
+      "bytes": 24.82
+     },
+     {
+      "amount": 30,
+      "level_dbfs": -24.19,
+      "shift_db": 28.47,
+      "snr_db": 82.02,
+      "bytes": 37.32
+     },
+     {
+      "amount": 45,
+      "level_dbfs": -9.54,
+      "shift_db": 43.12,
+      "snr_db": 96.67,
+      "bytes": 56.52
+     },
+     {
+      "amount": 60,
+      "level_dbfs": -3.21,
+      "shift_db": 49.45,
+      "snr_db": 102.99,
+      "bytes": 64.81
+     }
+    ]
+   }
+  },
+  "SS140_141_dc_to_venvdcy": {
+   "note": "DC -> VEnvDcy (a RATE destination). 131.2 bytes at +/-100% once the calibration curvature is inverted per rung rather than averaged.",
+   "data": {
+    "base_rate_byte": 72,
+    "ln_per_byte": -0.0565,
+    "rows": [
+     {
+      "amount": 0,
+      "db_per_s": 22.887,
+      "r2": 0.9582,
+      "n": 86,
+      "ratio": 1.0,
+      "byte_shift": -0.0
+     },
+     {
+      "amount": -10,
+      "db_per_s": 11.104,
+      "r2": 0.9531,
+      "n": 168,
+      "ratio": 0.4852,
+      "byte_shift": 12.8
+     },
+     {
+      "amount": -5,
+      "db_per_s": 16.62,
+      "r2": 0.9502,
+      "n": 104,
+      "ratio": 0.7262,
+      "byte_shift": 5.66
+     },
+     {
+      "amount": 5,
+      "db_per_s": 35.611,
+      "r2": 0.9753,
+      "n": 67,
+      "ratio": 1.556,
+      "byte_shift": -7.82
+     },
+     {
+      "amount": 10,
+      "db_per_s": 50.399,
+      "r2": 0.9824,
+      "n": 45,
+      "ratio": 2.2021,
+      "byte_shift": -13.97
+     },
+     {
+      "amount": 0,
+      "db_per_s": 23.01,
+      "r2": 0.9575,
+      "n": 85,
+      "ratio": 1.0054,
+      "byte_shift": -0.09
+     }
+    ]
+   }
+  },
+  "SS141_byte_to_db_per_s_calibration": {
+   "note": "The local byte<->dB/s calibration, 8 rate bytes 58-86 each twice. d(ln rate)/d(byte) = -0.05761. SS134 says the law is piecewise, so a GLOBAL slope does not exist -- the spread earlier filed as uncertainty was this curvature disagreeing with itself.",
+   "data": {
+    "carrier_hz": 164.06,
+    "window_ms": 85.33,
+    "slope": -0.057614,
+    "r2": 0.998282,
+    "curvature": 0.0001751,
+    "rows": [
+     {
+      "byte": 58,
+      "db_per_s": 53.893,
+      "r2": 0.9619,
+      "n": 74,
+      "db_per_window": 4.6,
+      "rep": 0
+     },
+     {
+      "byte": 62,
+      "db_per_s": 39.729,
+      "r2": 0.9522,
+      "n": 87,
+      "db_per_window": 3.39,
+      "rep": 0
+     },
+     {
+      "byte": 66,
+      "db_per_s": 32.191,
+      "r2": 0.9486,
+      "n": 102,
+      "db_per_window": 2.75,
+      "rep": 0
+     },
+     {
+      "byte": 70,
+      "db_per_s": 25.544,
+      "r2": 0.9497,
+      "n": 139,
+      "db_per_window": 2.18,
+      "rep": 0
+     },
+     {
+      "byte": 74,
+      "db_per_s": 20.511,
+      "r2": 0.9508,
+      "n": 166,
+      "db_per_window": 1.75,
+      "rep": 0
+     },
+     {
+      "byte": 78,
+      "db_per_s": 16.471,
+      "r2": 0.9497,
+      "n": 215,
+      "db_per_window": 1.41,
+      "rep": 0
+     },
+     {
+      "byte": 82,
+      "db_per_s": 12.961,
+      "r2": 0.9538,
+      "n": 270,
+      "db_per_window": 1.11,
+      "rep": 0
+     },
+     {
+      "byte": 86,
+      "db_per_s": 10.434,
+      "r2": 0.9548,
+      "n": 337,
+      "db_per_window": 0.89,
+      "rep": 0
+     },
+     {
+      "byte": 58,
+      "db_per_s": 54.425,
+      "r2": 0.9632,
+      "n": 74,
+      "db_per_window": 4.64,
+      "rep": 1
+     },
+     {
+      "byte": 62,
+      "db_per_s": 39.731,
+      "r2": 0.9516,
+      "n": 87,
+      "db_per_window": 3.39,
+      "rep": 1
+     },
+     {
+      "byte": 66,
+      "db_per_s": 32.095,
+      "r2": 0.9487,
+      "n": 102,
+      "db_per_window": 2.74,
+      "rep": 1
+     },
+     {
+      "byte": 70,
+      "db_per_s": 25.701,
+      "r2": 0.9502,
+      "n": 139,
+      "db_per_window": 2.19,
+      "rep": 1
+     },
+     {
+      "byte": 74,
+      "db_per_s": 20.518,
+      "r2": 0.9507,
+      "n": 165,
+      "db_per_window": 1.75,
+      "rep": 1
+     },
+     {
+      "byte": 78,
+      "db_per_s": 16.444,
+      "r2": 0.9486,
+      "n": 215,
+      "db_per_window": 1.4,
+      "rep": 1
+     },
+     {
+      "byte": 82,
+      "db_per_s": 12.944,
+      "r2": 0.9558,
+      "n": 272,
+      "db_per_window": 1.1,
+      "rep": 1
+     },
+     {
+      "byte": 86,
+      "db_per_s": 10.447,
+      "r2": 0.9543,
+      "n": 338,
+      "db_per_window": 0.89,
+      "rep": 1
+     }
+    ]
+   }
+  },
+  "SS143_vel_to_filter_freq": {
+   "note": "Vel+ -> Filter Freq at three bases and three amounts. In cents the span spreads 9.5% across bases; in bytes 1.6%. A +100% cord moves 248 of FMORPH's 255. Corners converted to bytes via the SS125 LP2 law.",
+   "data": {
+    "preset": 13,
+    "voice": 0,
+    "note": 24,
+    "ceiling_hz": 24000.0,
+    "method": "SS125 H=S/S_open, LP2, Q0, passband 110-240 Hz, -3 dB corner",
+    "rows": [
+     {
+      "base_fmorph": 40,
+      "amount": 25,
+      "f_vel1_hz": 252.0,
+      "f_vel127_hz": 720.7,
+      "cents": 1819.5,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 70,
+      "amount": 25,
+      "f_vel1_hz": 398.4,
+      "f_vel127_hz": 1048.8,
+      "cents": 1675.6,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 100,
+      "amount": 25,
+      "f_vel1_hz": 697.3,
+      "f_vel127_hz": 1669.9,
+      "cents": 1512.0,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 40,
+      "amount": 50,
+      "f_vel1_hz": 252.0,
+      "f_vel127_hz": 1710.9,
+      "cents": 3316.3,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 70,
+      "amount": 50,
+      "f_vel1_hz": 410.2,
+      "f_vel127_hz": 2777.3,
+      "cents": 3311.4,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 100,
+      "amount": 50,
+      "f_vel1_hz": 697.3,
+      "f_vel127_hz": 6375.0,
+      "cents": 3831.2,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 40,
+      "amount": 12,
+      "f_vel1_hz": 252.0,
+      "f_vel127_hz": 392.6,
+      "cents": 767.8,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 70,
+      "amount": 12,
+      "f_vel1_hz": 398.4,
+      "f_vel127_hz": 673.8,
+      "cents": 909.6,
+      "saturated": false
+     },
+     {
+      "base_fmorph": 100,
+      "amount": 12,
+      "f_vel1_hz": 697.3,
+      "f_vel127_hz": 1031.2,
+      "cents": 677.5,
+      "saturated": false
+     }
+    ]
+   }
+  },
+  "SS144_vel_to_attack_amount_sweep": {
+   "note": "Vel< -> VEnvAtk, amounts 0/10/28/50 at base 30. Amount 0 gives span 1.00. t(vel127) constant across amounts, confirming Vel< is zero at full velocity.",
+   "data": {
+    "preset": 13,
+    "voice": 0,
+    "note": 24,
+    "base_attack_byte": 30,
+    "source": "Vel< (12)",
+    "destination": "VEnvAtk (73)",
+    "rows": [
+     {
+      "amount": 0,
+      "t_vel1_s": 0.1653,
+      "t_vel127_s": 0.1653,
+      "span": 1.0,
+      "predicted": 1.0,
+      "window_ms": 5.33,
+      "rise_over_window": 31.0,
+      "plateau_vel1": 0.15652,
+      "plateau_vel127": 0.1564
+     },
+     {
+      "amount": 10,
+      "t_vel1_s": 0.3787,
+      "t_vel127_s": 0.1653,
+      "span": 2.29,
+      "predicted": 2.23,
+      "window_ms": 5.33,
+      "rise_over_window": 71.0,
+      "plateau_vel1": 0.15795,
+      "plateau_vel127": 0.15587
+     },
+     {
+      "amount": 28,
+      "t_vel1_s": 1.28,
+      "t_vel127_s": 0.1707,
+      "span": 7.5,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 240.0,
+      "plateau_vel1": 0.15858,
+      "plateau_vel127": 0.1568
+     },
+     {
+      "amount": 50,
+      "t_vel1_s": 6.2933,
+      "t_vel127_s": 0.1707,
+      "span": 36.875,
+      "predicted": 40.0,
+      "window_ms": 5.33,
+      "rise_over_window": 1180.0,
+      "plateau_vel1": 0.15852,
+      "plateau_vel127": 0.15586
+     }
+    ]
+   }
+  },
+  "SS144_vel_to_attack_base_sweep": {
+   "note": "Same cord at amount 28, bases 10-50. Bases 10 and 18 are rejected: the DENOMINATOR t(vel127) is only 7 and 14 analysis windows. The t(vel127) column is also the unmodulated attack time at byte=base, which gives d(ln t)/d(byte) = 0.05841 over bytes 26-50 -- the ATTACK law, +1.4% from the DECAY constant over bytes 58-86. Two segments, one law.",
+   "data": {
+    "preset": 13,
+    "voice": 0,
+    "note": 24,
+    "base_attack_byte": "swept 20-75",
+    "source": "Vel< (12)",
+    "destination": "VEnvAtk (73)",
+    "rows": [
+     {
+      "base": 10,
+      "amount": 28,
+      "t_vel1_s": 0.4373,
+      "t_vel127_s": 0.0373,
+      "span": 11.714,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 82.0,
+      "plateau_vel1": 0.15849,
+      "plateau_vel127": 0.15642
+     },
+     {
+      "base": 18,
+      "amount": 28,
+      "t_vel1_s": 0.656,
+      "t_vel127_s": 0.0747,
+      "span": 8.786,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 123.0,
+      "plateau_vel1": 0.15857,
+      "plateau_vel127": 0.15606
+     },
+     {
+      "base": 26,
+      "amount": 28,
+      "t_vel1_s": 1.0453,
+      "t_vel127_s": 0.144,
+      "span": 7.259,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 196.0,
+      "plateau_vel1": 0.15879,
+      "plateau_vel127": 0.15611
+     },
+     {
+      "base": 34,
+      "amount": 28,
+      "t_vel1_s": 1.6107,
+      "t_vel127_s": 0.208,
+      "span": 7.744,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 302.0,
+      "plateau_vel1": 0.15864,
+      "plateau_vel127": 0.1568
+     },
+     {
+      "base": 42,
+      "amount": 28,
+      "t_vel1_s": 2.496,
+      "t_vel127_s": 0.368,
+      "span": 6.783,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 468.0,
+      "plateau_vel1": 0.15858,
+      "plateau_vel127": 0.15642
+     },
+     {
+      "base": 50,
+      "amount": 28,
+      "t_vel1_s": 4.0267,
+      "t_vel127_s": 0.5653,
+      "span": 7.123,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 755.0,
+      "plateau_vel1": 0.15885,
+      "plateau_vel127": 0.15618
+     }
+    ]
+   }
+  },
+  "SS144_vel_to_attack_truncated_run": {
+   "note": "KEPT AS A NEGATIVE EXAMPLE. Bases 20-75; at 60 and 75 the envelope never reached its plateau inside the capture, so the rise read SHORT and the span looked base-dependent. The tell was an impossibility, not a statistic: base 75 measured a SHORTER rise than base 60. Both artefacts in this measurement bias toward the hypothesis under test, so the goodness of the trend was worthless as evidence.",
+   "data": {
+    "preset": 13,
+    "voice": 0,
+    "note": 24,
+    "base_attack_byte": "swept 20-75",
+    "source": "Vel< (12)",
+    "destination": "VEnvAtk (73)",
+    "rows": [
+     {
+      "base": 20,
+      "amount": 28,
+      "t_vel1_s": 0.7627,
+      "t_vel127_s": 0.096,
+      "span": 7.944,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 143.0,
+      "plateau_vel1": 0.15858,
+      "plateau_vel127": 0.15646
+     },
+     {
+      "base": 30,
+      "amount": 28,
+      "t_vel1_s": 1.3493,
+      "t_vel127_s": 0.1653,
+      "span": 8.161,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 253.0,
+      "plateau_vel1": 0.15838,
+      "plateau_vel127": 0.15662
+     },
+     {
+      "base": 45,
+      "amount": 28,
+      "t_vel1_s": 2.976,
+      "t_vel127_s": 0.4267,
+      "span": 6.975,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 558.0,
+      "plateau_vel1": 0.15857,
+      "plateau_vel127": 0.15633
+     },
+     {
+      "base": 60,
+      "amount": 28,
+      "t_vel1_s": 6.064,
+      "t_vel127_s": 0.912,
+      "span": 6.649,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 1137.0,
+      "plateau_vel1": 0.13281,
+      "plateau_vel127": 0.15648
+     },
+     {
+      "base": 75,
+      "amount": 28,
+      "t_vel1_s": 5.744,
+      "t_vel127_s": 1.52,
+      "span": 3.779,
+      "predicted": 7.89,
+      "window_ms": 5.33,
+      "rise_over_window": 1077.0,
+      "plateau_vel1": 0.01915,
+      "plateau_vel127": 0.0891
+     }
+    ]
+   }
+  }
+ },
+ "destination_range_rule": {
+  "claim": "A +/-100% cord moves its destination across its own full parameter range.",
+  "evidence": [
+   {
+    "destination": "AmpVol (level)",
+    "measured_bytes": 126.4,
+    "range": 127,
+    "ratio_pct": 99.5
+   },
+   {
+    "destination": "VEnvDcy (rate)",
+    "measured_bytes": 131.2,
+    "range": 127,
+    "ratio_pct": 103.3
+   },
+   {
+    "destination": "FMORPH (filter)",
+    "measured_bytes": 248.5,
+    "range": 255,
+    "ratio_pct": 97.5
+   },
+   {
+    "destination": "VEnvAtk (rate)",
+    "measured_bytes": 123.4,
+    "range": 127,
+    "ratio_pct": 97.1
+   }
+  ],
+  "mean_pct": 98.8,
+  "sd_pct": 2.9,
+  "why_fmorph_matters": "The two 127-range destinations could not distinguish this rule from 'a cord is worth a constant ~127 bytes'. FMORPH's range is 255 and it measures 248, so the constant-bytes reading is refuted by the only case that can tell them apart."
+ }
+}
