@@ -14805,3 +14805,57 @@ cancels the base exactly. A *span in cents* against the filter's byte→Hz law d
 not, because that law is not a uniform number of cents per byte (§125). The cord
 is base-independent in both cases; only the unit the answer is quoted in decides
 whether the base survives.
+
+### §144 addendum — the two runs agree to 0.02%, and attack shares the decay rate law
+
+mpc2emu read the amount sweep (7.50 at amount 28) and the base sweep (mean 7.23)
+as a 3.7% disagreement and chose between them. **They do not disagree.**
+
+The amount sweep was taken entirely at base 30. The base sweep brackets it:
+
+```
+base 26 -> 7.26      base 34 -> 7.74
+interpolated to base 30:  7.50
+amount sweep at base 30:  7.50      -0.02%
+```
+
+The 3.7% is a single-base measurement compared against a **multi-base mean**, not
+two measurements of the same thing disagreeing. So the choice is not between rival
+numbers: `0.07206` is the exponent **at base 30**, `0.07064` is the **mean over
+bases 26–50**. Both are correct answers to different questions, and the gap sits
+inside the base sweep's own 4.8% scatter.
+
+For a writer applying the constant across arbitrary presets the multi-base mean is
+marginally the better estimator, but the difference is 4% in span and nothing
+downstream resolves that, so either is defensible.
+
+**The amount-10 exclusion is justified, for a better reason than "noisiest
+point".** Its denominator — the unmodulated time at byte 30 — was measured as
+0.165 s, where the base sweep's own byte→time law interpolates 0.176 s, 6.1% low.
+A small span amplifies denominator error directly: corrected, amount 10 gives
+exponent 0.0766 rather than 0.0829, most of the way to the 0.0720 of the other
+two. It is denominator scatter, not a small-amount nonlinearity.
+
+**Free result: attack and decay share one rate law.** The base sweep's
+`t(vel 127)` values *are* the unmodulated attack times at byte = base, so they
+measure the attack byte→time law directly:
+
+| byte | 26 | 34 | 42 | 50 |
+|---|---:|---:|---:|---:|
+| t | 0.144 | 0.208 | 0.368 | 0.565 s |
+
+`d(ln t)/d(byte) = 0.05841` over bytes 26–50, against the **decay** rate constant
+`0.05760` measured over bytes 58–86 (§141) — **+1.4%**. Two different envelope
+segments, two disjoint byte ranges, one law. Consistent with §127's single shared
+rate table being read by every segment.
+
+(Fitting all six bases gives 0.06694, but bytes 10 and 18 are the
+resolution-limited rungs — 7 and 14 windows across the whole rise. The clean four
+give 0.05841. The same points that faked base-dependence also steepen this fit.)
+
+**Correction to the range-rule figure above.** §144 divided by 0.0576, the *decay*
+constant measured over a different byte range. Using the attack law from the same
+run is self-consistent: `0.07064 / 0.05841 = 1.209` bytes per amount unit → **121
+bytes, 95.2% of 127** (or 97.1% on the amount-sweep exponent). The four-destination
+mean becomes 98.8% ± 2.9% rather than 99.2% ± 2.6% — the rule is unaffected, but
+the divisor should come from the same measurement rather than a neighbouring one.
