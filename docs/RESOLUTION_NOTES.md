@@ -14599,3 +14599,108 @@ whose data regions decode as noise, and a jump-table dispatch would leave no
 compares at all. A controller sweep on hardware would be stronger. But a
 *positive* — CC 6 special-cased — would have killed the recommendation, and it is
 not there.
+
+## §143 — Vel+ → Filter Freq: a cord moves BYTES, not cents — and that settles §139/§140/§141 (2026-09-15, live)
+
+Commissioned by mpc2emu, who carry `VEL_FILTER_FULL_CENTS = 9120` marked NOMINAL.
+It is not an independent measurement — it is `FILTER_ENV_FULL_CENTS = 4383`
+multiplied by the Vel+ source's 2.08-unit span, so it inherits that constant's
+base. Their question was the right one: **is a full cord worth a fixed number of
+cents at all, or does the span depend on where the corner starts?**
+
+Method as §125: P013 v0, flat noise, note 24 root-matched, LP2, Q 0, every cord
+reaching Filter Freq zeroed, one cord Vel+ → Filter Freq. The span is a *ratio*
+of corners, 1200·log₂(f₁₂₇/f₁), so it needs no cutoff law — only the same
+corner-finding at both velocities.
+
+### Run 1 measured the capture, not the machine
+
+`+100%` at bases 40/70/100 all pinned at 24000 Hz — **the capture's Nyquist, not
+the machine's ceiling.** All three were lower bounds and said nothing about
+base-dependence, which was the entire question. Saturation detection caught it
+(the corner at FMORPH 255 with no cord was measured first, and every full-amount
+rung landed there), so the run reported lower bounds rather than three plausible
+and meaningless cents figures.
+
+### Run 2: nine rungs, amounts that cannot saturate
+
+| base | amt | f(vel 1) | f(vel 127) | cents | Δbyte |
+|---:|---:|---:|---:|---:|---:|
+| 40 | 12 | 252.0 | 392.6 | 767.8 | 26.3 |
+| 70 | 12 | 398.4 | 673.8 | 909.6 | 31.7 |
+| 100 | 12 | 697.3 | 1031.2 | 677.5 | 25.5 |
+| 40 | 25 | 252.0 | 720.7 | 1819.5 | 63.1 |
+| 70 | 25 | 398.4 | 1048.8 | 1675.6 | 60.7 |
+| 100 | 25 | 697.3 | 1669.9 | 1512.0 | 60.9 |
+| 40 | 50 | 252.0 | 1710.9 | 3316.3 | 124.1 |
+| 70 | 50 | 410.2 | 2777.3 | 3311.4 | 126.1 |
+| 100 | 50 | 697.3 | 6375.0 | 3831.2 | 125.9 |
+
+Δbyte is the measured corner converted back through §125's law.
+
+**In cents the same data spreads 9.5%; in bytes it spreads 1.6%** (amount 50) and
+3.9% (amount 25). The amount-12 rungs are noisy in both — the smallest shift, so
+corner-finding resolution dominates.
+
+> **The cord moves the FMORPH byte by a fixed amount independent of base. The
+> cents span varies only because the byte→Hz law is not a uniform number of cents
+> per byte.** `VEL_FILTER_FULL_CENTS` as a single constant is the wrong shape of
+> model, exactly as mpc2emu suspected.
+
+Round-trip self-check on the inverse law: setting FMORPH 40/70/100 and recovering
+the byte from the measured corner gives 40.0 / 67.2–68.9 / 101.0 — accurate to
+±3 bytes on shifts of 60–126.
+
+### The number, and it kills "always 127 bytes"
+
+Six well-resolved rungs: **2.485 ± 0.041 bytes per amount unit (1.6%)**, so a
+**+100% cord moves 248 bytes of FMORPH — 97.4% of its 0–255 range.**
+
+| destination | measured at ±100% | its range | ratio |
+|---|---:|---:|---:|
+| `AmpVol` (level) §141 | 126.4 | 127 | 99.5% |
+| `VEnvDcy` (rate) §141 | 131.2 | 127 | 103.3% |
+| `FMORPH` (filter) | 248.5 | 255 | 97.4% |
+
+**§141 could not distinguish "a cord spans its destination's range" from "a cord
+is worth a constant ~127 bytes", because both its destinations happened to have a
+range of 127.** FMORPH has twice that, and gives 248 — so the constant-bytes
+reading is dead and the destination-range reading is confirmed on a case that can
+tell them apart. Mean ratio across three destinations: 100.1% ± 2.4%.
+
+That is §139's claim, which §140 withdrew and §141 left open. **§139's conclusion
+was right and its reasoning was not** — it asserted the tidy story from a single
+127-range destination that could not discriminate. The claim is safe now because
+of a test §139 never ran, not because §139 was vindicated. §133's 132 and §141's
+interval stand as fair readings of what was known then.
+
+### `9120` is larger than the filter's entire tuning range
+
+From §125's law plus the panel's own 18334 Hz at FMORPH 251:
+
+```
+byte  20 ->   199.2 Hz          byte 20 -> 235   6417 cents
+byte 235 ->  8109.4 Hz          byte 20 -> 251   7829 cents
+byte 251 -> 18334   Hz (panel)
+```
+
+**The whole FMORPH range spans about 7829 cents. 9120 is ~1291 cents more than
+the filter can travel at all.** So the constant is not merely base-dependent — no
+base makes it reachable. Any conversion asking for 9120 cents of velocity→filter
+depth gets a fully-open filter and the remainder is discarded.
+
+### What a writer should do instead
+
+Convert the source's velocity→filter depth to a **byte shift**, not a cents span:
+`amount = Δbyte / 2.485`, with Δbyte obtained from the base cutoff and the target
+cutoff through the §125 law — the same base-dependent treatment
+`e4xt_cents_to_cord_amount` already applies to the filter envelope. A cents-based
+constant cannot be made correct by re-measuring it, because the quantity it names
+is not constant.
+
+### Rig note
+
+Reading cords past a preset's actual count returns sentinels, not zeros: P013
+cords 18–23 read `src -1`, `amt 16383` (0x3FFF). A scan that treats those as real
+cords will find nonsense destinations. Stop at the preset's cord count, or reject
+`amt 16383`.
