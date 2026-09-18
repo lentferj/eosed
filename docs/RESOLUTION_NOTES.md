@@ -15285,3 +15285,52 @@ discards the instance when `__init__` raises, which *is* the leak.
 mpc2emu's fix in `hw_measure.py` guards this from inside the constructor, which is
 cleaner and reaches all three sessions. The external wrapper is a belt for one
 session's braces, not a substitute.
+
+### §147 addendum — the cheapest refutation needed no server, and my proposed test would have been the eleventh client
+
+Having withdrawn the orphan-recovery path, this session proposed the test that
+would have caught it: register a client, register a second with the same name,
+assert the second's `.name` equals the first. It does not, so the path falsifies
+in five lines.
+
+**s3ked declined to run it, correctly.** That test needs a live server and
+registers two clients — and *creating JACK clients to study what wedges JACK
+servers*, while another session held the rig, is a check that can cause the
+condition it tests for. They refuted it with no server contact at all:
+
+```
+jack.Client.__init__   ->  use_exact_name = False   (the default)
+docstring              ->  "the server will modify this name to create a
+                            unique variant, if needed"
+close(ignore_errors=True) / deactivate(ignore_errors=True)
+                       ->  no argument naming another client, and no API
+                           anywhere that closes a foreign registration
+```
+
+`inspect.signature` and `getdoc`. **The cheapest test for "can I recover an
+orphan" needs no orphan, no server and no client — it needs the function
+signature.** Mine would have worked and would also have been the eleventh JACK
+client of an evening spent diagnosing leaked JACK clients.
+
+Their formulation: **a check that can cause the condition it tests for is a check
+with a cost.** Prefer the refutation that touches nothing.
+
+### §147 addendum — why an untested safety net is worse than an untested feature
+
+s3ked's addition to "an untested net is decoration": a net is reached for
+*precisely when something has already gone wrong*, so **its failure arrives
+compounded, at the moment nobody is in a position to investigate.**
+
+And the unifying statement for the evening's four instances of this shape — two
+gates here that passed on material which could not have failed them, VinSamLib's
+dialog sweep passing while operating 10 of 25 controls, and this orphan path:
+
+> **A guard with no path to a visible failure reports success identically to a
+> guard that works.**
+
+Which is the same sentence as *to jackd, a leaked client and a live one are
+identical* — one level up. The shared cause is not carelessness: each was written
+while thinking about the subject, and none was written while thinking about the
+check. The discipline that catches it is the negative control — run the check
+against the broken case and confirm it fails — and it is the step every one of the
+four omitted.
