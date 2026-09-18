@@ -14953,3 +14953,48 @@ like a smooth convex fall. As **local rates** it is 4.2 / 23.8 / 20.0 / 9.6 /
 6.9 / 19.6 dB/s, which is not a shape any single envelope produces. Cumulative
 times always increase smoothly; that is a property of cumulation, not evidence
 about the underlying curve. **Differentiate before believing a shape.**
+
+### §145 addendum — the knee conclusion is withdrawn, and the "13 dB ripple" is not a difference between machines
+
+**Withdrawn: "the knee earns nothing on this material."** That rested on the
+reference figure `MPC −20 to −60 = 11.40 dB/s`, which mpc2emu has since withdrawn.
+Re-measured with the detector method above, the same reference gives **18.20 dB/s**,
+which would put the match near `Rls2 = 75`, not 86. The 0.5% agreement in §145 was
+against a number that no longer exists. **Nothing about `_ENV_SHAPE_BREAK_TIME`
+should be changed on the strength of it.**
+
+What survives untouched: the E4XT release is one straight line at 11.0 dB/s
+(r² 0.99879, thirteen points), and the rate law predicts the release destination
+to 3–9%. Those are measurements of this instrument and do not depend on any
+reference.
+
+**And a comparison I enabled wrongly.** I reported the sustain as "steady to
+2.09 dB" without stating the window. That figure came from t = 10–24 s of a
+**25 s** hold. mpc2emu measured ~13 dB over the last 2.5 s of a **4 s** hold and
+reasonably read the two against each other, concluding that something modulates
+on the MPC which our conversion does not carry.
+
+Measured in **their** window, on E4XT captures already in hand:
+
+| window | E4XT ripple |
+|---|---:|
+| 1.9–4.35 s of a 4 s hold (their window), three reps | **12.45 / 13.42 / 13.37 dB** |
+| 1.9–4.35 s of the 25 s hold | 12.73 dB |
+| 10–24 s of the 25 s hold (settled) | **2.08 dB** |
+
+**The E4XT ripples the same ~13 dB they measured.** There is no modulation
+difference between the machines; the note simply has not settled by 4 s on either,
+and it takes ~10 s here. So the ripple cannot explain their S-curve, and this
+program is not disqualified as a reference on those grounds.
+
+The difference that IS real is repeatability: their rep spread is 0.38–0.53 s at
+every threshold, ours 0.017–0.094 s, **on identically rippling material**. A
+sustain-median reference absorbs the ripple; whatever is still moving on their
+side is method, not material.
+
+**The lesson is about the quoting, not the measuring.** 2.09 dB was correct and
+so was 13 dB; they describe different windows of the same signal, and putting them
+side by side manufactured a difference between two machines that are behaving
+identically. **A dispersion figure without its window is not a number.** This is
+the same failure as §136's floor quoted without saying which bin it was measured
+at — and it cost a hypothesis about a missing LFO in the XPM reader.
