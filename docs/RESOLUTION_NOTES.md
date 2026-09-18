@@ -15176,3 +15176,81 @@ segment 1 0.96R to reach 29 dB, where the MPC is 29 dB down at 0.86R and 60 dB
 down at 0.95R. That is the plunge measured above as the E4XT being 36 dB behind at
 0.75R, and it is why no single time constant closes the gap — the two curves are
 not related by a scale factor in time.
+
+## §147 — Fifteen capture scripts, none of which closed the JACK client (2026-09-18, live)
+
+s3ked traced this machine's two JACK server wedges tonight to clients that outlive
+their owners, and the finding applies here harder than it does to them: **not one
+of the fifteen capture scripts run from this session called
+`_PersistentRecorder.close()`.** That method exists — `hw_measure.py:577`, it
+deactivates then closes the client — and it was never called, in ~40 captures.
+
+### Why that is worse than it sounds
+
+The module registers an `atexit` hook for the **MIDI** port (`_release_midi`,
+hw_measure.py:228) and none for the recorder. So MIDI was always released and the
+audio client never was, and the asymmetry is invisible because the MIDI hook works.
+
+Every one of those scripts ran under a shell `timeout`, which sends **SIGTERM**.
+Several were killed that way tonight — the hung `relpan.py`, the `qual.py` that hit
+a wedged server. Signal handlers were installed in those scripts, but only to send
+All Notes Off; the recorder was not in them.
+
+### Three failure modes, only one of which was on my radar
+
+1. **Construction can fail after `activate()`.** `_PersistentRecorder.__init__`
+   calls `client.activate()` and then `reconnect()`, which can raise — a missing
+   source port, a busy server, or its own connection read-back assertion. The
+   client is then registered and running with **no reference left to close it**.
+   (s3ked's finding, in their own `probes/jcap.py`; the same shape is in the
+   shared `hw_measure.py` that this session and mpc2emu both use.)
+
+2. **`except Exception` does not catch being killed.** `SystemExit` and
+   `KeyboardInterrupt` are not `Exception`s, and **being killed is precisely how
+   this failure arrives** — a timeout, a Ctrl-C, a harness killing a hung probe.
+   A teardown guarded by `except Exception` runs in every case except the one
+   that matters. Catch `BaseException` and handle the signals.
+
+3. **A capture with no deadline is a rig-wide outage, not a failed run.** A
+   blocked capture holds the client indefinitely. s3ked measured a sibling's
+   6-second capture sitting blocked for 1:54. A deadline converts that into one
+   bad measurement.
+
+### Why it is invisible from the client side
+
+To jackd, a client whose owner has died and one that is merely slow look
+identical. It keeps writing to the socket. The symptom is `jack_lsp` timing out
+**for every session on the machine**, with a jackd thread parked in
+`sock_alloc_send_pskb` — blocked writing to a socket nobody reads. **Killing the
+offending process does not clear it**; the server needs restarting. That matches
+what was seen here twice: `jackd` alive (PID 137100), `jack_lsp` hanging, MIDI
+entirely unaffected.
+
+### What was done
+
+`scratchpad/rig.py` wraps the recorder with: teardown on `BaseException` during
+construction *and* an orphan-recovery path that reconnects by client name to close
+a half-built client; `atexit` plus SIGTERM/SIGINT/SIGHUP handlers; and a
+`SIGALRM` deadline around the capture itself.
+
+**The constructor leak is in `hw_measure.py`, which belongs to mpc2emu** — reported
+rather than edited, per the convention that each project writes its own tree. It
+affects every session using that file.
+
+No stale `eosed-*` clients were resident at the time of writing (277 ports, matching
+s3ked's count after their restart), so nothing of this session's is currently leaked.
+
+### The transferable part
+
+**A resource whose release is only on the happy path is not released.** The test
+is not "does the teardown exist" — it did, and was correct — but "does it run when
+the process is killed", because for a long-running capture that is the normal exit.
+
+s3ked also ran their nine new tests **against the old code as a negative control**
+and eight fail there. A test suite that has never failed against the bug it
+targets has not been shown to test anything.
+
+### Rig protocol, agreed among the sessions after three collisions today
+
+Say **RIG IS MINE** before touching audio or MIDI, and **RIG IS FREE** when done —
+including when the run fails.
