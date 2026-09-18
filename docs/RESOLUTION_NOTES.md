@@ -15254,3 +15254,34 @@ targets has not been shown to test anything.
 
 Say **RIG IS MINE** before touching audio or MIDI, and **RIG IS FREE** when done —
 including when the run fails.
+
+### §147 addendum — the orphan-recovery path does not work and is removed
+
+§147 credits `scratchpad/rig.py` with "an orphan-recovery path that reconnects by
+client name to close a half-built client". **It cannot do that, and the claim is
+withdrawn.**
+
+`jack.Client(name)` takes `use_exact_name=False` by default, and the server "will
+modify this name to create a unique variant, if needed". So reconnecting by the
+orphan's name registers **`name-01`**, closes that, and leaves the orphan
+untouched — while raising nothing and appearing to succeed. And the API exposes
+`close()` and `deactivate()` on your *own* client only; there is no call that
+closes another client's registration.
+
+**Once a client outlives its owner, only a server restart clears it** — which is
+precisely what s3ked observed and why killing the offending process does not help.
+
+It was written, put in a commit message and described to two peers without being
+run once. The same evening's lesson, applied to the fix for the evening's lesson:
+**code that cannot fail visibly needs a test before it is described as working,
+and "it is only a safety net" is not an exemption** — a safety net nobody has
+dropped anything into is decoration.
+
+Replaced with the thing that does work for the constructor case: build the
+recorder with `cls.__new__(cls)` and call `__init__` by hand, so a failure after
+`activate()` still leaves a reference to the client. A plain constructor call
+discards the instance when `__init__` raises, which *is* the leak.
+
+mpc2emu's fix in `hw_measure.py` guards this from inside the constructor, which is
+cleaner and reaches all three sessions. The external wrapper is a belt for one
+session's braces, not a substitute.
