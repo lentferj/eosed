@@ -14998,3 +14998,112 @@ side by side manufactured a difference between two machines that are behaving
 identically. **A dispersion figure without its window is not a number.** This is
 the same failure as §136's floor quoted without saying which bin it was measured
 at — and it cost a hypothesis about a missing LFO in the XPM reader.
+
+## §146 — The release ladder on flat noise: no length dependence, and the mismatch is shape not scale (2026-09-18, live)
+
+mpc2emu's E4B release fix had been derived on one sustaining pad and missed by
+1.5× on the only other program they tried. Their earlier K2000 release factor had
+failed the same way — calibrated at 0.55 s, shipped, 2.6× wrong at 2.85 s. So the
+question for the bench was narrow: **does the geometry break as release length
+changes, or is the error the same everywhere?**
+
+Jan loaded a noise calibration ISO to P007–P012. Five byte pairs were set, the
+ones their converter emits for source releases of 0.25/0.5/1/2/4 s, and each
+measured twice.
+
+### No length dependence
+
+| asked | Rls1/Rls2 | measured t(−50 dB) | ratio |
+|---:|---|---:|---:|
+| 0.25 | 43/29 | 0.272 s | 1.09 |
+| 0.50 | 55/41 | 0.565 | 1.13 |
+| 1.00 | 68/54 | 1.147 | 1.15 |
+| 2.00 | 80/66 | 2.283 | 1.14 |
+| 4.00 | 92/78 | 4.523 | 1.13 |
+
+Measured releases span **0.272 to 4.523 s, 16.6×**, and the ratio is flat at
+~1.13. **There is no length-dependent bug**; the residual is one constant error.
+
+### A caveat on how that was reported, which is the methodological point
+
+The curves were first reported as "agreeing to within 0.7 dB at every fraction of
+R" — plotted as dB below sustain against **t/R**. That axis normalises the release
+length out. If the byte→rate law is exponential and the geometry scales R
+linearly, the curves *must* collapse; a good part of that agreement is built in by
+the choice of axis.
+
+What the collapse does test, and it is not nothing: the byte→rate law was measured
+14% out at byte 44 (§145 addendum), so if the emitted bytes had failed to deliver
+proportional rates the curves would have separated. They did not. **But "agrees to
+0.7 dB" overstates it, and the honest version is the ratio column above.**
+
+Generally: **a normalised axis can manufacture the agreement it is used to
+demonstrate.** Report the un-normalised quantity alongside it.
+
+### The mismatch is in the shape, not a scale factor
+
+dB below sustain, at fractions of the asked release:
+
+| | 0.25R | 0.50R | 0.75R | 0.90R | 1.00R |
+|---|---:|---:|---:|---:|---:|
+| E4XT | −10.9 | −18.7 | −26.6 | −35.3 | −42.1 |
+| MPC | −14.6 | −22.7 | −62.6 | −77.6 | *silent* |
+
+Through the first half the E4XT is ~4 dB behind, roughly a constant offset. **Then
+the MPC plunges and the E4XT does not** — 36 dB apart at 0.75R. No single
+time-scaling constant fixes that; it would drag the first half far too deep while
+correcting the second. This retires an earlier framing of the error as a clean
+1.99× on the time fed to the segment split.
+
+**The E4XT cannot reproduce what the MPC does here at all.** mpc2emu measured the
+MPC gating to digital silence at exactly t = R. The E4XT's envelope steps a level
+accumulator at a rate and keeps stepping — there is no parameter meaning "be zero
+at time T". So the conversion target cannot be "silence at R"; it has to be a
+chosen depth reached by R, and which depth is a judgement about audibility rather
+than a measurement.
+
+Floor caveat: the chain floor sat 67 dB below the sustain, so readings at 1.5R
+(−66 to −68 dB on all five) are the floor, not the machine. Everything to 1.00R is
+real.
+
+### Sustain changes the release shape, and it is structural
+
+Same bytes (55/41), P007 at sustain 100% against P008 at sustain 76%:
+
+| | 0.25R | 0.50R |
+|---|---:|---:|
+| sustain 100% | −10.9 | −18.8 |
+| sustain 76% | −19.0 | −34.0 |
+
+**Nearly twice as deep.** The mechanism is in the machine: the writer places the
+knee at 28.1 dB below **peak** (Rls1 level 71%), but the release starts from the
+**sustain**. At sustain 100% segment 1 covers 28.1 dB; at sustain 76% the sustain
+is already 23 dB down, so segment 1 covers only ~5 dB and the fast segment takes
+over almost at once.
+
+So the knee's depth *relative to where the fall begins* depends on sustain. That
+explains the 1.5× on their sustain-0.63 program without any new theory — it is a
+different branch of their knee clamp, not a mystery about release seconds. It also
+scopes the earlier 1.99× figure: derived on sustain-100 material, it applies to
+the clamped branch only.
+
+### Rig facts for this bank
+
+- **P007–P012 are silent at note 60.** Zones cover note 24 and 66–96; everything
+  here was measured at note 72. The first qualification run read −80 dBFS with the
+  note on *and* off and the bank was nearly reported as dead.
+- Sustain is flat from 0.6 s, so a 4 s hold is sufficient — unlike the pad in
+  §145, which needed 10 s to settle and forced 20 s holds.
+- Usable range is ~60 dB over the chain floor at unity gain, the same as the pad.
+  The flat top is the gain here, not the dynamic range.
+
+### An "as-found" that was never read
+
+`E4_GEN_VOLUME` on P007 was set to +10 dB for headroom **without reading it
+first**, and 0 was written into the originals file as an assumption. The restore
+printed +10, which caught it. The true value was recovered from P009/P011/P012 —
+untouched presets from the same ISO, all reading 0 dB — and P007 restored.
+
+**Recording an as-found value that was never actually read looks like data and is
+not.** Same class as quoting a dispersion without its window (§145 addendum): the
+artefact is indistinguishable from a measurement once written down.
