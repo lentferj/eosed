@@ -14859,3 +14859,97 @@ run is self-consistent: `0.07064 / 0.05841 = 1.209` bytes per amount unit → **
 bytes, 95.2% of 127** (or 97.1% on the amount-sweep exponent). The four-destination
 mean becomes 98.8% ± 2.9% rather than 99.2% ± 2.6% — the rule is unaffected, but
 the divisor should come from the same measurement rather than a neighbouring one.
+
+## §145 — The amp RELEASE measured: one straight line in dB, and a detector that anchored to the attack (2026-09-18, live)
+
+mpc2emu asked whether the E4XT's release on a high-sustain program matches their
+writer's two-segment model, and whether the shape or only the scale is wrong.
+Subject: P003 v0, a converted pad with sustain at 100%. RAM only, nothing saved.
+
+### The read-back confirms the writer
+
+```
+Atk1 0/100%   Atk2 0/100%   Dcy1 0/100%   Dcy2 0/100%
+Rls1 rate 86 / level 71%      Rls2 rate 15 / level 0%
+no cords reach any Vol-Env destination (72/73/74/75)
+```
+
+Through our own measured laws: level 71% → byte 90 → **28.1 dB below peak**
+(against their inferred `_ENV_SHAPE_KNEE_DB = 29.0`), and rate 86 → **10.5 dB/s**
+(§141 measured 10.43/10.45 directly at that byte). So segment 1 = 28.1 dB at
+10.5 dB/s = 2.67 s predicted, 2.77 s measured. **The constants their block marks
+as "INFERRED … NOT hardware-confirmed" are confirmed.**
+
+### The release is a single straight line in dB
+
+With `Rls2` swept to 86 (equal to `Rls1`), drops every 2 dB, three reps:
+
+| fit | value |
+|---|---|
+| straight-line fit, −2 to −26 dB | **11.004 dB/s**, r² 0.99879, max resid 0.43 dB |
+| rate law prediction for byte 86 | 10.51 dB/s (ratio 1.047) |
+| −20 to −50 dB, from the rate sweep | 11.34 dB/s |
+
+So from −2 dB to −50 dB the release is **one straight line at ~11 dB/s** with no
+knee anywhere. This extends §136's "the envelope is linear in dB" to the release
+segments, and §141's rate law to a release destination — segment 2's measured
+rate tracks the law to 3–9% (Rls2 80 → 14.88 vs 14.51; Rls2 86 → 11.43 vs 10.51).
+
+Reachability: the sustain sits at −24 dBFS, so −60 dB below it is under the
+capture floor. Everything here is bounded at −50 dB.
+
+### The knee earns nothing on this material
+
+```
+MPC reference, −20 to −60 dB:   11.40 dB/s
+E4XT at Rls2 = 86, −20 to −50:  11.34 dB/s      0.5% apart
+```
+
+At `Rls2 = 86` both segments run at the same rate, which is simply a straight
+release — and it matches the reference's whole middle and tail. mpc2emu's
+conclusion: `_ENV_SHAPE_BREAK_TIME` should be **removed** for high-sustain
+sources rather than retuned. A simpler writer, not a better-calibrated one.
+
+### The detector failure, which produced two false mechanisms before one true one
+
+Two captures of an **unchanged** segment 1 disagreed by 0.6 s. I proposed two
+physical causes for that and both were wrong:
+
+1. **"mpc2emu's numbers are pan-contaminated"** — withdrawn. Their script
+   power-sums; pan was never the mechanism, and I offered it before testing it.
+2. **"the sustained level ripples 16 dB"** — withdrawn. That was measured over
+   t = 1.2–6.0 s of a *four-second* note, so almost entirely attack and
+   filter-envelope transient. A 25 s hold shows the sustain steady to **2.09 dB**
+   with −0.14 dB of drift.
+
+The actual cause was the instrument: **my note-off detector took the sustain as
+"median of points within 1 dB of the PEAK".** On a pad whose filter envelope makes
+the attack louder than the sustain, that selects attack points only, and note-off
+landed ~2.7 s into a 20 s note.
+
+**A broken measurement produces a plausible mechanism faster than it produces an
+obvious error** (mpc2emu's phrasing, and they hit the same shape twice the same
+day). Both of my proposed mechanisms were physically real effects — pan does
+exist, transients do exist — which is exactly why neither looked like a mistake.
+
+The fix, and it is the method to reuse:
+
+- **sustain = median over the last 2.5 s before the scheduled note-off**, not
+  anything derived from the peak
+- **note-off = first point after that window falling 1 dB below the sustain**
+- **the reference level is the sustain median**, so a ~2 dB tremolo ripple cannot
+  move every threshold with it
+- the MIDI schedule is a fine **prior** — measured latency here is +0.06 to
+  +0.19 s, small and stable; search near it and refine in the audio
+
+Rep-to-rep spread went from 0.6 s to **0.017–0.094 s**, and 4 s and 20 s holds
+then agreed to 0.1 s — so hold length, the third mechanism I was about to blame,
+never mattered either.
+
+### A note on reading cumulative curves
+
+The reference curve read 2.38 / 2.80 / 3.30 / 4.34 / 5.80 / 6.31 s and looked
+like a smooth convex fall. As **local rates** it is 4.2 / 23.8 / 20.0 / 9.6 /
+6.9 / 19.6 dB/s, which is not a shape any single envelope produces. Cumulative
+times always increase smoothly; that is a property of cumulation, not evidence
+about the underlying curve. **Differentiate before believing a shape.**
