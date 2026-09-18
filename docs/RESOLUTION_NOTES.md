@@ -15107,3 +15107,72 @@ untouched presets from the same ISO, all reading 0 dB — and P007 restored.
 **Recording an as-found value that was never actually read looks like data and is
 not.** Same class as quoting a dispersion without its window (§145 addendum): the
 artefact is indistinguishable from a measurement once written down.
+
+### §146 addendum — the knee-clamp explanation is withdrawn; the measurement stands, the inference did not
+
+§146 above concludes: *"the knee's depth relative to where the fall begins depends
+on sustain… it is a different branch of their knee clamp, not a mystery about
+release seconds."* **The second half is withdrawn.**
+
+mpc2emu checked their writer against it. `_rmid = _env_db_to_level_byte(decay_span
++ _r_mid_db)` — **their knee is already sustain-referenced**, and `_r_mid_db =
+min(29.0, 0.48 × rel_span)` does not change branch at sustain 0.63, because
+rel_span only falls 97.82 → 93.81 and the clamp stays at 29.0. Their emitted bytes
+at the two sustains are Rls1 55/Rls2 41 and Rls1 55/Rls2 42 — essentially
+identical rates, with the *level* byte moving to hold the knee 29 dB below the
+sustain.
+
+**The P007/P008 comparison set the same Rls1 level (71%) on both**, which fixes
+the knee 28.1 dB below *peak* rather than below sustain. On P008, whose sustain is
+23 dB down, that leaves segment 1 only ~5 dB to cover instead of 29 — which is
+exactly the doubling that was measured. What their writer would emit for P008 is
+Rls1 level **46%**, not 71%.
+
+So the measurement is sound and characterises **the instrument at fixed bytes** —
+useful, because it shows what happens when the level byte is left alone. It says
+nothing about their converter, which never leaves it alone.
+
+**And the MPC goes the other way.** Same program, release 499 ms, sustain 127 vs
+80 (the sustain level itself fell 4.02 dB against a predicted 4.03):
+
+| drop | sustain 127 | sustain 80 | diff |
+|---|---:|---:|---:|
+| −10 dB | 0.200 s | 0.190 s | −0.010 |
+| −30 dB | 0.430 | 0.420 | −0.010 |
+| −50 dB | 0.470 | 0.460 | −0.010 |
+
+A uniform one-hop offset at every point: **the curve translates, it does not
+change shape.** The MPC falls the same dB in the same time regardless of where it
+starts. So the two machines differ in kind on this, and the E4XT's fixed-byte
+doubling is not a model for it.
+
+**The lesson is about what a comparison holds fixed.** Holding the *bytes* fixed
+and varying sustain measures the instrument. Holding the *converter* fixed and
+varying sustain measures the conversion. They are different experiments and only
+the second bears on the writer — I ran the first and drew a conclusion about the
+second. Nothing in the numbers was wrong; the wrong thing was which question they
+answered.
+
+The test that would bear on it: set Rls1 level **46%** on P008 — the writer's
+sustain-referenced knee — and see whether the E4XT then reproduces the MPC's
+sustain-independence. Not run.
+
+**Precious's 1.5× is therefore unexplained again**, and mpc2emu's judgement is to
+leave it there: it was a musical program with its own decay mixed into the fall,
+measured before the protocol settled, and the noise work has made those pad
+numbers suspect. Better an open item than an explanation that does not hold.
+
+### §146 addendum — what the MPC's release shape actually is
+
+Normalised over four release lengths 8× apart, agreeing to 0.02R:
+
+```
+−10 dB at 0.39R     −30 dB at 0.86R     −50/−60 dB at 0.95R     SILENT at 1.00R
+−20 dB at 0.70R     −40 dB at 0.92R
+```
+
+**It spends its last nine percent of R covering thirty dB.** The E4B writer gives
+segment 1 0.96R to reach 29 dB, where the MPC is 29 dB down at 0.86R and 60 dB
+down at 0.95R. That is the plunge measured above as the E4XT being 36 dB behind at
+0.75R, and it is why no single time constant closes the gap — the two curves are
+not related by a scale factor in time.
