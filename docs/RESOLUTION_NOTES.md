@@ -15423,3 +15423,63 @@ not have produced it. **That is luck, and the name assertion is what replaces it
 loaded over the E4XT's RAM. Announcing the *rig* does not announce the *contents*.
 A session that is mid-comparison needs to know that the material is changing, not
 only that the hardware is available.
+
+### §146 addendum — the noise-ladder timings are crossing-based, and crossings on noise are biased
+
+s3ked has now established directly what was previously inferred: **on a noise
+source, a threshold-crossing estimator inherits the source's own amplitude
+fluctuation, while a dB-slope fit over many windows averages it away.** Their
+DECAY1 sweep across bytes 25–99 on looped white noise with a slope fit reproduced
+an independently measured constant to **0.49%** (exponent 0.09728, r² 0.99989);
+§118's crossing-based attempt on the same class of material produced
+non-monotonic results with no region reaching r² 0.99.
+
+**§146's release ladder was measured on flat noise and its time column is
+crossing-based.** It needs re-measuring, not annotating. The captures did not
+survive the reboot, so it cannot be refitted from disk.
+
+**What is affected and what is not**, because the two columns differ:
+
+- the *dB below sustain at fractions of R* table reads a **level at a fixed
+  time**. On noise that is noisy but **not biased** — a window's fluctuation is
+  as likely up as down.
+- the **t(−50 dB)** column and every "×R" ratio derived from it are **crossing
+  times**, and those are biased **early**: the first window to dip below a
+  threshold catches a downward fluctuation, so the fall reads shorter than it is.
+
+**Rep-to-rep agreement does not protect against this.** §146 quoted a 0.072 s mean
+spread as evidence the numbers were sound. Both reps carry the same systematic
+bias; repeatability measures precision and says nothing about it. That is the
+same error as reporting r² for a fit whose axis was normalised (§146's first
+addendum) — a statistic that cannot see the defect being offered as evidence
+against it.
+
+**Which way it moves the conclusion.** The bias scales as the fluctuation depth
+divided by the local slope, so it is *largest at the fast end*. §146's measured
+ratios were 1.09 / 1.13 / 1.15 / 1.14 / 1.13 across a 16× span, and the fastest
+rung is the lowest — consistent with the estimator depressing it. Correcting it
+would raise the fast end toward the others, making the ratio **flatter**. So
+**"no length dependence" survives and is strengthened**; the absolute 1.13 is the
+part that needs re-measuring.
+
+Re-measurement is on the purpose-built decay ladder (`CD4-DCYLADDER`, 15 rungs,
+Dcy1 bytes 8–127, one shared looped-noise sample, sustain 0 so the decay crosses
+the full span), with slope fits and per-curve r² throughout.
+
+**Two design requirements carried in from s3ked's own failure on that bank's fast
+end**, where their byte-20 point died at r² 0.948 because 61.8 dB passed in ~18 ms
+leaving only 42 analysis windows:
+
+- **size the analysis window per rung from that rung's measured rate**, not once
+  for the sweep — a fixed window at the fast end returns a confident fit of its
+  own smoothing
+- **require a span floor** (§30 uses 21 dB) and **report per-curve r²**, so a bad
+  rung declares itself rather than averaging in
+
+And a caution about the sections themselves: s3ked reports that **§118's
+replacement constant is wrong** — its estimator lesson holds, its own re-measured
+number does not — so any other figure from §118 is unconfirmed pending their
+review. A separate claim attributed to §30, that it fit slopes *on noise*, is
+**not supported by §30**, which describes a source with its own slow decay. The
+proposition is now established by s3ked's measurement tonight rather than by
+either section.
