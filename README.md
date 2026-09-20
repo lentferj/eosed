@@ -61,7 +61,9 @@ are for.
   settled by reading EOS's own code rather than by measurement,
   [`docs/AKAI_IMPORT.md`](docs/AKAI_IMPORT.md) documents the firmware's AKAI
   import path — the conversion tables and arithmetic, with the confidence of
-  each row stated.
+  each row stated — and
+  [`docs/ENSONIQ_ROLAND_IMPORT.md`](docs/ENSONIQ_ROLAND_IMPORT.md) does the same
+  for the Ensoniq path, with the Roland module located but not yet traced.
 - **A MIDI interface, a SCSI emulator and media**, plus **AI assistance, which
   is a paid service** used heavily throughout and not cheap at this volume.
 
