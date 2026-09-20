@@ -16261,3 +16261,43 @@ more captures reached the analysis.
 across presets 0–14, matching the ladder exactly. Preset 0's zone, non-transpose,
 filter type, cutoff and cord all back to their original values. Nothing was
 written to disk at any point.
+
+### §153 addendum — a second route, prepared and not taken
+
+mpc2emu built a purpose-made two-key bank (`KTPOLAR.E4B`, 7 presets, every key
+with its own zone rooted on itself so the playback ratio is exactly 1.0 and the
+resampling tilt never arises) and pointed out that it may not be needed:
+**§153's blocker was a live parameter edit, and a whole-preset send is a
+different operation.** If a preset dump establishes its own zones, the same
+seven presets can be built against the noise sample already resident in RAM,
+with no card crossing.
+
+That is worth testing and it is prepared:
+
+```
+  OLD-format dump of preset 0, 360 bytes
+  zone param offsets cross-checked: the three bytes reading 69 sit at 80/82/86,
+    spaced 0, 1 and 3 params apart at 2 bytes each, matching zone ids
+    44 ORIG_KEY, 45 KEY_LOW, 47 KEY_HIGH exactly
+  patched to root/low/high = 69/36/84, retargeted to preset 15 ("Empty Preset")
+  -> NOT SENT
+```
+
+**It is not taken, and the reason is this project's own rule rather than a
+judgement about risk.** `send_preset_old` overwrites a whole preset slot, and
+`eos/bridge.py` refuses it without `allow_write=True` while requiring the caller
+to put it behind an explicit arm-then-fire confirmation — the same gate as the
+Master erase utilities. Writing to an empty slot is low-risk in fact, but a
+script that simply passes `allow_write=True` is not an arm-then-fire
+confirmation; it is the guard being routed around by the one party the guard
+exists to stop. The measurement was authorised when the plan was parameter
+edits, and a whole-preset write is a different operation class.
+
+`tools/`-adjacent script at `~/temp/eosed-bench/kt_dumproute.py`, inert without
+`--fire`, refusing outright if the target slot is not `Empty Preset`.
+
+**If the test passes**, preset dumps establish zones, the measurement runs
+against resident RAM and no card moves. **If it fails**, that is a protocol
+finding worth as much as the measurement — it would mean zone geometry is
+reachable *only* from the front panel or a disk load, which is a real constraint
+on what any remote editor can do and belongs in `DISCLAIMER.md`.
