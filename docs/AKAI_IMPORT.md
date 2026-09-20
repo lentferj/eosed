@@ -546,6 +546,10 @@ Every law in this document, checked against **363 presets / 2800 voices of EOS's
 own AKAI import**. The agreement column is not the interesting one — it is 100%
 everywhere. **The strength column is.**
 
+### Conversion laws — these take an AKAI value in and produce an E4 value out
+
+These can be wrong, so testing them means something.
+
 | law | test | strength | agreement | distinct | P(chance) |
 |---|---|---|---:|---:|---:|
 | `header[27]` volume, input → output | **exact** | **definitive** | 100% (363/363) | — | — |
@@ -553,47 +557,49 @@ everywhere. **The strength column is.**
 | `PZT[6]` Decay2 rate, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
 | `PZT[7]` Decay2 level, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
 | `PZT[8]` Release1 rate, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
-| `PZT[8]` Release1 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 49 | 2.4 × 10⁻⁹ |
-| `PZT[6]` Decay2 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 42 | 4.0 × 10⁻⁸ |
-| `PZT[0]` Attack1 rate ∈ attack table | membership | **strong** | 100% (2800/2800) | 30 | 3.8 × 10⁻⁷ |
+| `PZT[8]` Release1 rate ∈ decay table | membership | strong | 100% (2800/2800) | 49 | 2.4 × 10⁻⁹ |
+| `PZT[6]` Decay2 rate ∈ decay table | membership | strong | 100% (2800/2800) | 42 | 4.0 × 10⁻⁸ |
+| `PZT[0]` Attack1 rate ∈ attack table | membership | strong | 100% (2800/2800) | 30 | 3.8 × 10⁻⁷ |
 | `header[27]` volume ∈ formula image | membership | moderate | 100% (363/363) | 9 | 2.8 × 10⁻⁵ |
 | `PZT[7]` Decay2 level ∈ sustain image | membership | **weak** | 100% (2800/2800) | 20 | 7.2 × 10⁻³ |
-| `PZT[1]` Attack1 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[2]` Attack2 rate = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[3]` Attack2 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[4]` Decay1 rate = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[5]` Decay1 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[9]` Release1 level = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `PZT[10]`/`[11]` Release2 rate/level = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
-| `header[26]` transpose ∈ −24…+24 | range | **none** | 100% (363/363) | 1 | — |
 
 Strength is read off `P(chance)`: **strong** below 10⁻⁶, **moderate** to 10⁻³,
-**weak** above it, **none** where the test cannot fail, **definitive** for an
-exact input-to-output check.
+**weak** above it, **definitive** for an exact input-to-output check. The
+membership rows are superseded by the exact rows above them and are kept only to
+show what the weaker test was worth before the sources arrived.
 
-**Read the strength column, not the agreement column.** `P(chance)` behind it is the
-probability that many *distinct* observed values would all land inside the
-predicted set if the values were arbitrary within their observed span. The decay
-table covers 67% of 0–110, so one value passing means little and 49 distinct
-values passing means 2.4 × 10⁻⁹.
+### Hardcoded constants — these take nothing in
 
-**The rows with one distinct value prove a constant and nothing more.** A test
-that asks "is this always 0" of a field that is always 0 cannot fail, and a table
-of such rows at 100% is the failure mpc2emu and this project both hit tonight:
-*a search that cannot fail produces rows, and rows look like results.* They are
-listed because the constants are real findings — `Decay1 rate = 0` is the whole
-plateau result — but they carry no evidence about a *law*.
+**These are not laws and the 100% beside them is not a verification.** The
+importer writes a fixed value into these fields regardless of the AKAI program,
+so "does the output always equal that value" is a question whose answer was
+already written in the code. It cannot come out any other way.
 
-**`PZT[7]` at 7.2 × 10⁻³ is the weakest real test here** and should not be quoted
-alongside the others. The sustain image covers 78% of the byte range, so 20
-distinct values passing is only mildly surprising.
+What the 2800 voices *do* establish is that the constant is **really the
+constant** — that no other code path writes these fields, and that no AKAI
+program on a 363-preset disc produced an exception. That is worth knowing and it
+is why the rows are here. It is simply a different claim from "this conversion is
+correct", and mixing the two in one column is what made this table confusing.
 
-**Only one row is an exact input-to-output check**: the volume formula, run by
-mpc2emu against their own AKAI sources and matching EOS on 363 of 363 presets
-with zero differences. Everything else in this table is a *membership* test —
-it confirms the output could have come from the documented law, not that it did.
-The distinction matters because a membership test cannot detect a second
-transform whose image lies inside the first.
+| field | value the importer writes | held across |
+|---|---|---|
+| `PZT[1]` Attack1 level | **127** (full) | 2800/2800 voices |
+| `PZT[2]` Attack2 rate | **0** (instant) | 2800/2800 voices |
+| `PZT[3]` Attack2 level | **127** (full) | 2800/2800 voices |
+| `PZT[4]` Decay1 rate | **0** (instant) | 2800/2800 voices |
+| `PZT[5]` Decay1 level | **127** (full) | 2800/2800 voices |
+| `PZT[9]` Release1 level | **0** (silence) | 2800/2800 voices |
+| `PZT[10]`/`[11]` Release2 rate/level | **0** / **0** | 2800/2800 voices |
+| `header[26]` transpose | within −24…+24 | 363/363 presets |
+
+**Read as a group these constants are the actual finding**, and a more
+interesting one than any single row suggests: they are how a **four-stage AKAI
+envelope is fitted into a six-stage E4 one.** Attack1 does the attack; Attack2
+and Decay1 are pinned open — rate 0, level 127 — so they pass through instantly
+at full level and contribute nothing; Decay2 carries decay and sustain; Release1
+carries release; Release2 is closed off. Two of the E4's six stages are
+deliberately neutralised, and `PZT[4] Decay1 rate = 0` is exactly the "plateau
+shape on every voice" mpc2emu observed from the corpus without knowing why.
 
 ### The membership rows are now exact
 
