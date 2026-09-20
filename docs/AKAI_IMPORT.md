@@ -274,26 +274,65 @@ The two LFO rows are confirmed on the E4 side by corpus match rather than by
 range (26 distinct values on the LFO1 path, 11 on LFO2, both satisfying
 `dest == T[src]` across 361 programs).
 
-### E4 side identified only by its range
+### Named on the AKAI side
 
-These have a confirmed formula and a confirmed AKAI source offset, but the E4
-parameter is inferred from the destination range alone. **The AKAI names are not
-established for these offsets** — mpc2emu's field table does not cover them — so
-the left column gives the offset, not a name.
+Names from **s3ked's `s3k/params.py`**, transcribed from Akai's own S1000 /
+S2800-S3000-S3200 / S2000-S3000XL-S3200XL SysEx documents. The offset convention
+was validated before use: s3ked's keygroup-count offset matches the `0x2a` anchor
+the importer's own loop bound confirms.
 
-| AKAI offset (range) | formula | E4 destination range |
+| AKAI parameter (range) | formula | E4 destination |
 |---|---|---|
-| `0x1a` (−50…+50) | `round(clamp(v,−50,50) × 77/50)` | ±77 |
-| `0x5c`, `0x5d` (−50…+50) | `round(clamp(v,−50,50) × 75/50)` | ±75 |
-| `0x59`, `0x5a`, `0x5b`, `0x5f` (−50…+50) | `round(clamp(v,−50,50) × 48/50)` | ±48 |
-| `0x5e` (−50…+50) | `round(clamp(v,−50,50) × 25/50)` | ±25 |
-| `0x1e`, `0x22`, `0x24`, `0x25`, `0x26` (0–99) | `round(clamp(v,0,99) × 32/99)` | 0–32 |
-| `0x4b` (−24…+24 after clamp) | `clamp(v, −24, +24)` | **Preset Transpose** (−24…+24) |
+| `V_LOUD` `0x1a` (−50…+50) — velocity → loudness | `round(clamp(v,−50,50) × 77/50)` | ±77 |
+| `MODVAMP1` `0x5c` (−50…+50) — loudness by assignable source 1 | `× 75/50` | ±75 |
+| `MODVAMP2` `0x5d` (−50…+50) — loudness by assignable source 2 | `× 75/50` | ±75 |
+| `MODVPAN1` `0x59` (−50…+50) — pan by assignable source 1 | `× 48/50` | ±48 |
+| `MODVPAN2` `0x5a` (−50…+50) — pan by assignable source 2 | `× 48/50` | ±48 |
+| `MODVPAN3` `0x5b` (−50…+50) — pan by assignable source 3 | `× 48/50` | ±48 |
+| `MODVLVOL` `0x5f` (−50…+50) — LFO1 depth control | `× 48/50` | ±48 |
+| `MODVLFOR` `0x5e` (−50…+50) — LFO1 speed control | `× 25/50` | ±25 |
+| `PANDEP` `0x1e` (0–99) — depth of **LFO2** | `round(clamp(v,0,99) × 32/99)` | 0–32 |
+| `LFODEP` `0x22` (0–99) — depth of **LFO1** | `× 32/99` | 0–32 |
+| `MWLDEP` `0x24` (0–99) — modwheel → LFO1 depth | `× 32/99` | 0–32 |
+| `PRSDEP` `0x25` (0–99) — aftertouch → LFO1 depth | `× 32/99` | 0–32 |
+| `VELDEP` `0x26` (0–99) — velocity → LFO1 depth | `× 32/99` | 0–32 |
+| `TRANSPOSE` `0x4b` (**−50…+50**) | `clamp(v, −24, +24)` | Preset Transpose (−24…+24) |
 
-The ±50 group is AKAI's signed modulation depths; the 0–99 group is its unsigned
-depths. That the E4 targets are ±77, ±75, ±48, ±25 and 0–32 rather than one
-common range is itself informative — these are per-destination full scales, which
-is what §139-§141 established for cords.
+`0x59`–`0x60` is a **source/amount** structure: `0x55`–`0x58` hold source bytes
+(which modulator, 0–255) and `0x59`–`0x60` the signed amounts. That is why the
+signed fields are contiguous.
+
+**A hypothesis of mine died here and the way it died is the useful part.** I had
+grouped these by EOS's destination scale and suggested the grouping reflected
+AKAI structure. It does not: `MODVLVOL` is an **LFO-depth** control sitting in the
+same ±48 group as three **pan** controls. The scales are EOS's own per-destination
+cord ranges — pan ±48, volume ±75, LFO-rate ±25, LFO-depth ±48 — so my four
+groups describe the E4 side, not the AKAI side, and reading them as source
+structure was reading the wrong end of the arrow. (Consistent with §139–§141: a
+cord's full scale is its destination's own range.)
+
+### What the importer silently drops
+
+Three fields sit inside runs it *does* convert and are never read. Confirmed by
+searching the disassembly for the corresponding stack offsets — none appear:
+
+| AKAI parameter | why it is notable |
+|---|---|
+| `MODVLFOD` `0x60` — amount of control of LFO1 **delay** | same contiguous signed block as the seven that are converted |
+| `PANDEL` `0x1f` — delay in growth of LFO2 | sits directly beside `PANDEP`, which is converted |
+| `LFODEL` `0x23` — delay in growth of LFO1 | sits directly beside `LFODEP`, which is converted |
+
+**So EOS carries both LFOs' rate and depth and neither of their delays.**
+
+Also: `TRANSPOSE` is **±50 on the AKAI and clamped to ±24** here, so any program
+transposed beyond two octaves is silently narrowed.
+
+These are invisible to any agreement metric between two converters — both sides
+write a constant and agree perfectly. (s3ked, who also supplied the names.)
+
+Conversely, `0x1b K_LOUD`, `0x1c P_LOUD` and `0x20 K_PANP` are documented "Not
+used", range 0–0, and sit inside the same run. **The importer does not read
+them** — checked directly — so the code and the document agree.
 
 ### Why the E4 names stop here
 
@@ -372,6 +411,78 @@ The sibling at `0x47f08` uses a 192-byte buffer filled by `0x47e48`, then walks
 a structure in 24-byte steps (`lea %fp@(-158),%a5` / `lea %a5@(24),%a5`) calling
 `0x2f880` per item. That is the more likely home of the per-keygroup conversion
 and it has **not** been traced.
+
+## The amp and filter envelopes — the keygroup path
+
+AKAI envelopes live in the **keygroup**, not the program header, so they are
+reached through the orchestrator's per-keygroup loop:
+
+```
+  0x48934  orchestrator      -> loops keygroups
+  0x47f08  keygroup handler  -> reads a 192-byte keygroup, finds the four
+                                velocity zones at keygroup+0x22 on a 24-byte
+                                stride, flags empty ones, DE-DUPLICATES
+                                identical zones, then per surviving zone:
+  0x475b4  zone converter    -> dispatches to
+  0x46fbc  envelope conversion
+```
+
+**EOS merges identical velocity zones.** `0x2fe78` compares two zones and the
+duplicate is flagged out, so an AKAI keygroup with four identical zones becomes
+one E4 zone rather than four.
+
+### The amp envelope, written literally
+
+```
+  46fbc:  a4@(12) AKAI attack   -> 0x2f7c4 -> a5@(108)       Atk1 rate
+  46fd8:  #127                  ->           a5@(109)        Atk1 level = 127
+  46fce:  0                     ->           a5@(110), (112) Atk2 rate = 0, Dcy1 rate = 0
+  46fdc:  #127                  ->           a5@(111), (113) Atk2 level = 127, Dcy1 level = 127
+  46fe4:  a4@(13) AKAI decay    -> 0x2f7ec -> a5@(114)       Dcy2 rate
+  46ff6:  a4@(14) AKAI sustain  -> 0x2f814 -> a5@(115)       Dcy2 level
+  47008:  a4@(15) AKAI release  -> 0x2f830 -> a5@(116)       Rls1 rate
+  4701a:  0                     ->           a5@(117..119)   Rls1 level, Rls2 rate/level
+```
+
+**`Dcy1 rate = 0` and `Dcy1 level = 127` are hardcoded constants.** This is the
+"plateau shape" mpc2emu observed across every voice of EOS's own imports, and it
+is not emergent — the importer writes it. An AKAI envelope has four stages and
+the E4's has six, so EOS spends Atk1 on the attack, leaves Atk2 and Dcy1 inert at
+full level, and puts decay/sustain on **Dcy2**.
+
+### The four laws
+
+| stage | AKAI source | conversion |
+|---|---|---|
+| attack | keygroup `0x0c` | table at **`0x303d0`**, 100 entries, index = clamp(v,0,99) |
+| decay | keygroup `0x0d` | table at **`0x30434`**, 100 entries |
+| sustain | keygroup `0x0e` | `round(clamp(v,0,99) × 127/99)` — proportional, no table |
+| release | keygroup `0x0f` | **the same table as decay**, `0x30434` |
+
+The filter envelope (`0x14`–`0x17`) is converted immediately after by the same
+pattern.
+
+```
+  attack table 0x303d0 (0..89)
+     0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0
+     0   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   2   2
+     2   2   2   3   3   3   4   4   4   5   6   6   7   9  10  11  12  13  14  15
+    17  18  19  21  23  25  26  28  29  31  33  35  37  39  40  42  44  46  48  50
+    52  54  56  58  60  62  63  65  67  69  71  74  75  77  79  81  83  85  87  89
+
+  decay + release table 0x30434 (0..110)
+     0   0   0   0   0   0   0   0   0   1   1   1   1   1   1   2   2   2   2   2
+     2   3   3   3   3   3   3   4   4   4   4   5   6   7   8   9  10  11  12  14
+    15  16  17  18  19  20  22  23  25  26  28  29  31  32  34  36  37  39  40  42
+    44  46  48  50  52  54  55  57  59  61  63  64  66  68  70  72  73  75  76  78
+    80  82  84  85  87  89  90  92  93  94  96  97  99 100 102 103 104 106 108 110
+```
+
+**This settles the decay-span question: there is no span convention in EOS's
+importer, because the importer does no time arithmetic at all.** Attack, decay
+and release are table lookups and sustain is a proportion. Any attempt to derive
+what "span" EOS assumed is deriving a quantity the code never computes — the same
+answer the LFO rate gave, and for the same reason.
 
 ## Confidence, and what is NOT established
 
