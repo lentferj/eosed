@@ -169,6 +169,10 @@ curve as data, which is a question that can be settled offline.
 ## The full conversion map
 
 Mechanically extracted; see the confidence note below before relying on a row.
+The proportional-rescale rows are given exactly in the next section; the
+table below is the raw extraction and its "call" attribution was wrong in
+at least two places (`0x50c04`/`0x50c24` are struct initialisers, not
+converters), so the columns to trust here are the source and destination.
 
 | dest off | akai byte | table | clamp |
 |---:|---:|---|---|
@@ -200,12 +204,68 @@ Other tables seen in the same block:
   0x48ab0   15 entries, clamp 0..14     0 17 16 18 20 10 9 97 105 72 80 17 16 20 88
 ```
 
+## The generic rescaler, which explains most of the conversions
+
+`0x2f6b4(value, lo, hi, scale)`:
+
+```
+  c  = clamp(value, lo, hi)
+  d7 = (2*c * 2*scale) / (2*hi)      ; signed
+  if d7 > 0: d7 += 1
+  return d7 >> 1                     ; i.e. round(c * scale / hi)
+```
+
+So **`round(clamp(v, lo, hi) * scale / hi)`** — a proportional rescale with
+round-half-up. Arguments are pushed `scale, hi, lo, value`; note `lo` is often
+pushed with `clrl`, not `pea 0`, which is easy to miss when reading call sites
+mechanically.
+
+Every call site in the program converter, with its own constants:
+
+| akai byte | dest off | conversion |
+|---:|---:|---|
+| 0x1a | 32 | `round(clamp(v,-50,50) * 77/50)` |
+| 0x5c | 36 | `round(clamp(v,-50,50) * 75/50)` |
+| 0x5d | 37 | `round(clamp(v,-50,50) * 75/50)` |
+| 0x59 | 41 | `round(clamp(v,-50,50) * 48/50)` |
+| 0x5a | 42 | `round(clamp(v,-50,50) * 48/50)` |
+| 0x5b | 43 | `round(clamp(v,-50,50) * 48/50)` |
+| 0x5e | 53 | `round(clamp(v,-50,50) * 25/50)` |
+| 0x5f | 54 | `round(clamp(v,-50,50) * 48/50)` |
+| 0x22 | 48 | `round(clamp(v,0,99) * 32/99)` |
+| 0x1e | 49 | `round(clamp(v,0,99) * 32/99)` |
+| 0x24 | 56 | `round(clamp(v,0,99) * 32/99)` |
+| 0x25 | 57 | `round(clamp(v,0,99) * 32/99)` |
+| 0x26 | 58 | `round(clamp(v,0,99) * 32/99)` |
+
+The two shapes are AKAI's signed ±50 controls mapping onto EOS ranges of ±77,
+±75, ±48 and ±25, and AKAI's 0-99 depths mapping onto 0-32.
+
+`0x2f784` is a thin wrapper used for one field (akai `0x18` -> dest 44):
+`clamp(round(clamp(v,-50,50) * 64/50), -64, +63)` — AKAI's ±50 pan onto EOS's
+±64.
+
+## Where the envelopes are NOT
+
+**This function converts the AKAI program HEADER only.** Its buffer is 196
+bytes and every source offset above is inside it. AKAI attack/decay/sustain/
+release live in the **keygroups**, which follow the header, so the amp-decay
+span question is *not* answered by this function and nothing above bears on it.
+
+The sibling at `0x47f08` uses a 192-byte buffer filled by `0x47e48`, then walks
+a structure in 24-byte steps (`lea %fp@(-158),%a5` / `lea %a5@(24),%a5`) calling
+`0x2f880` per item. That is the more likely home of the per-keygroup conversion
+and it has **not** been traced.
+
 ## Confidence, and what is NOT established
 
 **High — read directly and checked against data:**
 
 - the name converter and its character set
-- the volume formula, which reproduces all nine observed byte-27 values
+- the volume formula. It reproduces all nine observed byte-27 values, and
+  mpc2emu reimplemented it against their own corpus: **363 of 363 presets
+  match EOS's byte 27 exactly, zero differences**
+- the generic rescaler `0x2f6b4` and the thirteen call sites' constants
 - the LFO rate table, validated independently from the corpus at two call sites
 - the module map and the `%a4 = header + 2` offset, pinned three ways
 
