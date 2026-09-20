@@ -57,7 +57,11 @@ are for.
   [`docs/RESOLUTION_NOTES.md`](docs/RESOLUTION_NOTES.md) alongside the findings.
   What was actually recorded, and under which conditions, is catalogued in
   [`docs/CAPTURES.md`](docs/CAPTURES.md) — the audio itself is bench-local and
-  several sets are of machine states that no longer exist.
+  several sets are of machine states that no longer exist. Where a question was
+  settled by reading EOS's own code rather than by measurement,
+  [`docs/AKAI_IMPORT.md`](docs/AKAI_IMPORT.md) documents the firmware's AKAI
+  import path — the conversion tables and arithmetic, with the confidence of
+  each row stated.
 - **A MIDI interface, a SCSI emulator and media**, plus **AI assistance, which
   is a paid service** used heavily throughout and not cheap at this volume.
 
