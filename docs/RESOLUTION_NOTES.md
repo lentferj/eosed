@@ -16094,3 +16094,86 @@ picking "HF Damping" as the *value* of "Decay Time". The two questions
 
 Parameters with no enumeration, or a range wider than 512, still get the numeric
 dialog.
+
+## §152 — The 8-36 ladder: the overlap joins, and the fast end is not a straight line (2026-09-20, live)
+
+mpc2emu built `CD4-DCYFAST` to reach the rungs §149 could not. The trick is worth
+recording because it solved a problem this project had filed as a hard limit:
+**more gain cannot buy time resolution, but the BANK can buy distance.** Dcy1's
+target level is patched to silence and Dcy2's rate to zero, so Dcy1 carries the
+whole 97.82 dB at the same rate byte — 3.37x longer. Byte 8 goes from 33 ms to
+116 ms. The byte under test is untouched; only the distance moves.
+
+They captured and handed over the audio without fitting it, on s3ked's principle
+that the estimator decides the answer and a second one would make the overlap
+rungs meaningless as a check.
+
+### The estimator, validated first
+
+Overlapping windows at hop W/4, window sized per rung so **at most 1 dB falls
+inside one window**, points selected by walking forward from the peak and
+**stopping** at the floor. Each measured rate was then fed back as a synthetic
+exponential and re-extracted:
+
+```
+  bias against synthetic at the measured rate: -0.51% to +0.39% on all 15 rungs
+```
+
+**A hypothesis of mine died here and it is worth keeping.** The first pass used a
+fixed 6 ms window and I attributed the fast-end disagreement to smearing — a long
+window averages the fall and reports it slower, which is the right direction.
+Re-running at 1 ms changed byte 8 by **0.1%** (1005.70 -> 1004.61). The estimator
+was not the problem, and the explanation that fit the direction was still wrong.
+
+### The overlap rungs join
+
+| byte | this ladder | §149 ladder | diff |
+|---:|---:|---:|---:|
+| 24 | 371.92 | 377.03 | −1.4% |
+| 32 | 234.91 | 236.42 | −0.6% |
+
+**Two independently built banks, different spans, different sessions, agreeing to
+about 1%.** That is what the overlap was for and it passes.
+
+### The fast end disagrees, and the reason is that it is curved
+
+Fitting only the first *n* dB of each full-span decay:
+
+| byte | 10 dB | 20 dB | 30 dB | 40 dB | 50 dB | §149 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 8 | 1305.5 | 1169.2 | 1173.8 | 1048.4 | 1002.5 | 1261.40 |
+| 16 | 663.8 | 681.9 | 674.8 | 625.5 | 513.5 | 861.26 |
+| 24 | 371.4 | 385.1 | 380.7 | 381.5 | 371.0 | 377.03 |
+| 32 | 238.0 | 232.0 | 236.0 | 236.0 | 236.1 | 236.42 |
+
+**Bytes 24 and 32 are flat across every window — real straight lines. Bytes 8 and
+16 are not.** They fall steadily as more of the decay is included, and their r² is
+0.93-0.97 where the slow rungs reach 0.999. The r² was telling us the model was
+wrong and the first pass read it as "thin data".
+
+So **"the decay rate at byte 8" is not a single number.** It depends on how much
+of the decay is measured, which means the two ladders were never measuring the
+same quantity down there: §149's short span sampled mostly the steep early
+portion, and byte 8's first 10 dB here reads **1305.5** against §149's **1261.40**,
+a 3.5% agreement.
+
+**Byte 16 does not resolve that way and is left open.** Its steepest window reads
+663-682 where §149 reported 861.26, and no sub-span of this capture reaches 861.
+That is a real disagreement between two ladders, not a span artefact, and it is
+recorded unresolved rather than averaged away.
+
+### What this does to §149's law
+
+The law was fitted over 32-127 and **nothing here disturbs it** — both overlap
+rungs land within 1.4%. What changes is the meaning of extending it downward:
+
+- Below roughly byte 20 the decay is **not exponential**, so no single rate law can
+  describe it and the "knee in 24-32" from §149 addendum 1 is better read as the
+  point where a straight-line model stops applying at all.
+- §149's three recovered fast rungs (1261.40, 861.26, 377.03) are still real
+  measurements, but they are **rates of the early portion**, not of the decay, and
+  they should be quoted that way.
+
+**This is the second time today a number was well measured and badly defined.**
+The first was mpc2emu's span convention; this is the same shape — the measurement
+was sound and the quantity it named was not.
