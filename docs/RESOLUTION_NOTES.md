@@ -15856,3 +15856,97 @@ only), which was read first and restored afterwards; the bank is untouched.
 Preset *numbers* appear above. The bank, its source media and its preset names do
 not, and must not — they are commercial library material. The shape of a finding
 never needs them.
+
+## §151 — Does EOS's AKAI importer map FX? No. And byte 27 is not FX either (2026-09-20)
+
+§150 identified the FX fields in the *SysEx parameter* space. This locates them in
+the *file* and then answers Jan's question from the corpus, with no hardware.
+
+### The FX block is preset-header bytes 60–75
+
+`E4B_FORMAT.md` marks `60:82` as "zero". It is not — it is the FX block, laid out
+in exactly the order of SysEx ids 6–21:
+
+```
+  [60] FX_A_ALGORITHM   [61] Decay Time  [62] HF Damping  [63] FxB==>FxA
+  [64..67] FX_A_AMT_0..3        (Main, Sub 1, Sub 2, Sub 3)
+  [68] FX_B_ALGORITHM   [69] Feedback    [70] LFO Rate    [71] Delay Time
+  [72..75] FX_B_AMT_0..3
+```
+
+**The identification is a falsification test, not a pattern match.** Those sixteen
+fields carry six different limits — 44, 90, 127, 100, 32, 127 — and §150 pinned
+each one against the hardware. If the block sits anywhere else, some preset
+somewhere must violate one.
+
+```
+  24 banks, 1184 preset headers
+    FX block all-zero : 480
+    FX block non-zero : 704
+    RANGE VIOLATIONS  : 0
+```
+
+**704 headers carrying real data and not one byte out of range**, including the
+two tight ones (FX A's algorithm ≤ 44, FX B's ≤ 32) where a random byte would
+fail ~83% of the time. The four-byte AMT groups also behave as §150 predicted from
+the machine: `AMT_0` (Main) carries the send and `AMT_1..3` are usually zero.
+
+### The answer: the importer writes no FX at all
+
+```
+  bank                        presets   FX block all-zero   byte 27
+  EOS AKAI import (full)          363         363/363       239..250
+  EOS AKAI import (subset)         20          20/20        241
+  hardware-saved commercial        10           0/10        0
+  large factory bank              347           0/347       0
+```
+
+**Every one of the 363 imported presets has a completely zero FX block.** Read
+through §150's corrected table that is not "no data" — it is a *meaningful*
+setting: algorithm 0 is `Master Effect A`/`Master Effect B`, i.e. **inherit the
+master effect**, with every send at 0.
+
+So the importer does not map FX, and it does not invent FX either. It leaves each
+preset deferring to the master with the sends shut — which for a source format
+whose programs carry no EOS-comparable effect state is the defensible choice. Two
+non-imported banks in the same corpus carry real per-preset FX, so the field is
+being exercised; it is the importer that declines to write it.
+
+### Byte 27 is therefore NOT FX, and that was this project's prediction
+
+mpc2emu's re-save experiment showed byte 27 is **preserved** by the machine, not
+generated, so the 239–242 they see comes from the importer — and they recorded
+that as "what eosed predicted would point hard at FX".
+
+**That prediction is refuted.** The FX block is bytes 60–75 and it is identically
+zero in precisely the banks where byte 27 is non-zero. Byte 27 cannot be the FX
+field it was predicted to be, because the real FX field is sitting next to it
+holding nothing.
+
+Two corrections to the shape of the evidence as well:
+
+**The range is wider than recorded.** Not 240–242 but **239, 240, 241, 242, 243,
+244, 245, 249, 250** — nine distinct values across 363 presets, with 241 the mode
+at 249 and 242 next at 78. (Recorded raw: their count is 361 presets and this
+walker finds 363 in the full-bank file. The two may be different files; not
+reconciled here.)
+
+**It tracks nothing structural.** Cross-tabulated against `num_voices` it is
+scattered — 241 appears on voice counts from 1 to 30, 242 on 1 to 40. It is not a
+count, an index or a size.
+
+### A hypothesis worth one cheap hardware test
+
+Read as a **signed** byte, every value in the whole 1184-header corpus lands in
+**−17..0**, and `E4_PRESET_VOLUME` (SysEx id 1) is a signed dB field with range
+**−96..10**. Nothing in the corpus falls outside it.
+
+That fits a per-program gain trim the importer derives from the AKAI source and
+everything else leaves at 0 dB, and it explains why the machine preserves the byte
+and why 0 is legal. **It is a hypothesis, not a result** — the corpus only ever
+exercises −17..0, which is consistent with a volume field but far from proof, and
+"signed byte lands in a wide range" is weak evidence on its own.
+
+One SysEx read settles it: load the import, select one of the presets whose byte
+27 is 249 (−7) and read id 1. If it reads −7, byte 27 is the preset volume. If it
+reads 0, the hypothesis is dead and byte 27 is still unidentified.
