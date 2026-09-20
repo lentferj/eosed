@@ -17,7 +17,7 @@ from eos import params as p
 from eosed.app import (
     BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
     _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _EMPTY_SAMPLE_NAME, _dangling_sample_refs,
-    _voice_sample_info, ConfirmSweepScreen, EosedApp)
+    _voice_sample_info, ChoiceScreen, ConfirmSweepScreen, EditValueScreen, EosedApp)
 from eosed.demo import DemoBridge
 
 
@@ -2543,3 +2543,82 @@ def test_zero_voice_note_silent_when_voices_were_never_walked():
               "overviews": {}}
     assert app._zero_voice_note(result) == ""
     assert "0 voices" not in app._sweep_note(result)
+
+
+# --- the enumerated-value picker --------------------------------------------
+
+def test_value_choices_offers_tables_only_for_value_enumerations():
+    """A field label is not a list of choices.
+
+    id 7 is "Decay Time" whatever it holds, so offering FX_A_PARM_NAMES as its
+    choices would invite picking "HF Damping" as the VALUE of "Decay Time".
+    """
+    for name in ("E4_PRESET_FX_A_ALGORITHM", "MASTER_FX_A_ALGORITHM",
+                 "E4_PRESET_FX_B_ALGORITHM", "E4_VOICE_FTYPE"):
+        assert p.value_choices(p.PARAMETERS_BY_NAME[name]), name
+    for name in ("E4_PRESET_FX_A_PARM_0", "E4_PRESET_FX_A_PARM_1",
+                 "E4_PRESET_FX_A_AMT_0", "PRESET_SELECT", "E4_PRESET_VOLUME"):
+        assert p.value_choices(p.PARAMETERS_BY_NAME[name]) is None, name
+
+
+async def test_choice_screen_lists_every_value_in_the_device_range():
+    """Including values our table has no name for.
+
+    A stale maximum once made five FX B algorithms unreachable, and the
+    Input-based dialog rejected them silently. A picker that listed only the
+    names we know would rebuild that failure, so unnamed values still get a row.
+    """
+    param = p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"]
+    screen = ChoiceScreen(param, current=25, minimum=0, maximum=46,
+                          choices=p.FX_A_ALGORITHM_NAMES)
+    assert screen._values == list(range(0, 47))
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await app.push_screen(screen)
+        await pilot.pause()
+        options = screen.query_one("#choices").options if hasattr(
+            screen.query_one("#choices"), "options") else None
+        labels = [str(o.prompt) for o in (options or [])]
+        assert any("Cavern" in t for t in labels)
+        # 45 and 46 are past the table; they must still be selectable.
+        assert sum("(unnamed)" in t for t in labels) == 2
+
+
+async def test_choice_screen_honours_the_device_minimum_not_the_table():
+    """MASTER_FX_A_ALGORITHM starts at 1: 0 means "inherit the master" and the
+    master cannot inherit from itself (RESOLUTION_NOTES §150 addendum)."""
+    param = p.PARAMETERS_BY_NAME["MASTER_FX_A_ALGORITHM"]
+    screen = ChoiceScreen(param, current=14, minimum=1, maximum=44,
+                          choices=p.FX_A_ALGORITHM_NAMES)
+    assert 0 not in screen._values
+    assert screen._values[0] == 1
+
+
+async def test_algorithm_edit_opens_the_picker_and_plain_values_do_not():
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    async with app.run_test() as pilot:
+        await _select_preset(pilot, app)
+        params = app.query_one("#params")
+        await _wait_for(pilot, lambda: params.row_count)
+        ids = [p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"].id,
+               p.PARAMETERS_BY_NAME["E4_PRESET_TRANSPOSE"].id]
+        want = {}
+        for row in range(params.row_count):
+            cell = str(params.get_row_at(row)[0]).strip()
+            for pid in ids:
+                if cell == str(pid):
+                    want[pid] = row
+        assert len(want) == 2, want
+        await pilot.click("#params")
+        params.move_cursor(row=want[ids[0]])
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        assert isinstance(app.screen_stack[-1], ChoiceScreen)
+        await pilot.press("escape")
+        await _wait_for(pilot, lambda: len(app.screen_stack) == 1)
+
+        params.move_cursor(row=want[ids[1]])
+        await pilot.press("enter")
+        assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
+        assert isinstance(app.screen_stack[-1], EditValueScreen)
+        await pilot.press("escape")

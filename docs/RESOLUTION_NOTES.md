@@ -16061,3 +16061,36 @@ no error, no status line, the dialog simply refused. The five distortion
 algorithms were unreachable from the editor and the failure was silent. With a
 minimum of 0 on the master blocks, stepping down offered a value the device
 rejects.
+
+### §150 addendum 2 — the enumerated-value picker, and the rule it is built around
+
+`EditValueScreen` asks for a number. For a parameter whose values are an
+enumeration that is the wrong question: nobody knows that Cavern is 25, and the
+whole reason §150 exists is that the number-to-name mapping was wrong for a year
+without looking wrong.
+
+`ChoiceScreen` (`eosed/app.py`) lists the names instead, for FX algorithms,
+filter types, LFO shapes and cord sources/destinations — anything
+`params.value_choices()` answers for.
+
+**The design rule comes from the bug it is meant to stop repeating.**
+
+- **Every value in the device's range gets a row, named or not.** An unnamed
+  value shows as `(unnamed)` and is still selectable. The temptation is to list
+  the names we hold, which would mean a stale or incomplete table silently
+  hiding legal values — *exactly* the failure the maximum of 27 produced, where
+  typing 28-32 did nothing and said nothing. A picker built from our own table
+  would have rebuilt that failure in a new place and made it harder to see.
+- **The range comes from the device (`04h`), never from the table's keys.**
+  `MASTER_FX_A_ALGORITHM` shares `FX_A_ALGORITHM_NAMES` with the preset field
+  but starts at 1, since 0 is "inherit the master". Filtering by the table would
+  offer a value the device rejects.
+
+`value_choices()` deliberately returns nothing for `FX_*_PARM_*`, `FX_*_AMT_*`
+and the envelope stages. Those names label the **field**, not the value — id 7 is
+"Decay Time" whatever it holds — and offering them as choices would invite
+picking "HF Damping" as the *value* of "Decay Time". The two questions
+`_known_value_name` and `value_choices` answer look similar and are not the same.
+
+Parameters with no enumeration, or a range wider than 512, still get the numeric
+dialog.

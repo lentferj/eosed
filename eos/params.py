@@ -927,6 +927,52 @@ def _known_value_name(param: Parameter, value: int) -> Optional[str]:
     return None
 
 
+# --- value enumerations, for a picker ---------------------------------------
+# :func:`_known_value_name` answers "what is THIS value called". A chooser
+# needs the other direction: "what values are there". The two are not the same
+# question, and only some parameters can answer the second one.
+#
+# Deliberately NOT here: FX_A_PARM_NAMES, FX_B_PARM_NAMES, FX_AMT_BUS_NAMES and
+# the envelope-stage notes. Those label the FIELD, not the value -- id 7 is
+# "Decay Time" whatever it holds -- so offering them as a list of choices would
+# invite picking "HF Damping" as the value of "Decay Time".
+
+_CHOICES_BY_NAME: Dict[str, Dict[int, str]] = {
+    "E4_VOICE_SOLO": VOICE_SOLO_MODES,
+    "E4_VOICE_ASSIGN_GROUP": VOICE_ASSIGN_GROUPS,
+    "E4_VOICE_LFO_SHAPE": LFO_SHAPES,
+    "E4_VOICE_LFO2_SHAPE": LFO_SHAPES,
+    "E4_VOICE_SUBMIX": SUBMIX_LABELS,
+    "E4_VOICE_FTYPE": FILTER_TYPE_NAMES,
+    "MASTER_OUTPUT_FORMAT": OUTPUT_FORMAT_LABELS,
+    "MASTER_OUTPUT_CLOCK": OUTPUT_CLOCK_LABELS,
+    "MASTER_WORD_CLOCK_IN": WORD_CLOCK_IN_LABELS,
+    "MIDIGLO_MIDI_MODE": MIDI_MODE_LABELS,
+    "MIDIGLO_CTRL7_CURVE": CTRL7_CURVE_LABELS,
+}
+
+
+def value_choices(param: Parameter) -> Optional[Dict[int, str]]:
+    """Every named value this parameter can take, or None if it has no such list.
+
+    The caller must still filter by the DEVICE's reported range rather than
+    trusting the table's own keys: ``MASTER_FX_A_ALGORITHM`` shares
+    :data:`FX_A_ALGORITHM_NAMES` with the preset-level field but its minimum is
+    1, because value 0 means "inherit the master" and the master cannot inherit
+    from itself (docs/RESOLUTION_NOTES.md §150 addendum).
+    """
+    name = param.name
+    if name.endswith("FX_A_ALGORITHM"):
+        return FX_A_ALGORITHM_NAMES
+    if name.endswith("FX_B_ALGORITHM"):
+        return FX_B_ALGORITHM_NAMES
+    if param.group == "voice.cords" and name.endswith("_SRC"):
+        return CORD_SOURCES
+    if param.group == "voice.cords" and name.endswith("_DST"):
+        return CORD_DESTINATIONS
+    return _CHOICES_BY_NAME.get(name)
+
+
 def describe_value(param: Parameter, value: int) -> str:
     """"123" normally, or "123 (Name)" when a known mapping exists for this
     parameter's current value. See the FX_*_NAMES tables above for the

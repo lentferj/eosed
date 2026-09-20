@@ -65,7 +65,8 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.theme import Theme
-from textual.widgets import DataTable, Header, Input, Static
+from textual.widgets import DataTable, Header, Input, OptionList, Static
+from textual.widgets.option_list import Option
 
 from eos import bridge as bridge_mod
 from eos import lcd as lcd_mod
@@ -518,6 +519,75 @@ class EditValueScreen(ModalScreen[Optional[int]]):
         self.dismiss(None)
 
 
+class ChoiceScreen(ModalScreen[Optional[int]]):
+    """Pick a value from a named list instead of typing its number.
+
+    Used for parameters whose values are an enumeration (:func:`p.value_choices`)
+    -- FX algorithms, filter types, LFO shapes, cord sources/destinations. For
+    those, the number is an index into a table nobody memorises, and typing it
+    blind is how "25" gets entered for Cavern when Cavern is 24 somewhere else.
+
+    Two rules, both of which exist because of a bug this dialog is meant to
+    stop repeating (docs/RESOLUTION_NOTES.md §150):
+
+    * **Every value in the DEVICE's range gets a row**, named or not. A value
+      missing from our table still appears, as "(unnamed)". Before this, a
+      stale maximum silently made five FX B algorithms unreachable -- the
+      Input-based dialog rejected them with no message at all. A picker that
+      only listed the names we happen to know would reintroduce exactly that
+      failure in a new place.
+    * **The range comes from the device, not from the table's own keys.**
+      ``MASTER_FX_A_ALGORITHM`` shares its table with the preset-level field
+      but starts at 1, because 0 means "inherit the master" and the master
+      cannot inherit from itself. Filtering by the table would offer it.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    # Above this many rows a list stops being faster than typing the number.
+    MAX_ROWS = 512
+
+    def __init__(self, param: p.Parameter, current: int,
+                 minimum: int, maximum: int, choices: Dict[int, str]):
+        super().__init__()
+        self.param = param
+        self.current = current
+        self.minimum = minimum
+        self.maximum = maximum
+        self.choices = choices
+        self._values: List[int] = list(range(minimum, maximum + 1))
+
+    def compose(self) -> ComposeResult:
+        info = (f"{self.param.name} (id {self.param.id})\n"
+                f"current {p.describe_value(self.param, self.current)}\n"
+                f"range {self.minimum} .. {self.maximum}")
+        options = []
+        for value in self._values:
+            label = self.choices.get(value)
+            mark = "*" if value == self.current else " "
+            options.append(Option(f"{mark} {value:>4}  {label or '(unnamed)'}",
+                                  id=str(value)))
+        yield Vertical(
+            Static(info),
+            OptionList(*options, id="choices"),
+            id="dialog", classes="wide",
+        )
+
+    def on_mount(self) -> None:
+        widget = self.query_one("#choices", OptionList)
+        widget.focus()
+        if self.minimum <= self.current <= self.maximum:
+            widget.highlighted = self._values.index(self.current)
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        self.dismiss(int(event.option.id))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class RenameScreen(ModalScreen[Optional[str]]):
     """Ask for a new (<=16 char) preset name."""
 
@@ -795,6 +865,7 @@ class EosedApp(App):
        Capped at 90% so it still fits a narrow terminal. */
     #dialog.wide { width: 84; max-width: 90%; }
     #history { height: auto; max-height: 20; }
+    #choices { height: auto; max-height: 18; }
     #tables { height: 1fr; }
     #presets { width: 22%; height: 1fr; }
     #voices  { width: 13%; height: 1fr; }
@@ -2521,8 +2592,13 @@ class EosedApp(App):
                 return
             self._apply_edit(param.id, new_value, current)
 
-        self.push_screen(
-            EditValueScreen(param, current, rng.minimum, rng.maximum, rng.default), on_result)
+        choices = p.value_choices(param)
+        span = rng.maximum - rng.minimum + 1
+        if choices and span <= ChoiceScreen.MAX_ROWS:
+            screen = ChoiceScreen(param, current, rng.minimum, rng.maximum, choices)
+        else:
+            screen = EditValueScreen(param, current, rng.minimum, rng.maximum, rng.default)
+        self.push_screen(screen, on_result)
 
     # -- undo log -------------------------------------------------------------
     def _current_scope(self) -> Tuple[Optional[int], Optional[int], str]:
