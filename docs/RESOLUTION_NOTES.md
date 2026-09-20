@@ -15573,3 +15573,96 @@ measurement uses 28.1 dB.
 **So the generator's rate law is sound to ~1% across bytes 32–102 and diverges
 above ~110**, reaching 1.78× at the top of the range. That is the actionable half:
 not a scale factor, a range limit.
+
+### Addendum (2026-09-20, live) — the three refused rungs, recovered: the law is range-limited, not universal
+
+The §149 fit above covers bytes 32–127 because bytes 8, 16 and 24 were refused
+for want of windows. s3ked pushed back on leaving them there, and on the
+explanation I had ready for them:
+
+> "If your extraction returns the right answer on the synthetic, the bad point is
+> the E4XT telling you something. That is a finding, and dismissing it as
+> instrument would lose it."
+
+They had retracted exactly that move in their own §259, after validating their
+fitter against a constructed decay of known rate. So the rungs were recovered
+rather than explained.
+
+**How.** Overlapping analysis windows, hop = W/4 instead of W (s3ked's rig), which
+buys 4× the window count out of the same 30 ms. Then the extractor was validated
+against synthetic exponentials of known rate, and the bias re-calibrated **at the
+measured rate of each rung** rather than at an estimate of it — an earlier pass
+interpolated byte 8's correction at 880 dB/s when the rung actually measures
+~1250, and got −6.18% where the truth is −1.17%.
+
+| byte | measured | recovered from synth | bias | spread |
+|---:|---:|---:|---:|---:|
+| 8 | 1246.63 | 1232.03 | −1.17% | 3.86% |
+| 16 | 846.53 | 832.05 | −1.71% | 2.08% |
+| 24 | 375.40 | 373.78 | −0.43% | 2.18% |
+| 32 | 236.35 | 236.28 | −0.03% | 0.47% |
+
+Corrected: **1261.40, 861.26, 377.03, 236.42 dB/s.** The spread column is the
+honest uncertainty, not the bias — byte 8's whole decay is ~30 ms and only a
+handful of windows fit inside it even at hop W/4.
+
+### The negative result
+
+**A single quadratic does not span bytes 8–127.**
+
+```
+full 8-127, 15 rungs:   ln(dB/s) = -0.0000155·b² - 0.059038·b + 7.5014   r² 0.996736   max resid 24.5%
+32-127, 12 rungs:       ln(dB/s) = -0.0001205·b² - 0.041229·b + 6.8271   r² 0.998011   max resid 16.1%
+```
+
+The full-range fit is worse *everywhere* — it buys the fast end by spoiling the
+range that already worked. And the 32–127 law extrapolated downward misses badly:
+
+| byte | measured | 32–127 law predicts | law is |
+|---:|---:|---:|---:|
+| 8 | 1261.40 | 658.23 | −48% |
+| 16 | 861.26 | 462.47 | −46% |
+| 24 | 377.03 | 319.96 | −15% |
+
+**This is not the rig running out of time resolution.** That failure mode smears a
+decay and reports it *slower* than truth; these rungs measure nearly **twice as
+fast** as the law predicts. The sign rules the instrument explanation out, which
+is the part of s3ked's warning that actually bites — the point I was going to
+dismiss is the one carrying the information.
+
+So the rate law is **piecewise**, as §134 said of it generally: 32–127 is one
+segment, below ~32 is another, and the knee sits somewhere in 24–32.
+
+### What I should have printed with §149's r²
+
+§149 quotes `r² 0.998042` and nothing else. In log space with 12 points that hides
+a single bad rung, so here is the column that belongs beside it:
+
+| byte | measured | fit | resid |
+|---:|---:|---:|---:|
+| 32 | 236.42 | 217.98 | +8.5% |
+| 40 | 147.11 | 146.23 | +0.6% |
+| 48 | 92.58 | 96.59 | −4.2% |
+| 60 | 47.00 | 50.38 | −6.7% |
+| 69 | 28.16 | 30.22 | −6.8% |
+| 80 | 15.05 | 15.76 | −4.5% |
+| 86 | 10.90 | 10.92 | −0.2% |
+| 94 | 6.95 | 6.60 | +5.3% |
+| 102 | 4.27 | 3.93 | +8.7% |
+| 110 | 2.50 | 2.30 | +8.6% |
+| 118 | 1.47 | 1.33 | +10.6% |
+| 127 | 0.59 | 0.70 | **−16.1%** |
+
+The law is good to ~16% worst case and ~6% typical. That is fine for its purpose
+and it is not what r² 0.998 sounds like.
+
+### For anyone adopting the law
+
+mpc2emu is taking this as the fix for their divergent region above byte 110, so
+the valid range matters to them specifically:
+
+- **Use it over bytes 32–127 only.** Quote ±16% worst case.
+- **Do not extrapolate below byte 32** — it is −48% at byte 8.
+- Below 32 there are three measured points and no fit. Three points and a knee of
+  unknown position do not make a law; if that region matters, it needs its own
+  ladder at bytes 8–36.
