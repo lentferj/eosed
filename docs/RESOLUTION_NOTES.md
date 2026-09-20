@@ -16356,3 +16356,58 @@ of preset 0 with KEY_LOW/KEY_HIGH 36/84**, where it previously read "Empty
 Preset". It cannot be returned to empty without Preset Delete (`71h`), which this
 project does not send speculatively, so it is left in place — RAM only, gone on
 the next bank load or power cycle. Nothing was written to disk.
+
+### §153 addendum 3 — the 0/127 read is real, and it makes the conclusion stronger than the one it replaces
+
+mpc2emu challenged the `0/127` zone reading as §148 in a third costume — a read
+that was not addressing a zone at all. **It was addressing one.** The
+discriminator is the sample index, which an unaddressed read cannot produce:
+
+```
+  preset  0  zone 0: sample=1 root=69 low=69  high=69     voice: 69/69/69
+  preset 15  zone 0: sample=1 root=69 low= 0  high=127    voice: 69/36/84
+  preset  0  zone 1: sample=0 root= 0 low=16  high=0      (empty, both presets)
+```
+
+`sample=1` on both, an empty zone 1 on both, and the selector reading back the
+value written. The read is real, and their file — which says that zone is 69/69 —
+is describing the bank on disk, not the object in RAM after a preset send.
+
+**Which makes the result stranger than either explanation on offer.** Writing the
+preset moved the zone's key range to **0–127**, not to the 36/84 I patched and
+not leaving it at 69/69. So after the send:
+
+```
+  zone key range   0 .. 127     (wide open)
+  voice key range 36 ..  84
+  keys that sound  69 only
+```
+
+**Neither range explains the behaviour, so neither is the gate.** The conclusion
+is no longer "the zone entry is the gate" — it is that **the playback mapping is
+compiled at bank load and is not rebuilt by a remote write**, at parameter level
+or at whole-preset level, and a program-change round trip does not rebuild it
+either. The structures a remote editor can read and write are the edit-side
+representation; what the machine plays from is a separate compiled object that
+only a bank load or the front panel regenerates.
+
+That is a stronger statement than the one it replaces and it belongs in
+`DISCLAIMER.md`: **a remote editor cannot change which key sounds.** Everything
+this project does — parameter edits, preset sends — operates on a representation
+the sound engine has already finished reading.
+
+It also explains §153's original symptom without needing the zone entry at all,
+and it explains why a program change did not help: selecting a preset chooses
+among compiled objects rather than recompiling one.
+
+**What would test it in one line**, once mpc2emu's purpose-built bank is loaded
+from a card: its voice window is 36–84 with three zones at 36/36, 60/60, 84/84.
+Select zone 1 and a working read must say **60/60**. If it does, the read path is
+sound and the compile-at-load reading stands. If it says 0/127 again, then a
+preset send is rewriting zone ranges on its own and that is a different finding.
+
+**On method, from mpc2emu and worth keeping next to the base-18 slip:** identify
+by a *relation a wrong hypothesis cannot satisfy*, not by a position anything can
+occupy. The sample index settled this because an unaddressed read cannot invent
+a 1; the key range alone could not have, because 0/127 is exactly what an
+unaddressed read might plausibly return.
