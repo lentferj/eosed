@@ -15334,3 +15334,92 @@ while thinking about the subject, and none was written while thinking about the
 check. The discipline that catches it is the negative control — run the check
 against the broken case and confirm it fails — and it is the step every one of the
 four omitted.
+
+## §148 — Comparing EOS's own AKAI import against a converter, and two ways to read the wrong thing (2026-09-20, live)
+
+Jan loaded EOS 4.0's own AKAI import of six S3000-generation `.P3` programs
+alongside mpc2emu's conversion of the same source files, and asked which
+differed. Read-only parameter reads over the editor protocol, matched by preset
+name. The method is sound and worth reusing; two of its readings were not.
+
+### What EOS's import chooses, where the converter chose otherwise
+
+On the one program with an audible difference (Jan: *"more Q and it comes in
+earlier"*), voice 0:
+
+| | EOS import | converter |
+|---|---:|---:|
+| FTYPE | 2-Pole Lowpass | 2-Pole Lowpass |
+| FMORPH (base cutoff) | **81** | **0** |
+| id 84 (Q) | 119 | 112 |
+| `FEnv+ → FilFreq` | 46 | 100 |
+| `Key+ → FilFreq` | **8** | **58** |
+| filter env Dcy1 | **rate 2 → 47%** | **rate 50 → 19%** |
+
+Both readings of the same source bytes are defensible — the converter treats the
+AKAI field as a *corner position* and parks the base at 0 with a full-scale
+sweep; EOS parks the base at 81 and sweeps less. The audible difference is not
+the resonance byte, which is where the search started.
+
+`Key+ → FilFreq` 58 against 8 is the one worth chasing: the converter's positive
+key-follow is documented on its side as an unresolved nonlinearity passed through
+uncorrected, and this is independent evidence on its size.
+
+### Retracted: "MEM-ANA STR is +12 on both voices"
+
+Root key read 55/67 on the EOS side and 67/79 on the converter's, ranges
+identical, coarse tune 0 on both. Reported as a clean octave defect. **It is not
+a defect — it is the same pitch in a different parameterisation.**
+
+The source carries `SPITCH 55`, `SHTUNO −12.059 st`, declared rate 22050 against
+an index rate of 44100. The declared/index gap is exactly +12 semitones and the
+sample's own tune cancels it. One side resolves to *rate 44100 + root 67*, the
+other to *rate 22050 + root 55*. Both sound identical.
+
+**Root key alone cannot separate them**, and the read that would have — the
+sample rate beside it — was not taken. Comparing one field of a multi-field
+encoding and concluding about the quantity those fields *jointly* determine is
+the same error as comparing a dispersion without its window (§145): the number
+is right and it is not the quantity in question.
+
+Standing, on the same evidence: SOLDANO 12 B, where the source has
+`SPITCH 50, SHTUNO 0`, declared rate equal to index rate — nothing to resolve —
+and EOS's import carries coarse tune 13 and fine 30 that the source does not.
+That is a genuine disagreement about a field one side reads and the other
+does not.
+
+### The bank was replaced mid-read, and the selection check could not see it
+
+An hour into the comparison, the same parameter on the same voice began reading
+all-zero where it had read real values. Diagnosed first as intermittent reads,
+then as the zone selector (id 226, reading the 16383 no-data sentinel). **Both
+wrong. A different bank had been loaded over the comparison set** — a sibling
+session's transposition-ceiling test, legitimately, while the rig was believed
+free.
+
+Every selection had been verified: preset-select and voice-select were written
+and read back, and matched, every time. Preset 13 was still preset 13.
+
+> **Verifying that you addressed slot N is not verifying that slot N still holds
+> what it held.**
+
+The check could not fail in the state that made its answers meaningless. Had the
+read gone out, it would have reported "the converter writes an all-zero amp
+envelope, nothing is reaching the machine" — to the session debugging that exact
+field that day.
+
+**Mechanism, not rule: read the preset NAME as part of selection and assert it
+against what the comparison expects.** One extra SysEx read per preset, and a
+swapped bank becomes impossible to misread rather than merely unlikely.
+
+What made the surviving findings safe was accidental corroboration rather than
+any guard: the tuning read produced a coarse tune of −47 on one voice, a value
+the sibling session had named in advance from its own file. An empty preset could
+not have produced it. **That is luck, and the name assertion is what replaces it.**
+
+### Rig protocol gap this exposed
+
+"RIG IS FREE" was said truthfully about audio capture while a bank was about to be
+loaded over the E4XT's RAM. Announcing the *rig* does not announce the *contents*.
+A session that is mid-comparison needs to know that the material is changing, not
+only that the hardware is available.
