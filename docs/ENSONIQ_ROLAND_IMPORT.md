@@ -228,10 +228,43 @@ probes at `0x0AC720`, `0x0AC800` and `0x0AD000` are empty. It lies between the
 Patch and Sample directories, or partials are reached through the patch records'
 links rather than a directory.
 
-**This is the disc's layout, not EOS's reading of it.** EOS's Roland module has
-`"S770 MR25A"` — this disc's volume label — as a literal at `0x17064f`, so it
-matches on content rather than on a filename, but nothing here says which of
-these structures it walks.
+The **Partial directory** is at `0x0AD800` (base `0x0AD600` + the same `0x200`),
+tag `0x43`, 4004 records on this disc — located by k2kremote and confirmed here,
+first record and the 4004th both carrying the tag.
+
+**This is the disc's layout, not EOS's reading of it**, and nothing above says
+which of these structures EOS walks.
+
+### How EOS decides a disc is Roland
+
+`0x16dd64`, decoded in full:
+
+```
+  16dd8c:  bsrw 0x16db8c         ; read sector 0
+  16dd94:  pea 0x170650          ; "S770 MR25A"
+  16dd9e:  pea %a0@(4)           ; sector 0 + 4
+  16dda2:  jsr 0x1a6be8          ; strcmp
+  16ddae:  moveq #1,%d7          ; match -> accept
+```
+
+**A full string compare against `"S770 MR25A"`**, including the `MR25A` suffix.
+The K2000's sniffer, per k2kremote, tests only bytes 4, 5 and 7 (`S`, `7`, `0`)
+and deliberately skips the model digit at byte 6, so it accepts S-750 and S-770
+alike. **Two importers, the same disc, different notions of what identifies it.**
+
+Tested against three discs, two of them format-version SYS 1.04 and one SYS 2.19:
+
+```
+  Gigapack I CD 1    "S770 MR25A"   EOS accepts
+  Gigapack I CD 2    "S770 MR25A"   EOS accepts
+  L-CDP-05 (SYS 2.19) "S770 MR25A"  EOS accepts
+```
+
+**The label does not vary with format version**, so EOS's stricter match costs
+nothing there — the initial worry that it would reject newer discs is
+unsupported. What remains is that EOS *would* reject any disc whose label differs
+at all, and no S-750 disc is available to test whether those carry a different
+one. **The asymmetry is real and its practical consequence is untested.**
 
 Corpus available: `Dokumente/SYNTHS/Roland Samples/` (two raw ISOs plus four
 archives, ~2.4 GB) and `Dokumente/SYNTHS/K2000R/Soundsets/`.
