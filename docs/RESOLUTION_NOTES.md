@@ -16795,3 +16795,95 @@ This is the same ordering error the project keeps making in miniature: item 3 wa
 chased first because it had a number attached, item 2 was found by accident while
 checking something else, and item 1 — the cheapest, and the one that decides
 whether 2 and 3 are even well-posed — surfaced last.
+
+## §156 — The Butterworth factor is refuted, and §155's "0.82 octave" is void (2026-09-21)
+
+mpc2emu re-ran their July extractor (`hw_measure.spectrum` + `corner_frequency`,
+the exact pair that built `_E4XT_CUTOFF_TABLE`) over this session's `ktcal`
+captures. Three results, and two of them retract things recorded here.
+
+### The rigs never disagreed
+
+Their estimator at `drop_db=12.0` against mine, same captures:
+
+```
+  byte   mine      theirs
+   147   1820.0    1772.5
+   200   4509.2    4450.2
+   210   5589.2    5528.3
+   217   6843.1    6659.2
+   230   9563.1    9908.2
+   240  15436.9   15685.5
+```
+
+Two independently written extractors, within a few percent. **Whatever was wrong
+was never the measurement.**
+
+### The −12 dB / −3 dB ratio is NOT 1.391
+
+Measured on the same captures:
+
+```
+  byte  80  1.22    byte 160  1.74    byte 217  2.05
+  byte 120  1.45    byte 180  2.00    byte 230  2.02
+  byte 147  1.64    byte 200  2.05    byte 240  2.07
+```
+
+**It climbs from 1.22 to 2.05.** A 4-pole Butterworth would give a constant
+1.391. Below byte 120 the ratio is *under* 1.391, so the filter is steeper than
+4-pole near its corner; above byte 180 the climb is the tilt collapse of §155
+arriving from the other side.
+
+**So no single factor converts between the two conventions, and every
+cross-convention number either project has quoted is void.** That includes
+§155's addendum, which stated a 1.76× / **0.82 octave** disagreement at byte 206
+and called it "convention-independent". **It was not** — it converted their
+corner to a −12 dB point by multiplying by 1.391, which is precisely the step
+that does not hold. The claim is withdrawn.
+
+The Butterworth assumption was flagged as load-bearing in §155 when it was made.
+It was load-bearing, and it was wrong. **Flagging an assumption does not
+discharge it.**
+
+### At matched convention the gap is 0.27 octave
+
+`table / (−3 dB reading of the same capture)`, thirteen points:
+
+```
+  0.791 0.883 0.843 0.893 0.908 0.871 0.826 0.816 0.839 0.830 0.813 0.776 0.711
+  median 0.830, sd 0.051, across a 4.5x span of corner frequency
+```
+
+A **scale** error of about 1.20×, consistent across the range — not the shape
+error the cross-convention comparison implied, and about a quarter of its size.
+
+### §154's polarity result survives an attempt to reproduce it, and that is the strongest thing that happened to it
+
+mpc2emu re-read the `ktpolar2` captures with their own estimator at
+`drop_db=3.0`. The control stays flat — 1084.0 Hz at all three keys, so the bank
+is sound — but the per-preset readings **quantise**: 1084.0 five times, 1277.3
+twice. Their 1/6-octave smoothing is ~12% wide against a total signal of
+0.39–0.48 octave, and `Key~/Key+` comes out **1.23** on those values instead of
+0.997.
+
+**That is their estimator landing on a grid coarser than the effect, and they
+identified it as such rather than as a contradiction.** The −12 dB point sits on
+the asymptote and is well conditioned for a *ratio*; the −3 dB point sits in the
+knee and is the right choice for a *calibration*. Different questions, different
+estimators — which is why §154's ratio and their table can both be sound.
+
+### What it does to the keytrack constant: worse
+
+Converting this session's readings through a measured −12→−3 curve gives
+full-scale slopes of **0.41–0.42**, against §154's 0.581 and their standing
+0.713. **Three estimates, three conventions, no reconciliation** — and the
+conversion's own assumptions are now suspect too.
+
+Their observation, which is the sharpest thing in the exchange: if the 0.713 and
+the LFO-sensitivity figure that independently predicted it to 0.07% both came
+from this estimator at this convention, **they share one ruler**, and their
+agreement would be explained without either being correct. A prediction that
+uses the same instrument as the thing it predicts is not an independent check.
+
+**Nothing in either codebase moves on this.** The measurement that settles it is
+still a cutoff sweep against a source with energy flat past 20 kHz.
