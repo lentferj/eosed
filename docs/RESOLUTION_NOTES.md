@@ -16411,3 +16411,68 @@ by a *relation a wrong hypothesis cannot satisfy*, not by a position anything ca
 occupy. The sample index settled this because an unaddressed read cannot invent
 a 1; the key range alone could not have, because 0/127 is exactly what an
 unaddressed read might plausibly return.
+
+### §153 addendum 4 — the byte count is right, the default is confirmed, the link prediction is untestable here
+
+mpc2emu's arithmetic against the 360-byte body:
+
+```
+  global + voice only      22 + 2*(22+146)        = 358  + 2 = 360   fits
+  global + link + voice    22 + 2*(22+29+146)     = 416             no
+  all four sets            22 + 2*(22+29+146+13)  = 442             no
+```
+
+Only the zone-less, link-less layout fits. **So the send does not carry zone
+parameters**, and the 0/127 is the receiver defaulting a range it was never
+given — not a send that rewrites zone ranges, which was the worse of the two
+outcomes and is now off the table.
+
+**Confirmed against a control they did not have.** Preset 16 was never written
+and still reads "Empty Preset":
+
+```
+  preset  0  zone (sample, root, low, high) = (1, 69,  69,  69)
+  preset 15  zone                           = (1, 69,   0, 127)   created by the send
+  preset 16  zone                           = (0,  0,  16,   0)   never created
+```
+
+A never-created zone reads `(0, 0, 16, 0)` — so **0/127 is not simply "what an
+empty slot says"**. It is what a zone *created by a preset send* says: the send
+carried the sample index and the root key and left the key range unset, and the
+machine opened it wide. That is a sharper confirmation than the byte count alone,
+because it distinguishes "defaulted on creation" from "was always that".
+
+**Actionable, and it belongs in `DISCLAIMER.md`: a preset send silently discards
+the zone mapping.** Anyone who sends a multi-zone preset gets zones with no key
+ranges back and no error. For a tool whose whole purpose is remote editing, that
+is a sharper limitation than the compile-at-load one and it has a victim.
+
+### The link prediction cannot be tested on this material
+
+Their inference predicts link parameters are also absent from the body, so a sent
+preset should show defaults rather than the source's values. Measured:
+
+```
+  link params identical across presets 0, 15 AND 16
+  8 non-zero ids (253, 254, 257-262) — the same 8 in all three
+```
+
+Preset 0's link parameters **are already at their defaults**, so carried and
+not-carried predict the same reading. The test returns "identical" and means
+nothing.
+
+This is the third instance tonight of the rule mpc2emu gave and then sharpened —
+**a field that barely varies cannot identify anything downstream of it** — and
+the first time it has caught a test of *theirs* rather than of ours. Testing link
+carriage needs a preset with non-default links, which nothing on this bank has.
+
+### Where this leaves §153
+
+Two independent facts, each covering what the other cannot:
+
+- **the dump omits zone parameters** → explains the 0/127 reading;
+- **the playback mapping is compiled at bank load** → explains why nothing became
+  audible at keys 36–84 although both recorded ranges permitted them.
+
+The second is still the one that blocks the measurement, and it is unaffected by
+the first.
