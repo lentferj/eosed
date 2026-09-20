@@ -16476,3 +16476,47 @@ Two independent facts, each covering what the other cannot:
 
 The second is still the one that blocks the measurement, and it is unaffected by
 the first.
+
+### §153 addendum 5 — the remaining blocker is one button, and it is not remotely reachable
+
+mpc2emu's two-key bank is on the card (`CD7-KTPOLAR.iso`, verified byte-identical
+at 23:42). That does not unblock the measurement, because **the editor protocol
+has no load-bank command.** The only bank-scope command in the message set is
+`ERASE_RAM_BANK` (`0x74`), which this project does not send.
+
+The panel protocol could in principle drive the front panel to load, but that is
+the reverse-engineered protocol, this project's rules require verifying any byte
+sequence by capture before writing code against it, and it is adjacent to the
+diversion command that must never be sent speculatively. Not a route to take for
+convenience.
+
+**So: a remote editor can read everything, write parameters and whole presets,
+and cannot load a bank or change which key sounds.** Those two limits are
+related — both are things the sound engine reads once, at load, from a path the
+editor protocol does not reach — and together they are the honest boundary of
+what this project can do without a hand on the machine. `DISCLAIMER.md` should
+say so in those terms.
+
+Once the bank is loaded, everything after is automated: zone-1 read first (it
+must say 60/60), then seven presets × three keys, with the absolute level of
+every take checked before anything is fitted.
+
+### The link question is blocked on the same button
+
+mpc2emu offered to locate link parameters in the preset header by relation: name
+a link value read over SysEx, and they scan 1162 presets for the header byte
+carrying it. **Neither side can supply the other's half from what is loaded.**
+Their corpus can say which header bytes vary; only a SysEx read can say what a
+link parameter currently *is*. The three presets read here are all at defaults —
+the same 8 non-zero ids (253, 254, 257–262, all 1) and 21 zeros — which is worth
+recording as the default vector and discriminates nothing.
+
+Filling it needs any bank with non-default links in RAM, which needs the same
+front-panel load. If a third-party bank is ever loaded for other reasons, the
+link vector is 29 reads, no audio and no writes — worth grabbing opportunistically.
+
+Their candidate header bytes are explicitly "places to look, no evidence any of
+them is a link field", which is the status the thirteen rescale rows had before
+the corpus check — and three of those turned out to be untestable rather than
+wrong. Some of the eight should be expected to land the same way: present in the
+map, never exercised, indistinguishable from absent.
