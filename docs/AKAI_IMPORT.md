@@ -546,24 +546,28 @@ Every law in this document, checked against **363 presets / 2800 voices of EOS's
 own AKAI import**. The agreement column is not the interesting one — it is 100%
 everywhere. **The strength column is.**
 
-| law | test | agreement | distinct values | P(passing by chance) |
-|---|---|---:|---:|---:|
-| `PZT[8]` Release1 rate ∈ decay table | membership | 100% (2800/2800) | 49 | 2.4 × 10⁻⁹ |
-| `PZT[6]` Decay2 rate ∈ decay table | membership | 100% (2800/2800) | 42 | 4.0 × 10⁻⁸ |
-| `PZT[0]` Attack1 rate ∈ attack table | membership | 100% (2800/2800) | 30 | 3.8 × 10⁻⁷ |
-| `header[27]` volume ∈ formula image | membership | 100% (363/363) | 9 | 2.8 × 10⁻⁵ |
-| `PZT[7]` Decay2 level ∈ sustain image | membership | 100% (2800/2800) | 20 | 7.2 × 10⁻³ |
-| `PZT[1]` Attack1 level = 127 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[2]` Attack2 rate = 0 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[3]` Attack2 level = 127 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[4]` Decay1 rate = 0 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[5]` Decay1 level = 127 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[9]` Release1 level = 0 | constant | 100% (2800/2800) | 1 | — |
-| `PZT[10]`/`[11]` Release2 rate/level = 0 | constant | 100% (2800/2800) | 1 | — |
-| `header[26]` transpose ∈ −24…+24 | range | 100% (363/363) | 1 | — |
-| `header[27]` volume, **exact input → output** | **exact** | **100% (363/363)** | — | — |
+| law | test | strength | agreement | distinct | P(chance) |
+|---|---|---|---:|---:|---:|
+| `header[27]` volume, input → output | **exact** | **definitive** | 100% (363/363) | — | — |
+| `PZT[8]` Release1 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 49 | 2.4 × 10⁻⁹ |
+| `PZT[6]` Decay2 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 42 | 4.0 × 10⁻⁸ |
+| `PZT[0]` Attack1 rate ∈ attack table | membership | **strong** | 100% (2800/2800) | 30 | 3.8 × 10⁻⁷ |
+| `header[27]` volume ∈ formula image | membership | moderate | 100% (363/363) | 9 | 2.8 × 10⁻⁵ |
+| `PZT[7]` Decay2 level ∈ sustain image | membership | **weak** | 100% (2800/2800) | 20 | 7.2 × 10⁻³ |
+| `PZT[1]` Attack1 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[2]` Attack2 rate = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[3]` Attack2 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[4]` Decay1 rate = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[5]` Decay1 level = 127 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[9]` Release1 level = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `PZT[10]`/`[11]` Release2 rate/level = 0 | constant | **none** | 100% (2800/2800) | 1 | — |
+| `header[26]` transpose ∈ −24…+24 | range | **none** | 100% (363/363) | 1 | — |
 
-**Read the last column, not the agreement column.** `P(chance)` is the
+Strength is read off `P(chance)`: **strong** below 10⁻⁶, **moderate** to 10⁻³,
+**weak** above it, **none** where the test cannot fail, **definitive** for an
+exact input-to-output check.
+
+**Read the strength column, not the agreement column.** `P(chance)` behind it is the
 probability that many *distinct* observed values would all land inside the
 predicted set if the values were arbitrary within their observed span. The decay
 table covers 67% of 0–110, so one value passing means little and 49 distinct
