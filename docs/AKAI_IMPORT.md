@@ -808,6 +808,35 @@ either of us acted on it: *"read from somewhere I did not enumerate" and
 "invented" predict the same output, and nothing I have separates them.* Something
 did separate them; nobody went and did it.
 
+### Confirmed from the file end
+
+mpc2emu traced their 0.118 to its source and it was their own reader: four of
+their E4B cord reads **indexed a fixed slot** instead of searching for a
+`(source, destination)` pair, and slot 6 is where *their writer's* template puts
+`Key+ → FilFreq`. EOS's importer packs the matrix in a different order, so what
+they sampled was this importer's **velocity → cutoff** depth
+(`21/127 × 0.713 = 0.1179`).
+
+With the cord searched for rather than indexed, the guard checks out against the
+file:
+
+```
+  Key+ -> FilFreq present in the 2800-voice import :  195 voices = 7.0%
+  source keygroups with non-zero filter_keyfollow  :              7.5%
+```
+
+**Emitted only where the source says something, and the prevalence matches to
+half a percentage point.** Nothing is invented, and the decompiled guard is
+confirmed independently of the decompilation.
+
+Two things worth carrying from how that was found. Their first estimate of the
+harm was **67.2%** and it was wrong in their own favour — it counted every voice
+whose slot 6 was not exactly `Key+ → FilFreq`, but most of those hold `Key~`, the
+same routing at a different pivot carrying the same depth. The honest figure is
+**2.7%**, a 25× overstatement caught by asking what the count counted. And the
+one-number error was the smaller half: the slot-indexing defect affects four
+reads across every third-party bank they parse.
+
 This also explains, from a second direction, why a search for the thirteen
 rescaled program-header values found nothing in the header or the voice blocks:
 several of them are **cord amounts**, which sit in the matrix beside a source and
