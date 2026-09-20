@@ -16301,3 +16301,58 @@ against resident RAM and no card moves. **If it fails**, that is a protocol
 finding worth as much as the measurement — it would mean zone geometry is
 reachable *only* from the front panel or a disk load, which is a real constraint
 on what any remote editor can do and belongs in `DISCLAIMER.md`.
+
+### §153 addendum 2 — the preset-dump route, fired: it writes, and it still does not gate the key
+
+Jan approved the whole-preset write. Result: **the dump mechanism works perfectly
+and does not solve the problem, because the field it writes is not the one that
+decides which key sounds.**
+
+```
+  preset 15 (was "Empty Preset"), written from a patched dump of preset 0
+
+    dump bytes 80/82/86  (ORIG_KEY / KEY_LOW / KEY_HIGH)  =  69 / 36 / 84
+    live read, no zone selected                           =  69 / 36 / 84
+    live read, zone 0 selected                            =  69 /  0 / 127
+    keys that sound: 69 ONLY
+      36 −70.3   48 −69.5   60 −70.3   68 −68.7   69 −25.8   70 −70.3   84 −70.3
+```
+
+Round-trip is exact: dumping preset 15 back and diffing against the source gives
+**three differing bytes** — the retarget byte and the two patched ones — so the
+send path is sound and the value persists.
+
+**What this establishes:**
+
+- A preset dump **does** write voice-level fields that a live edit also writes,
+  and both read back. Neither changes the sounding key.
+- `E4_GEN_KEY_LOW`/`KEY_HIGH` at voice level are **not the gate.** The gate is
+  the zone's own sample mapping — a separate structure, which the zone-selected
+  read shows as a different object (`0/127`, not `36/84`).
+- So §153's conclusion narrows rather than reverses: the blocker is not "live
+  edits do not reach the voice" but **"the key→sample mapping is not reachable
+  through the fields either route writes"**.
+
+**Where the layout defeated me**, recorded so the next attempt starts further on:
+the NEW-format header reports 22 global, 29 link, 146 voice and 13 zone
+parameters, and params sit at `offset = 22 + 2 × index` — which puts the three
+bytes reading 69 at voice indices 7, 8 and 10, i.e. ids 44/45/47 exactly. But
+22 + 2×(22+146) already reaches 358 of the dump's 360 bytes, leaving no room for
+a 13-parameter zone block. **The header's counts are therefore not all present in
+the body**, and the zone block's actual location is unresolved.
+
+**One mistake worth keeping.** Re-deriving the offsets mid-investigation I used
+`(offset − 18) / 2` and got `KEY_LOWFADE`/`KEY_HIGH`/`VEL_LOW` — plausible names,
+wrong answer, and I briefly believed my original identification had been wrong.
+The base is 22, not 18. What caught it was that the *differences* between the
+three offsets (0, 1, 3 params) match ids 44, 45, 47 under one base and nothing
+sensible under the other. **A layout hypothesis that has to explain three related
+fields at once is much harder to get wrong than one checked field at a time.**
+
+### Machine state
+
+`CD4-DCYFAST` presets 0–14 untouched and verified. **Preset 15 now holds a copy
+of preset 0 with KEY_LOW/KEY_HIGH 36/84**, where it previously read "Empty
+Preset". It cannot be returned to empty without Preset Delete (`71h`), which this
+project does not send speculatively, so it is left in place — RAM only, gone on
+the next bank load or power cycle. Nothing was written to disk.
