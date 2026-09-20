@@ -891,6 +891,41 @@ rescaled program-header values found nothing in the header or the voice blocks:
 several of them are **cord amounts**, which sit in the matrix beside a source and
 a destination byte rather than at a named field offset.
 
+## A provenance caveat that applies to this whole document
+
+**Where a finding here agrees with Akai's published documentation, that
+agreement is probably not independent evidence.** Whoever implemented EOS's AKAI
+importer had to learn the format from somewhere, and the obvious somewhere is
+Akai's own SysEx/format documents — the same documents every third-party field
+table is transcribed from. So:
+
+```
+  Akai's doc  ->  a third-party parameter table      a transcription
+  Akai's doc  ->  EOS's importer                     probably another one
+  the AKAI's own firmware                            the thing being described
+```
+
+**A doc/firmware agreement is corroboration; a doc/EOS agreement may be
+circular.** This bites specifically on:
+
+- the **character set** at `0x31ba4` and its 12-character cap — EOS reading the
+  name as 12 characters from program offset `+3` matches Akai's documented
+  `PRNAME`, and that is two readings of one document, not two measurements;
+- the **"not used" fields** `0x1b`/`0x1c`/`0x20` being unread, already noted in
+  its own section;
+- **every field name** in the mapping tables, which come from a transcription.
+
+What EOS's firmware *does* independently establish is its own **arithmetic and
+its choices** — the conversion tables, the constants, the clamps, and the drop
+list. Those have no counterpart in Akai's documents and cannot have been
+transcribed from them.
+
+It also does one thing a document cannot: **it says how EOS's author read the
+layout.** A disagreement between this trace and a field table would have been a
+warning worth chasing. Agreement is weaker than it looks, and disagreement would
+have been strong. (s3ked, who raised it against a corroboration this document
+had claimed.)
+
 ## The AKAI source offsets ARE file offsets — unlike the other two importers
 
 A later finding in `ENSONIQ_ROLAND_IMPORT.md` — that Ensoniq's source offsets
