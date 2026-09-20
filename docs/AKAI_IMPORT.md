@@ -722,7 +722,7 @@ until they confirm it**; their field list is theirs to state.
 |---|---|---|---|
 | `0x17` `STEREO` stereo level | **not read** | read → dB, **applied** | applied with an extrapolation warning: the law was measured over 10–99 |
 | `0x23` `LFODEL` LFO1 delay | **not read** | read → `lfo1_delay` seconds, **applied** | one of s3ked's three losses; the other converter keeps it |
-| keygroup `0x08` filter keyfollow | **not read** | read → applied | but see the caveat below |
+| keygroup `0x08` filter keyfollow | **read** — builds a cord | read → applied | **corrected**, see the cord section |
 | `0x0f` MIDI program number | **not read** | **applied** as the program number | arguably performance state, not a preset parameter |
 | `0x15` `OSHIFT` octave shift | **not read** | read, **reported as dropped** | **neither side converts it** |
 | `0x11` polyphony | **not read** | read, warning only | neither side converts it |
@@ -743,15 +743,75 @@ Two things needing mpc2emu's confirmation rather than my reading of their code:
   reported", while the parser appears to apply stereo level already** (it feeds a
   gain sum and reports an `applied_db`). Either the document is stale or I am
   misreading the call path.
-- **Their own corpus comparison reports filter keytrack as "ours 0.000, EOS
-  0.118"**, which sits oddly with the parser reading and using keygroup `0x08`.
-  Something between reading the field and emitting it is producing zero.
+- ~~Their corpus reports filter keytrack as "ours 0.000, EOS 0.118"~~ —
+  **that line of reasoning is dead**, see below. It rested on my claim that
+  keygroup `0x08` is not read, which was wrong.
 
 The EOS side of this table also carries one limit: the keygroup read set was
 enumerated over the zone/envelope path (`0x46da8`–`0x475b0`). A keygroup byte
 read in some other function would not appear in it, so "not read" is firmer for
 the program header — where the whole converter was enumerated and its pointer
 bases checked — than for keygroup `0x08`.
+
+## Modulation cords — and a retraction
+
+**EOS builds E4 cords from AKAI's per-keygroup modulation fields.** This was
+missed at first because the cord amount is not written to a named field: it goes
+into the modulation matrix as a `(source, destination, amount)` triple.
+
+```
+  46956:  tstb %a3@(8) / beq       ; if the AKAI value is 0, SKIP ENTIRELY
+  4695c:  lea %a4@(0,%d7:l:4),%a5  ; 4-byte-stride slot in the matrix
+  46962:  moveb #8,%a5@(188)       ; cord SRC = 8  = Key+
+  46968:  moveb #56,%a5@(189)      ; cord DST = 56 = FilFreq
+  46980:  jsr 0x2f6b4              ; round(clamp(v,-50,50) * 96/50)
+  46986:  moveb %d0,%a5@(190)      ; cord AMOUNT
+```
+
+With `a5 = voice + 2` — the same base the envelope stores confirm — `a5@(188)`
+lands at `voice[190]`, the start of the 20 × 4-byte modulation matrix.
+
+| cord source | destination | scale | AKAI keygroup byte | written |
+|---|---|---:|---|---|
+| `Key+` | `FilFreq` | 96 | `0x08` | only if non-zero |
+| `Vel+` | `VEnvAtk` | 48 | `0x10` | only if non-zero |
+| `Vel+` | `VEnvRls` | 48 | `0x11` | only if non-zero |
+| `RlsVel` | `VEnvRls` | 48 | `0x12` | only if non-zero |
+| `Key+` | `VEnvRls` | 48 | `0x13` | only if non-zero |
+| `Vel+` | `FEnvAtk` | 48 | `0x18` | only if non-zero |
+| `Vel+` | `FEnvRls` | 48 | `0x19` | only if non-zero |
+| `RlsVel` | `FEnvRls` | 48 | `0x1a` | only if non-zero |
+| `Key+` | `FEnvRls` | 48 | `0x1b` | only if non-zero |
+
+All use the same rescaler, `round(clamp(v, −50, 50) × scale/50)`, into the amount
+byte.
+
+### RETRACTED: keygroup `0x08` is read, and EOS does not invent key tracking
+
+An earlier version of this document listed keygroup `0x08` among the fields the
+importer ignores, and mpc2emu built a finding on it — that EOS writes key
+tracking into programs which specify none, since 92.5% of that disc's keygroups
+carry `0x08 = 0`. **Both are wrong.** EOS reads the field and, when it is
+non-zero, emits a `Key+ → FilFreq` cord; when it is zero it emits **nothing**.
+That is the opposite of inventing.
+
+**The failure is worth more than the correction.** The original claim carried an
+explicit caveat — that the keygroup read set had been enumerated over the
+zone/envelope path only, so "not read" was weaker there than for the program
+header. The caveat was correct, it was stated in writing, and then **both parties
+reasoned from the claim as though it were established.** Resolving it meant
+enumerating the rest of the importer, which took four minutes.
+
+**A caveat the author states and then ignores is worse than no caveat**, because
+it makes the limit look considered. The general form, in mpc2emu's words before
+either of us acted on it: *"read from somewhere I did not enumerate" and
+"invented" predict the same output, and nothing I have separates them.* Something
+did separate them; nobody went and did it.
+
+This also explains, from a second direction, why a search for the thirteen
+rescaled program-header values found nothing in the header or the voice blocks:
+several of them are **cord amounts**, which sit in the matrix beside a source and
+a destination byte rather than at a named field offset.
 
 ## Confidence, and what is NOT established
 
