@@ -77,7 +77,11 @@ _PARAMS: List[Parameter] = [
     _p(11, "E4_PRESET_FX_A_AMT_1", "global", 0, 100),
     _p(12, "E4_PRESET_FX_A_AMT_2", "global", 0, 100),
     _p(13, "E4_PRESET_FX_A_AMT_3", "global", 0, 100),
-    _p(14, "E4_PRESET_FX_B_ALGORITHM", "global", 0, 27),
+    # MAX CORRECTED 27 -> 32 (2026-09-20). The spec is EOS 4.00 and 27 is
+    # exactly "Vibrato"; 4.70 appends five distortion algorithms after it.
+    # The device's own 04h reports 0..32 -- see docs/RESOLUTION_NOTES.md.
+    _p(14, "E4_PRESET_FX_B_ALGORITHM", "global", 0, 32,
+       notes="spec (EOS 4.00) says max 27; EOS 4.70 adds 28-32"),
     _p(15, "E4_PRESET_FX_B_PARM_0", "global", 0, 127),
     _p(16, "E4_PRESET_FX_B_PARM_1", "global", 0, 127),
     _p(17, "E4_PRESET_FX_B_PARM_2", "global", 0, 127),
@@ -651,34 +655,107 @@ CORD_DESTINATIONS: Dict[int, str] = {
 # VERIFY BEFORE TRUSTING FOR ANYTHING BEYOND A CONVENIENCE UI LABEL: set
 # FX_A_ALGORITHM/FX_B_ALGORITHM to a few of these ids live and compare
 # against what the front panel actually displays.
+# CORRECTED 2026-09-20: both tables were off by one and the app displayed the
+# wrong effect name for every preset. They were transcribed from the manual's
+# printed list, which starts at the first real effect -- but the wire encoding
+# reserves value 0 for "Master Effect A"/"B", meaning *inherit the master
+# setting*. Printed position is not wire value.
+#
+# These are now read out of the EOS 4.70 firmware's own pointer tables
+# (22-byte records for A at 0x923c4, 16-byte for B at 0x927a2, load base
+# 0x20000) and confirmed on the E4XT: six algorithm values read back over
+# SysEx were matched against what the front panel showed for the same three
+# presets, and all six agree with the table below and with none of the old one.
+#
+# Spellings are the firmware's, not the manual's ("Brt Hall Pan", not "Bright
+# Hall Pan"), because those are the strings the LCD actually draws.
+#
+# The B table's ORDER is the pointer table's, not the string pool's: the pool
+# runs Delay Stereo, Delay Stereo 2, Delay Chorus where the table runs Delay,
+# Delay Stereo, Delay Stereo 2, Panning Delay. Using pool order gives wrong
+# indices for everything from 18 up.
 FX_A_ALGORITHM_NAMES: Dict[int, str] = {
-    0: "Room 1", 1: "Room 2", 2: "Room 3", 3: "Hall 1", 4: "Hall 2", 5: "Plate",
-    6: "Delay", 7: "Panning Delay", 8: "Multitap 1",
-    9: "Multitap Pan", 10: "3 Tap", 11: "3 Tap Pan",
-    12: "Soft Room", 13: "Warm Room", 14: "Perfect Room",
-    15: "Tiled Room", 16: "Hard Plate", 17: "Warm Hall",
-    18: "Spacious Hall", 19: "Bright Hall", 20: "Bright Hall Pan",
-    21: "Bright Plate", 22: "B-Ball Court", 23: "Gymnasium",
-    24: "Cavern", 25: "Concert 9", 26: "Concert 10 Pan",
-    27: "Reverse Gate", 28: "Gate 2", 29: "Gate Pan",
-    30: "Concert 11", 31: "Medium Concert", 32: "Large Concert",
-    33: "Large Concert Pan", 34: "Canyon",
-    35: "DelayVerb 1", 36: "DelayVerb 2", 37: "DelayVerb 3",
-    38: "DelayVerb 4 Pan", 39: "DelayVerb 5 Pan",
-    40: "DelayVerb 6", 41: "DelayVerb 7", 42: "DelayVerb 8", 43: "DelayVerb 9",
+    0: "Master Effect A",
+    1: "Room 1",
+    2: "Room 2",
+    3: "Room 3",
+    4: "Hall 1",
+    5: "Hall 2",
+    6: "Plate",
+    7: "Delay",
+    8: "Panning Delay",
+    9: "Multitap 1",
+    10: "Multitap Pan",
+    11: "3 Tap",
+    12: "3 Tap Pan",
+    13: "Soft Room",
+    14: "Warm Room",
+    15: "Perfect Room",
+    16: "Tiled Room",
+    17: "Hard Plate",
+    18: "Warm Hall",
+    19: "Spacious Hall",
+    20: "Bright Hall",
+    21: "Brt Hall Pan",
+    22: "Bright Plate",
+    23: "BBall Court",
+    24: "Gymnasium",
+    25: "Cavern",
+    26: "Concert 9",
+    27: "Concert 10 Pan",
+    28: "Reverse Gate",
+    29: "Gate 2",
+    30: "Gate Pan",
+    31: "Concert 11",
+    32: "MediumConcert",
+    33: "Large Concert",
+    34: "Lg Concert Pan",
+    35: "Canyon",
+    36: "DelayVerb 1",
+    37: "DelayVerb 2",
+    38: "DelayVerb 3",
+    39: "DelayVerb4Pan",
+    40: "DelayVerb5Pan",
+    41: "DelayVerb 6",
+    42: "DelayVerb 7",
+    43: "DelayVerb 8",
+    44: "DelayVerb 9",
 }
 
 FX_B_ALGORITHM_NAMES: Dict[int, str] = {
-    0: "Chorus 1", 1: "Chorus 2", 2: "Chorus 3", 3: "Chorus 4", 4: "Chorus 5",
-    5: "Doubling", 6: "Slapback",
-    7: "Flange 1", 8: "Flange 2", 9: "Flange 3", 10: "Flange 4", 11: "Flange 5",
-    12: "Flange 6", 13: "Flange 7", 14: "Big Chorus", 15: "Symphonic",
-    16: "Ensemble", 17: "Delay", 18: "Delay Stereo 1", 19: "Delay Stereo 2",
-    20: "Panning Delay", 21: "Delay Chorus",
-    22: "Pan Delay Chorus 1", 23: "Pan Delay Chorus 2",
-    24: "Dual Tap 1/3", 25: "Dual Tap 1/4", 26: "Vibrato",
-    27: "Distortion 1", 28: "Distortion 2", 29: "Distortion Flange",
-    30: "Distorted Chorus", 31: "Distorted Double",
+    0: "Master Effect B",
+    1: "Chorus 1",
+    2: "Chorus 2",
+    3: "Chorus 3",
+    4: "Chorus 4",
+    5: "Chorus 5",  # ROM pads this one
+    6: "Doubling",  # ROM pads this one
+    7: "Slapback",
+    8: "Flange 1",
+    9: "Flange 2",
+    10: "Flange 3",
+    11: "Flange 4",
+    12: "Flange 5",
+    13: "Flange 6",
+    14: "Flange 7",
+    15: "Big Chorus",
+    16: "Symphonic",
+    17: "Ensemble",
+    18: "Delay",
+    19: "Delay Stereo",
+    20: "Delay Stereo 2",
+    21: "Panning Delay",
+    22: "Delay Chorus",
+    23: "Pan Dly Chrs 1",
+    24: "Pan Dly Chrs 2",
+    25: "DualTap 1/3",
+    26: "DualTap 1/4",
+    27: "Vibrato",
+    28: "Distortion 1",
+    29: "Distortion 2",
+    30: "DistortedFlange",
+    31: "DistortedChorus",
+    32: "DistortedDouble",
 }
 
 # FX_*_PARM_0/1(/2) names: the manual states these plainly as fixed labels
@@ -692,7 +769,12 @@ FX_B_ALGORITHM_NAMES: Dict[int, str] = {
 # for each processor, not a guarantee that every one of the 44/32 algorithms
 # uses them identically. Treat the displayed name as a strong hint, not a
 # certainty, for delay-family and other non-reverb/non-chorus algorithms.
-FX_A_PARM_NAMES: Dict[int, str] = {0: "Decay Time", 1: "HF Damping"}
+# PARM_2 was "left unmapped, not guessed" while only the manual was
+# available; the firmware's own label pool names it. It is a routing
+# amount (B's output into A), not an effect parameter.
+FX_A_PARM_NAMES: Dict[int, str] = {
+    0: "Decay Time", 1: "HF Damping", 2: "FxB==>FxA",
+}
 FX_B_PARM_NAMES: Dict[int, str] = {0: "Feedback", 1: "LFO Rate", 2: "Delay Time"}
 
 # FX_*_AMT_0-3: NOT algorithm-dependent — always the wet/dry send amount for
@@ -793,7 +875,7 @@ def _known_value_name(param: Parameter, value: int) -> Optional[str]:
         return FX_A_ALGORITHM_NAMES.get(value)
     if name.endswith("FX_B_ALGORITHM"):
         return FX_B_ALGORITHM_NAMES.get(value)
-    if name.endswith(("FX_A_PARM_0", "FX_A_PARM_1")):
+    if name.endswith(("FX_A_PARM_0", "FX_A_PARM_1", "FX_A_PARM_2")):
         return FX_A_PARM_NAMES.get(int(name[-1]))
     if name.endswith(("FX_B_PARM_0", "FX_B_PARM_1", "FX_B_PARM_2")):
         return FX_B_PARM_NAMES.get(int(name[-1]))

@@ -15666,3 +15666,193 @@ the valid range matters to them specifically:
 - Below 32 there are three measured points and no fit. Three points and a knee of
   unknown position do not make a law; if that region matters, it needs its own
   ladder at bytes 8–36.
+
+### Addendum 2 (2026-09-20) — the 30 dB span this section closed on is WITHDRAWN by its author
+
+§149 above ends by resolving the generator's flat ~0.92 implied/measured ratio as
+a span-definition difference, "their span is ~30 dB where this measurement uses
+28.1 dB", and the table quotes **ratio 0.983 ± 0.012, span-matched at 30 dB.**
+
+**mpc2emu has withdrawn the 30 dB figure, so that resolution no longer stands and
+the numbers above must not be built on.** Recording it here rather than editing
+the section, because the reasoning that produced it is the instructive part.
+
+Their own account of the fault: they compared a span-aware reading of their bytes
+against a **span-blind** reading of EOS's. EOS never uses the two-segment decay
+shape — Dcy1 rate is 0 on every voice — so their parser takes its plateau
+fallback branch, where the whole decay comes from a law that assumes a span which
+is neither fixed nor 30 (43.1 dB at byte 4, rising to 51.1 at byte 110). The
+"implied EOS span" was therefore a compound of their own parser and the rate
+ratio, not a measurement of EOS's convention anywhere. **The 1.93× goes with it**
+as a statement about EOS's conversion; it remains a real difference between two
+files *as that parser reads them*.
+
+**What survives is the exponent falsification, and why it survives is the point.**
+That argument is about the ratio's SHAPE against their own decay byte — an error
+in their law would have to slope, and it does not — and it holds however EOS's
+side is read, because EOS's bytes are not a function of theirs. The 30 dB claim
+was about the ratio's LEVEL, and the level is exactly what the reader asymmetry
+corrupts. **A shape argument survived an instrument fault that destroyed a level
+argument built from the same numbers** — the same discriminator as this section's
+own sign test on byte 8, and worth keeping as a general rule: ask what the
+artefact explanation predicts about shape or sign before arguing about size.
+
+**And the process failure is one this project keeps making.** They checked the
+below-32 prevalence *in aggregate over all six envelope stages*, got 51%, and
+filed it as a caveat. Per stage it was a refutation, because the one stage
+carrying EOS's entire decay is the stage their reader handles differently. **The
+aggregate hid that a stage was empty.**
+
+### s3ked's correction to the sign test, which belongs with it
+
+s3ked applied §149's sign argument to their own two anomalies and it came out
+**decisive on one and silent on the other — the one they had got wrong:**
+
+```
+  byte 20   measured 2370.32 vs law 3329.72  ->  reads SLOWER  -- consistent with smearing
+  byte 96   measured    2.19 vs law    1.98  ->  reads FASTER  -- smearing ruled out, free
+```
+
+**A silent test is not an agreeing test.** Reading slower is exactly what a
+resolution limit produces, so the sign test cannot clear byte 20 and only
+synthesis could. Worth stating because a cheap test that is decisive most of the
+time is the kind that gets treated as decisive always.
+
+They also caught the mirror of this section's own byte-8 bias error. Their control
+synthesised each point at its **measured** rate and asked whether the estimator
+would report it; the resolution hypothesis actually claims something else — that
+the machine is *on* the law and the estimator under-reports — which they had never
+tested. Re-run at the law-predicted rate, fed 3329.72, their estimator returns
+3313.87 (−0.48%). The refutation stands, but it had been aimed one step off the
+hypothesis.
+
+One coincidence noted and explicitly not claimed: their fast end starts
+misbehaving at byte 20 and the knee here sits in 24–32. Different machine,
+different law. Recorded in case it stops being a coincidence.
+
+## §150 — The Preset FX fields, from the firmware's own tables and confirmed on the machine (2026-09-20, live)
+
+Jan loaded a commercial bank and gave the FX settings his front panel showed for
+three presets — algorithm names, parameter values and send percentages. That is a
+**known-plaintext attack on the encoding**: the names and numbers are the
+plaintext, the wire bytes are the ciphertext, and the only job is to line them up.
+
+### The headline: the committed algorithm tables were off by one, and the app has been showing the wrong effect name for every preset
+
+`FX_A_ALGORITHM_NAMES` and `FX_B_ALGORITHM_NAMES` were transcribed from the
+manual's printed list of effects. **The manual's list starts at the first real
+effect. The wire encoding reserves value 0 for "Master Effect A"/"Master Effect
+B", meaning *inherit the master setting*.** Printed position is not wire value,
+and every entry was one low.
+
+Read over SysEx, against what the panel displayed for the same presets:
+
+| preset | panel says | wire byte | old table | new table |
+|---|---|---:|---|---|
+| P001 FX A | Cavern | 25 | Concert 9 ✗ | Cavern ✓ |
+| P001 FX B | Delay Stereo 2 | 20 | Panning Delay ✗ | Delay Stereo 2 ✓ |
+| P002 FX A | Spacious Hall | 19 | Bright Hall ✗ | Spacious Hall ✓ |
+| P002 FX B | Symphonic | 16 | Ensemble ✗ | Symphonic ✓ |
+| P003 FX A | MediumConcert | 32 | Large Concert ✗ | MediumConcert ✓ |
+| P003 FX B | Slapback | 7 | Flange 1 ✗ | Slapback ✓ |
+
+**Six for six against the new table and zero for six against the old one.** The
+old table was never wrong in a way that looked wrong: every value it returned was
+a real effect name, just the neighbouring one.
+
+### Where the tables actually live
+
+In the decompressed EOS 4.70 image (regenerate with `eosflash export` +
+`eosflash flash --4mb`; load base `0x20000`), as **pointer tables of fixed-stride
+records**, not as a plain string list:
+
+```
+  FX A   table at 0x923c4   22-byte records   45 entries (0..44)
+  FX B   table at 0x927a2   16-byte records   33 entries (0..32)
+  layout: u32 big-endian pointer to a NUL-terminated name, then metadata
+```
+
+**Do not read the string pool in address order.** The pool and the pointer table
+disagree: the pool runs `Delay Stereo, Delay Stereo 2, Delay Chorus` where the
+table runs `Delay, Delay Stereo, Delay Stereo 2, Panning Delay`. Pool order gives
+wrong indices for everything from 18 up — and it would have produced a *different*
+wrong answer than the manual did, which is how the two were told apart.
+
+Spellings are now the firmware's rather than the manual's (`Brt Hall Pan`, not
+`Bright Hall Pan`; `BBall Court`, not `B-Ball Court`), because those are the
+strings the LCD actually draws and a TUI meant to match the hardware should match
+what the hardware prints.
+
+### FX_B_ALGORITHM's maximum was stale, and the device says so itself
+
+`params.py` carried max **27**, transcribed from the SysEx spec — which is EOS
+**4.00**. The firmware table has 33 entries, and the device's own parameter-range
+request (`04h`) answers **0..32**.
+
+**27 is exactly `Vibrato`.** Everything above it is the distortion family
+(`Distortion 1`, `Distortion 2`, `DistortedFlange`, `DistortedChorus`,
+`DistortedDouble`) added after 4.00. So the spec was never wrong; it was current,
+and 4.70 grew past it. A reader validating against 27 rejects five legal values.
+
+All sixteen FX ids were range-checked against the device. **Fifteen of sixteen
+agreed with the transcription; this was the only drift** — which is both a good
+result for the spec and the reason the one mismatch is worth trusting.
+
+### The three PARM slots, and the one the manual could not name
+
+The firmware keeps a single label pool immediately before the algorithm tables,
+six strings, three for A then three for B:
+
+```
+  FX A:  Decay Time   HF Damping   FxB==>FxA
+  FX B:  Feedback     LFO Rate     Delay Time
+```
+
+Five of those six already matched what a previous session had taken from the
+manual. The sixth is the one the manual does not name: `FX_A_PARM_2` had been
+left deliberately unmapped rather than guessed, and it is **`FxB==>FxA`** — a
+routing amount feeding the B block's output into A, not an effect parameter.
+That is why it reads 0 on every preset seen so far.
+
+The parameter values confirm the ordering independently of any name:
+
+```
+  P002 FX A: PARM_0 = 37, PARM_1 = 120      panel: Decay Time 37, HF Damping 120
+  P002 FX B: PARM_0 = 48, PARM_1 = 24       panel: Feedback 48, LFO Rate 24
+```
+
+**`FX_A_PARM_0`'s range is 0..90 while the other five are 0..127**, so a value of
+120 cannot be a Decay Time. The order is pinned by the range alone, with the
+labels only agreeing afterwards.
+
+`FX_*_AMT_0..3` need no new work: the existing `FX_AMT_BUS_NAMES` (Main, Sub 1,
+Sub 2, Sub 3) is right, and `AMT_0` carried Jan's stated Main sends exactly —
+5%, 18%, 3%, 3%, 2%, 6% across the three presets, six for six.
+
+### The trap that nearly produced a false confirmation
+
+The first read selected presets with `send_program_change` and got **identical FX
+values for all four presets**. Those values happened to match the P002 hint's FX A
+block exactly — algorithm 19, 37, 120, send 3 — which looked like a four-for-four
+confirmation.
+
+It was not. **Ids 6–21 follow `PRESET_SELECT` (id 223), not Program Change**, and
+223 was pointing at preset 14 the whole time. Preset 14 simply shares P002's FX A
+settings, as presets in one library bank often will. Its FX **B** block differed,
+which is the only reason the coincidence was visible at all.
+
+**This is §148's lesson arriving in a new costume: the reads were addressed
+correctly and identified nothing.** What caught it was reading back id 223 rather
+than assuming the selection had moved. A probe that selects should verify the
+selection landed, every time, for the same reason a dump should assert the preset
+name — and note that the confirming evidence here was an *inconsistency inside a
+match*, not a mismatch.
+
+### Method note
+
+No preset data was written. Selection moves `PRESET_SELECT` (navigation, RAM
+only), which was read first and restored afterwards; the bank is untouched.
+
+Preset *numbers* appear above. The bank, its source media and its preset names do
+not, and must not — they are commercial library material. The shape of a finding
+never needs them.

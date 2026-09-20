@@ -131,34 +131,51 @@ def test_enum_tables_cover_their_full_range():
 
 # --- FX algorithm/parameter name tables + describe_value --------------------
 
-def test_fx_a_algorithm_names_cover_spec_derived_count():
-    # 44 names (ids 0-43), matching the manual's row-major table expansion —
-    # id 44 (the SysEx spec's stated max) has no known name; see the
-    # module-level caveat in eos/params.py.
-    assert len(p.FX_A_ALGORITHM_NAMES) == 44
-    assert set(p.FX_A_ALGORITHM_NAMES) == set(range(44))
-    assert 44 not in p.FX_A_ALGORITHM_NAMES
+def test_fx_a_algorithm_names_cover_the_full_wire_range():
+    # 45 names (ids 0-44), matching the device's own 04h maximum. Value 0 is
+    # "Master Effect A" -- inherit from the master setting, not an effect.
+    # The manual's printed list omits it, which is how these were off by one.
+    assert len(p.FX_A_ALGORITHM_NAMES) == 45
+    assert set(p.FX_A_ALGORITHM_NAMES) == set(range(45))
+    assert p.FX_A_ALGORITHM_NAMES[0] == "Master Effect A"
+    assert p.lookup("E4_PRESET_FX_A_ALGORITHM").maximum == 44
 
 
-def test_fx_b_algorithm_names_exceed_old_spec_max():
-    # 32 names from the newer EOS 4.0 manual; the older SysEx spec's stated
-    # max is only 27 — ids 28-31 are a manual-only, hardware-unconfirmed
-    # extension. Both facts are asserted here so a future edit can't silently
-    # "fix" this apparent inconsistency without re-reading why it exists.
-    assert len(p.FX_B_ALGORITHM_NAMES) == 32
-    assert set(p.FX_B_ALGORITHM_NAMES) == set(range(32))
-    assert p.lookup("E4_PRESET_FX_B_ALGORITHM").maximum == 27
+def test_fx_b_algorithm_names_run_past_the_eos_400_spec_max():
+    # 33 names (ids 0-32). The SysEx spec is EOS 4.00 and stops at 27, which
+    # is exactly "Vibrato"; 4.70 appends five distortion algorithms after it.
+    # Confirmed live: the device's own 04h reports 0..32, so a max of 27 here
+    # would reject five legal values.
+    assert len(p.FX_B_ALGORITHM_NAMES) == 33
+    assert set(p.FX_B_ALGORITHM_NAMES) == set(range(33))
+    assert p.FX_B_ALGORITHM_NAMES[0] == "Master Effect B"
+    assert p.FX_B_ALGORITHM_NAMES[27] == "Vibrato"
+    assert p.lookup("E4_PRESET_FX_B_ALGORITHM").maximum == 32
+
+
+def test_fx_algorithm_names_match_the_values_read_off_the_e4xt():
+    # Three presets read over SysEx on 2026-09-20 and cross-checked against
+    # what the front panel displayed for the same presets. Every one of these
+    # disagrees with the pre-correction tables, so this pins the off-by-one.
+    for value, expected in ((25, "Cavern"), (19, "Spacious Hall"),
+                            (32, "MediumConcert")):
+        assert p.FX_A_ALGORITHM_NAMES[value] == expected
+    for value, expected in ((20, "Delay Stereo 2"), (16, "Symphonic"),
+                            (7, "Slapback")):
+        assert p.FX_B_ALGORITHM_NAMES[value] == expected
 
 
 @pytest.mark.parametrize("value,expected", [
-    (0, "Room 1"), (5, "Plate"), (18, "Spacious Hall"), (43, "DelayVerb 9"),
+    (0, "Master Effect A"), (1, "Room 1"), (6, "Plate"),
+    (19, "Spacious Hall"), (44, "DelayVerb 9"),
 ])
 def test_fx_a_algorithm_name_spot_checks(value, expected):
     assert p.FX_A_ALGORITHM_NAMES[value] == expected
 
 
 @pytest.mark.parametrize("value,expected", [
-    (0, "Chorus 1"), (24, "Dual Tap 1/3"), (31, "Distorted Double"),
+    (0, "Master Effect B"), (1, "Chorus 1"), (25, "DualTap 1/3"),
+    (32, "DistortedDouble"),
 ])
 def test_fx_b_algorithm_name_spot_checks(value, expected):
     assert p.FX_B_ALGORITHM_NAMES[value] == expected
@@ -206,7 +223,7 @@ def test_describe_value_aligned_puts_the_sign_outside_the_digits():
 
     # The "(Name)" suffix still follows, unchanged.
     algo = p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"]
-    assert p.describe_value_aligned(algo, 0) == " 0 (Room 1)"
+    assert p.describe_value_aligned(algo, 0) == " 0 (Master Effect A)"
 
 
 def test_describe_value_aligned_never_breaks_on_a_boundary():
@@ -221,16 +238,17 @@ def test_describe_value_aligned_never_breaks_on_a_boundary():
 
 def test_describe_value_fx_algorithm():
     param = p.lookup("E4_PRESET_FX_A_ALGORITHM")
-    assert p.describe_value(param, 18) == "18 (Spacious Hall)"
+    assert p.describe_value(param, 19) == "19 (Spacious Hall)"
     param_b = p.lookup("MASTER_FX_B_ALGORITHM")
-    assert p.describe_value(param_b, 24) == "24 (Dual Tap 1/3)"
+    assert p.describe_value(param_b, 25) == "25 (DualTap 1/3)"
 
 
 def test_describe_value_fx_parm_and_amt():
     parm0 = p.lookup("E4_PRESET_FX_A_PARM_0")
     assert p.describe_value(parm0, 40) == "40 (Decay Time)"
-    parm2 = p.lookup("E4_PRESET_FX_A_PARM_2")  # not documented -> no name
-    assert p.describe_value(parm2, 5) == "5"
+    # PARM_2 is undocumented in the manual but named in the firmware.
+    parm2 = p.lookup("E4_PRESET_FX_A_PARM_2")
+    assert p.describe_value(parm2, 5) == "5 (FxB==>FxA)"
     amt1 = p.lookup("E4_PRESET_FX_A_AMT_1")
     assert p.describe_value(amt1, 20) == "20 (Sub 1)"
     b_parm2 = p.lookup("MASTER_FX_B_PARM_2")
