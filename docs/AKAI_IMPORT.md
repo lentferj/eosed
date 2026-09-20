@@ -39,7 +39,8 @@ with no invalid words in this region.
 | `0x432d8`-`0x43944` | S1000 file handling; type bytes `0x70`/`0x73` appear as `pea` immediates |
 | `0x43b7c`-`0x441fc` | S3000 file handling; type bytes `0xf0`/`0xf3` |
 | `0x43a94`, `0x4434c` | `"S1000 preset"`, `"S3000 preset"` — browser descriptors, **not** the importer |
-| **`0x47778`-`0x47e44`** | **the program converter** (stack frame `-200`) |
+| **`0x48934`-`0x48a0c`** | **the orchestrator**: header convert, then a keygroup loop |
+| **`0x47778`-`0x47e44`** | **the program-header converter** (stack frame `-200`) |
 | `0x47f08`, `0x48284`, `0x48500` | parallel converters, frames `-208`/`-208`/`-200` |
 | `0x48ab0`-`0x48c00`+ | the conversion lookup tables, packed back to back |
 | `0x3060c` | AKAI name → ASCII converter |
@@ -61,8 +62,8 @@ master/config menu and are a separate thread; they are not the converter.
 ```
   47778:  linkw %fp,#-200          ; 200-byte local buffer for the AKAI program
   47784:  movel %d1,%d7            ; d7 = caller's handle
-  47786:  moveal %a1,%a4           ; a4 = preset-header destination
-  47788:  moveal %a0,%a5           ; a5 = voice/zone destination
+  47786:  moveal %a1,%a4           ; a4 = the preset object (header + 2)
+  47788:  moveal %a0,%a5           ; a5 = the caller's 68-byte SCRATCH struct
   4778a:  lea %fp@(-196),%a1
   47790:  bsrw 0x4771c             ; read the AKAI program into the buffer
 ```
@@ -305,6 +306,61 @@ a different layout, not a shifted one.** Until it is aligned, naming the
 range-only rows would be guessing, and the table above says so rather than
 filling the column in.
 
+## The orchestrator, and what `%a5` actually is
+
+`0x48934`-`0x48a0c` is the top-level import routine, and it corrects a claim made
+earlier in this document.
+
+```
+  48940:  moveal %a1,%a5          ; a5 = the PRESET object being built
+  4894c:  pea 0xf0 / jsr 0x31344  ; locate the AKAI S3000 program (type 0xf0)
+  48994:  lea %fp@(-68),%a0       ; a0 = a 68-byte SCRATCH struct in THIS frame
+  4899c:  moveal %a5,%a1
+  4899e:  bsrw 0x47778            ; program-header converter
+  489a8:  moveb %fp@(-66),%d0     ; = scratch[2] -- the KEYGROUP COUNT
+  489b2:  loop:
+            lea %fp@(-68),%a0     ;   the same scratch struct
+            moveal %a5,%a1        ;   the same preset object
+            bsrw 0x47f08          ;   keygroup converter, ONCE PER KEYGROUP
+          addql #1,%d7 / cmpl / blt loop
+```
+
+Inside `0x47778` the assignment is `moveal %a1,%a4` / `moveal %a0,%a5`. The
+caller passes `a1` = the preset object and `a0` = `&fp@(-68)`. **So `%a4` is the
+preset and `%a5` is the caller's scratch struct — not a voice block, and not any
+output structure.** The earlier note here guessed `%a5` was a "voice/zone
+destination"; it is a **parse context**, 68 bytes, staging program-level values
+for the per-keygroup pass that follows.
+
+Two things fall out and both check:
+
+- `scratch[2]` is the loop bound, and the conversion map has `scratch[2]`
+  receiving AKAI `0x2a`, which mpc2emu's format doc names **number of keygroups
+  (1-99)**. A program-level count becoming the voice count, used as the loop
+  bound. Independent confirmation of that row.
+- AKAI holds pan, LFO rates and the modulation depths **per program** while the
+  E4 holds them **per voice**, so they must be staged once and applied N times.
+  That is exactly what a scratch struct consumed in a loop is for.
+
+### Why the rescaled values are not in the file
+
+mpc2emu searched the preset header and the first six voice blocks for the
+thirteen rescaler rows, under four rounding conventions, requiring two or more
+distinct predicted values. **None matched**, and they control-tested the harness
+on three known-good mappings (the volume law, and both LFO table paths) which all
+found their targets — so the negative is real.
+
+The structure above explains it. The rescales write to a **scratch struct**, and
+what reaches the file is whatever `0x47f08` does with those values afterwards.
+Some pass through unchanged — both LFO rates land in the file exactly as the
+table produces them — and the rescaled ones evidently do not.
+
+**So the thirteen rows are correct about the code and say nothing yet about the
+file.** They are a real description of `0x47778`'s arithmetic and must not be
+used to predict E4B bytes until `0x47f08` is traced. Six of them are additionally
+untestable against that corpus at all: the source byte is constant across all 361
+programs, so their only support is the code.
+
 ## Where the envelopes are NOT
 
 **This function converts the AKAI program HEADER only.** Its buffer is 196
@@ -338,9 +394,9 @@ contiguous and wrong where the compiler interleaved.
 
 - **`0x48ab0` is probably not a conversion table.** Its values are not monotonic
   and do not look like a mapping. It may be a mis-pairing.
-- The `%a5` struct's identity. It is the voice/zone destination by position, but
-  the offsets above are offsets into *that struct*, not into an E4B voice block,
-  and the two have not been aligned here.
+- ~~The `%a5` struct's identity.~~ **Resolved**: it is the caller's 68-byte
+  scratch context, not an output structure. See the orchestrator section. The
+  offsets are into that scratch struct and do not correspond to file offsets.
 - Anything about the S3000 path. Only the `-200` frame function was read. Its
   parallel is located but not traced.
 
