@@ -393,3 +393,18 @@ def test_describe_value_never_raises_across_every_parameters_full_range():
     for param in p.PARAMETERS.values():
         for value in (param.minimum, param.maximum, 0):
             assert isinstance(p.describe_value(param, value), str)
+
+
+def test_master_fx_algorithms_cannot_select_the_inherit_value():
+    """The master block's minimum is 1, not 0, on the device (04h).
+
+    0 is "Master Effect A"/"B" -- inherit the master setting -- so the master
+    itself cannot select it. This is independent evidence for the index-0
+    semantics: were 0 "Room 1", there would be no reason to exclude it.
+    """
+    for name in ("MASTER_FX_A_ALGORITHM", "MASTER_FX_B_ALGORITHM"):
+        assert p.lookup(name).minimum == 1, name
+    # the preset-level ones CAN inherit, and do start at 0
+    for name in ("E4_PRESET_FX_A_ALGORITHM", "E4_PRESET_FX_B_ALGORITHM"):
+        assert p.lookup(name).minimum == 0, name
+    assert p.lookup("MASTER_FX_B_ALGORITHM").maximum == 32

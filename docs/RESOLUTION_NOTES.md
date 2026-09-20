@@ -16019,3 +16019,45 @@ byte-27 refutation likewise only needs the block to be at 60-75 and zero there.
 
 What weakens is any claim about *where each individual field sits inside the
 block*, and it weakens most exactly where mpc2emu said it would.
+
+### §150 addendum — the master FX block cannot select "inherit", which is independent proof of the index-0 semantics
+
+Checking the *master* FX ids (228-243) against the device after correcting the
+preset ones found two mismatches, and the second was not the one being looked for:
+
+```
+  228 MASTER_FX_A_ALGORITHM    device 1..44    ours 0..44   <<<
+  236 MASTER_FX_B_ALGORITHM    device 1..32    ours 0..27   <<<
+        (the other 14 master FX ids agree exactly, defaults included)
+```
+
+The stale maximum on 236 was expected — it is id 14's bug in the second place it
+was written. **The minimum is the interesting one: the master FX algorithm starts
+at 1, not 0, in both blocks.**
+
+That is exactly what §150's index-0 reading predicts and nothing else explains.
+Value 0 is `Master Effect A`/`B`, meaning *inherit the master setting*, so the
+master block cannot select it — it would be inheriting from itself. **Had index 0
+been `Room 1` as the old tables claimed, there would be no reason for the master
+to exclude a plain reverb.**
+
+This matters because it is **independent of the evidence that produced the
+correction**. §150 rested on six algorithm values matched against the front panel,
+all from one bank. This is a different mechanism (a range request), a different
+parameter block, and it agrees. Two of the sixteen master ids were wrong in a way
+that only makes sense if the corrected reading is right.
+
+### What it cost in the TUI, which is not nothing
+
+`EditValueScreen` enforces the declared range on submit:
+
+```python
+  if not (self.minimum <= value <= self.maximum):
+      return
+```
+
+So with a maximum of 27, **typing 28-32 and pressing enter did nothing at all** —
+no error, no status line, the dialog simply refused. The five distortion
+algorithms were unreachable from the editor and the failure was silent. With a
+minimum of 0 on the master blocks, stepping down offered a value the device
+rejects.

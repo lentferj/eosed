@@ -339,7 +339,13 @@ _PARAMS: List[Parameter] = [
     _p(225, "VOICE_SELECT", "master.select", 0, 255, notes="max = 255 - NumOfLinks"),
     _p(226, "SAMPLE_ZONE_SELECT", "master.select", 0, 255),
     _p(227, "GROUP_SELECT", "master.select", 0, 31),
-    _p(228, "MASTER_FX_A_ALGORITHM", "master.fx", 0, 44, default=14),
+    # MINIMUM CORRECTED 0 -> 1 (2026-09-20, device 04h reports 1..44).
+    # Value 0 is "Master Effect A" = inherit the master setting, so the
+    # MASTER block cannot select it -- it would be inheriting from itself.
+    # Independent confirmation of the index-0 semantics: if 0 were "Room 1"
+    # there would be no reason for the master to exclude it.
+    _p(228, "MASTER_FX_A_ALGORITHM", "master.fx", 1, 44, default=14,
+       notes="0 (inherit master) is not selectable here"),
     _p(229, "MASTER_FX_A_PARM_0", "master.fx", 0, 90, default=54),
     _p(230, "MASTER_FX_A_PARM_1", "master.fx", 0, 127, default=64),
     _p(231, "MASTER_FX_A_PARM_2", "master.fx", 0, 127, default=0),
@@ -347,7 +353,11 @@ _PARAMS: List[Parameter] = [
     _p(233, "MASTER_FX_A_AMT_1", "master.fx", 0, 100, default=20),
     _p(234, "MASTER_FX_A_AMT_2", "master.fx", 0, 100, default=30),
     _p(235, "MASTER_FX_A_AMT_3", "master.fx", 0, 100, default=40),
-    _p(236, "MASTER_FX_B_ALGORITHM", "master.fx", 0, 27, default=1),
+    # Same two corrections as id 228 and id 14: minimum 1 (cannot inherit
+    # from itself) and maximum 32 (EOS 4.70 adds five distortion
+    # algorithms after "Vibrato"). Device 04h reports 1..32.
+    _p(236, "MASTER_FX_B_ALGORITHM", "master.fx", 1, 32, default=1,
+       notes="0 (inherit master) is not selectable here; spec (EOS 4.00) says max 27"),
     _p(237, "MASTER_FX_B_PARM_0", "master.fx", 0, 127, default=0),
     _p(238, "MASTER_FX_B_PARM_1", "master.fx", 0, 127, default=3),
     _p(239, "MASTER_FX_B_PARM_2", "master.fx", 0, 127, default=0),
