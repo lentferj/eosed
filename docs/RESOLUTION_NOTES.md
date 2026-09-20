@@ -16739,3 +16739,59 @@ whether or not its input exists, so the check that the input exists cannot live
 inside the estimator.**
 
 15 dB is used here as the threshold and is itself a judgement, not a measurement.
+
+### §155 addendum — the two laws disagree by 0.8 octave in the middle, and the convention is unresolved
+
+Checking mpc2emu's claim that their writer collapses a real AKAI filter onto
+"wide open" found a larger problem, and the first attempt at it repeated an error
+this project had been handed an hour earlier.
+
+**The error:** comparing my **−12 dB points** against their **corners** gave
+byte deltas of 34–52 and was meaningless. A 4-pole is −12 dB at 1.391× its
+corner. mpc2emu made this exact mistake in the opposite direction earlier the
+same night and reported it; it was in front of me when I made it.
+
+**The convention-independent statement**, which assumes nothing about filter
+shape: at byte 200 the −12 dB point measures **4509 Hz** with 31.7 dB of tilt,
+and 5589 Hz at byte 210, so about 4900 Hz at byte 206. Their table places
+**2000 Hz** at byte 205.9, which on any consistent convention is a −12 dB point
+of 2782 Hz.
+
+```
+  ratio 1.76  ->  0.82 octave, at a byte where tilt is ~30 dB
+```
+
+**That is the middle of the range, not the top.** Both calibrations should be
+reliable there. The disagreement is therefore not explained by §155's dead zone.
+
+### The convention gates everything and is answerable for free
+
+Whether their FILFRQ-93 collapse is real depends on what their July extractor
+measured:
+
+- **if their table records corners**, their byte 245 for 7643 Hz is nearly right
+  on my curve (~242) and the collapse is much smaller than feared;
+- **if it records −12 dB points**, 245 is ~20 bytes high and the collapse is real
+  and audible.
+
+Nothing outside their code can settle it, and until it is settled neither side
+can claim a byte is misplaced. **A listening test run before that is spent
+attention**: a null result under the first reading tells nobody anything.
+
+**Caveat on this project's own half, stated because it is load-bearing:**
+converting −12 dB points to corners assumes a **Butterworth** response. The
+E4XT's 4-pole may not be. The 4509 Hz at byte 200 is measured; every corner
+derived from it by dividing by 1.391 is not.
+
+### Three open items, in the order they should be taken
+
+```
+  1. convention   what did each extractor measure?   free, code-only, gates 2 and 3
+  2. middle       0.82 octave apart at byte 206      both nominally reliable
+  3. top          byte > 230 unmeasurable by either  needs a source flat past 20 kHz
+```
+
+This is the same ordering error the project keeps making in miniature: item 3 was
+chased first because it had a number attached, item 2 was found by accident while
+checking something else, and item 1 — the cheapest, and the one that decides
+whether 2 and 3 are even well-posed — surfaced last.
