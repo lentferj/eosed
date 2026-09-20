@@ -800,14 +800,39 @@ equal at all.** Over the 2690 keygroups of the disc behind the reference import:
 | `RlsVel → VEnvRls` | `0x12` | 2 | 28 (1.0%) | thin |
 | `Vel+ → FEnvAtk` | `0x18` | 2 | 12 (0.4%) | thin |
 | `Vel+ → FEnvRls` | `0x19` | 2 | 12 (0.4%) | thin |
-| `Key+ → VEnvRls` | `0x13` | 1 | **0** | **none — always zero** |
-| `RlsVel → FEnvRls` | `0x1a` | 1 | **0** | **none — always zero** |
-| `Key+ → FEnvRls` | `0x1b` | 1 | **0** | **none — always zero** |
+| `Key+ → VEnvRls` | `0x13` | 1 | **0** *on this disc* | **see below — non-zero elsewhere** |
+| `RlsVel → FEnvRls` | `0x1a` | 1 | **0** *on this disc* | none on any disc checked |
+| `Key+ → FEnvRls` | `0x1b` | 1 | **0** *on this disc* | none on any disc checked |
 
 **Three of the nine cannot be checked against this material at all**, because the
 source field is zero on every keygroup — and the guard means EOS emits nothing
 for them, so the output is equally silent. Three more rest on 12–28 keygroups
 holding two distinct values.
+
+**"Zero on this disc" is not "zero".** mpc2emu checked a different AKAI source
+ISO — 13 programs, 205 keygroups — and found `0x13` reading **−5 on 17 of them**,
+every keygroup of one program. Both counts are correct; they are different discs.
+A prevalence without its corpus named is not a measurement, and the column above
+now names one.
+
+**That makes `0x13` testable end to end, which nothing here could do.** The
+reasoning that it was unverifiable was sound *about this corpus*: EOS emits no
+cord for a zero source byte, so EOS's own output can never exercise the row. It
+was never a statement about the field. With a program that sets the byte, the
+test is one import and one SysEx read:
+
+```
+  import that program on the E4XT through EOS's own importer,
+  then read the voice's cords.
+
+  a Key+ -> 0x4B cord with amount -5   -> this trace's reading is confirmed
+  a cord with a DECAY destination      -> refuted; the AKAI field is the
+                                          key->decay dependence its own
+                                          documentation names
+```
+
+It needs an AKAI disc mounted and a front-panel import, so it is Jan's to
+schedule, but it needs no measurement rig — three bytes of one cord decide it.
 
 This does not weaken the *derivation*: these offsets come from instructions, not
 from correlating fields against output, so a constant field cannot mislead the
