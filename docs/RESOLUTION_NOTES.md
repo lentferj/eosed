@@ -16520,3 +16520,80 @@ them is a link field", which is the status the thirteen rescale rows had before
 the corpus check — and three of those turned out to be untestable rather than
 wrong. Some of the eight should be expected to land the same way: present in the
 map, never exercised, indistinguishable from absent.
+
+## §154 — Key+ and Key~ share a span; only the pivot differs (2026-09-20, live)
+
+Measured on mpc2emu's purpose-built `CD7-KTPOLAR`: seven presets, one cord each
+at slot 6 (`Key+`/`Key~` → `FilFreq`), three root-matched zones at keys 36, 60
+and 84 so nothing is resampled. 4-pole lowpass, corner ~1.8 kHz unmodulated,
+resonance zero.
+
+### Raw
+
+```
+  preset       k36 Hz    k60 Hz    k84 Hz      ratio 36->84    octaves
+  CTRL 0       1820.0    1820.0    1820.0          1.000         0.000
+  KEY+ 32      2393.8    2832.3    3596.9          1.503         0.587
+  KEY~ 32      1478.5    1820.0    2218.5          1.501         0.585
+  KEY+ 64      3218.5    5276.9    9864.6          3.065         1.616
+  KEY~ 64      1230.8    1820.0    2535.4          2.060         1.043
+  KEY+ 96      4675.4   12887.7   saturated           —             —
+  KEY~ 96       960.0    1820.0    3240.0          3.375         1.755
+```
+
+**The control is flat** — 1820.0 Hz at all three keys, 0.0 cents/octave. The rig
+does not vary with key, so the rest means something.
+
+### The answer
+
+**At amount 32, the only amount where both forms stay fully inside the band:**
+
+```
+  Key+ spans 0.587 octaves over keys 36 -> 84
+  Key~ spans 0.585 octaves
+  Key~/Key+ = 0.997        (1.0 = shared span;  2.0 = bipolar over the key range)
+```
+
+**The family shares a span.** A bipolar `Key~` — mapping the key range onto
+−1..+1 where `Key+` maps it onto 0..+1 — would have covered **twice** the
+octaves at the same amount. It covers the same.
+
+**Only the pivot differs.** `Key~` leaves the corner at exactly the unmodulated
+1820.0 Hz at **key 60**, on all three amounts independently. `Key+` never reaches
+1820 Hz anywhere in range, so its pivot sits at or below key 0.
+
+This is the same structure as the velocity family measured 2026-09-01 —
+`Vel+` pivoting at 0, `Vel<` at 127, `Vel~` at 89.4, one shared span — and it is
+what mpc2emu's fix assumed. **Their family read is correct as it stands and needs
+no scale factor.**
+
+Linearity in amount checks too: `Key~` spans 0.585 / 1.043 / 1.755 octaves at
+amounts 32 / 64 / 96, against 1.0 / 2.0 / 3.0 expected ratios — 1.78 and 3.00
+measured.
+
+### What the amounts above 32 cannot say
+
+`Key+` at amounts 64 and 96 drives the corner out of the measurable band: the
+passband-to-6.4–12.8 kHz tilt falls to 12.0 dB at amount 64 key 84 and to 1.1 dB
+at amount 96 key 84, which is a filter wide open. Its apparent 1.616 octaves at
+amount 64 is therefore **not** evidence of a larger span, it is an estimator
+running out of spectrum. Only the amount-32 pair carries the result.
+
+### Three traps, all of them ones this project had already recorded
+
+1. **`PRESET_SELECT` moves the editor's pointer; the engine plays what Program
+   Change selected.** The first full run — 21 captures, all seven presets — played
+   **preset 0 every time**. Every corner read exactly 1820.0 Hz and every peak
+   −22.8 dBFS. §150 found this for parameter *reads*; it applies to playback too,
+   in the opposite direction, and it produced a perfectly self-consistent table
+   of zeros.
+2. **Cord slot 6 is ids 147/148/149**, not 135/136/137. An assert on the
+   destination caught `(96, 48, 0)` — `Lfo1~ → Pitch`, slot 2 — before it reached
+   a capture.
+3. **Indexing a slot instead of searching for the cord.** Slot 0 reads
+   `(10, 64, 0)` identically on all seven presets; the planted cord is at slot 6.
+   This is the defect mpc2emu had just fixed on their own side, made again here
+   within the hour.
+
+The identical-peaks signature is what exposed (1): 21 captures agreeing to
+0.1 dBFS is not a measurement, it is one measurement repeated.
