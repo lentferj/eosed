@@ -16597,3 +16597,76 @@ running out of spectrum. Only the amount-32 pair carries the result.
 
 The identical-peaks signature is what exposed (1): 21 captures agreeing to
 0.1 dBFS is not a measurement, it is one measurement repeated.
+
+### §154 addendum — the estimator, calibrated; and where the 0.581-vs-0.713 disagreement lives
+
+mpc2emu reduced §154's captures to a full-scale key-tracking slope and got
+**0.5827 / 0.5807 / 0.5804** across three amounts, against their standing
+constant of **0.713** — which is not a guess: measured 2026-06-12 at r 0.9994 and
+independently predicted to 0.07% from an unrelated sensitivity figure. They asked
+two questions about the estimator before either number moves. Both are answered.
+
+### The estimator is log-linear, so §154's ratio is safe
+
+Cutoff byte swept on the control preset, cord amount 0, key 60 throughout:
+
+```
+  byte  80 -> 618.5 Hz     byte 140 -> 1578.5     byte 180 -> 3156.9
+  byte 100 -> 843.1        byte 147 -> 1820.0     byte 200 -> 4612.3
+  byte 120 -> 1175.4       byte 160 -> 2263.1
+
+  log2(corner) vs cutoff byte:  0.024010 oct/byte,  r2 0.998835,  max resid 64 cents
+  FFT bin resolution 1.5385 Hz  (0.08% at 1820 Hz)
+```
+
+**The round numbers are real bin centres, not a coarse grid** — 1820.0 Hz is bin
+1183 and 960.0 Hz is bin 624 exactly. And because the estimator tracks the byte
+log-linearly, its offset is **multiplicative**: it cancels in any ratio. §154's
+polarity result is a ratio of two numbers taken the same way and is untouched by
+everything below.
+
+### The captures are self-consistent with the cord model
+
+Predicting each preset from the measured cutoff law plus §139–§141's rule that a
+100% cord moves its destination across its full range:
+
+```
+  KEY+ 32   predicted 0.5785 oct over keys 36->84,  measured 0.5873   +1.5%
+  KEY~ 32   predicted 0.5785                        measured 0.5853   +1.2%
+  KEY~ 96   predicted 1.7587                        measured 1.7549   -0.2%
+  KEY~ 64   predicted 1.1570                        measured 1.0425   -9.9%   <- the odd one
+```
+
+Three of four agree to 1.5%, and `KEY~ 64` is the point mpc2emu independently
+flagged as 11% low. **So the captures, the cutoff law and the cord model all
+agree with each other.** The disagreement with 0.713 is not in the measurement.
+
+### Where it does live
+
+```
+  full cutoff range, measured here      6.12 octaves over bytes 0..255
+  E4B_FORMAT.md (57 Hz .. 20 kHz)       8.45 octaves
+  ratio                                 1.381
+
+  0.713 / 0.5785                        1.232
+```
+
+**Both discrepancies are in the cutoff law, not in the key-tracking arithmetic.**
+A full range 1.38× wider than measured here would raise the predicted slope by
+the same factor, which overshoots 0.713 rather than reaching it — so the two do
+not reconcile by a single scale either, and at least one more assumption is
+wrong.
+
+**Caveat on my own number, stated plainly:** `0.024010 oct/byte` is a −12 dB
+point, not a −3 dB corner, and its usable span here is bytes 80–200. Above that
+the passband-to-6.4–12.8 kHz tilt falls from 73 dB to 32 dB and the estimate
+compresses. Extrapolating it across the full 0–255 to get "6.12 octaves" assumes
+log-linearity well outside where it was checked, and that assumption is exactly
+the kind this project has been wrong about twice tonight.
+
+**Nothing in the code changes on this.** A constant with two independent
+derivations is not overturned by one evening, and mpc2emu is right to record it
+as open rather than switch. What this addendum establishes is narrower and
+firmer: **the estimator is sound, the captures are self-consistent, and the
+disagreement is in the byte→Hz cutoff law that both sides inherited rather than
+in anything measured tonight.** That is where the next measurement should point.
