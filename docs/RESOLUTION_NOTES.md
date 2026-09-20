@@ -16177,3 +16177,87 @@ rungs land within 1.4%. What changes is the meaning of extending it downward:
 **This is the second time today a number was well measured and badly defined.**
 The first was mpc2emu's span convention; this is the same shape — the measurement
 was sound and the quantity it named was not.
+
+## §153 — Key+ vs Key~: blocked, because zone key range cannot be set live (2026-09-20, live)
+
+The measurement mpc2emu wanted — whether the key-polarity cord family shares a
+span, which is load-bearing under two thirds of every third-party bank they read
+— **did not happen.** Recording why, and three things the failed attempt
+established.
+
+### The blocker
+
+```
+  select zone 0, write keylow=0 keyhigh=127   ->  readback 0/127     accepted
+  play key 36                                 ->  -70 dBFS           silent
+  play key 69                                 ->  -13 dBFS           sounds
+  force a reload, program change 1 -> 0       ->  still -70 at key 36
+```
+
+**The edit is accepted, stored, reads back correctly, and the live voice mapping
+does not follow it.** This project already records that a remote edit is not
+reflected until the preset is touched from the front panel. This is a sharper
+form: not "the LCD disagrees with the edit" but **"the key mapping disagrees with
+the edit"**, and a program-change round trip does not flush it.
+
+So on a bank whose zones are one key wide — which `CD4-DCYFAST`'s are, by design,
+since any non-root key resamples the noise and tilts its spectrum — **there is no
+second key to measure at and no way to make one over SysEx.** The remaining route
+is a purpose-built two-key bank, which needs a card crossing.
+
+### The run that produced a full set of numbers from nothing
+
+The first attempt completed: six captures, three conditions, a corner-frequency
+estimator, and this table.
+
+```
+  run        k36 Hz    k84 Hz   ratio   cents/oct
+  control    2037.5    2822.5   1.385       141.1
+  keyplus    3297.5    2553.8   0.774      -110.6
+  keytilde   2847.5    2480.0   0.871       -59.8
+```
+
+**Every one of those six captures was at the noise floor.** RMS −83.5 dBFS on all
+six, identical band profiles; the E4XT was producing nothing, because the zone
+was never widened. The estimator returned corner frequencies for room noise, and
+the three conditions differed because noise differs.
+
+Two things made it look like a result rather than a failure: the numbers were
+plausible in magnitude, and the control was *non-zero* in a way that invited
+explanation rather than suspicion. What exposed it was checking the **absolute
+level**, which no part of the analysis needed.
+
+**A fit to a non-existent quantity still returns a number** — recorded earlier
+tonight about a span convention, and here the non-existent quantity was the
+signal itself. The generalisation: an estimator that cannot fail loudly needs a
+separate check that its input exists at all, and that check is almost never part
+of the estimator.
+
+### Two protocol findings
+
+**`SAMPLE_ZONE_SELECT` (id 226) reads 16383 by default, and zone-scoped
+parameters then address nothing while reading back as written.** The first run
+wrote `E4_GEN_KEY_LOW`/`HIGH` with no zone selected; both read back correct and
+neither had any effect. §148 in a third costume — the readback confirms the
+address, not the effect.
+
+**Zone selection breaks voice-level READS but not WRITES.** With zone 0 selected,
+writes to the cord ids read back as `(0,0,0)`; re-selecting the voice made them
+read `(8,56)` immediately. The writes had landed throughout. Our existing note
+says zone select "breaks voice-level addressing", which is too coarse: code that
+writes a voice parameter, reads it back to verify and sees zero will conclude the
+write failed and retry, wrongly.
+
+### What caught it
+
+mpc2emu's instruction to read the cord's source, destination **and** amount back
+after writing — not to trust that the write returned cleanly. The assert fired on
+`(0,0,0)` against the expected `(8,56,0)` and stopped the second run before six
+more captures reached the analysis.
+
+### Machine state
+
+`CD4-DCYFAST` verified rung by rung afterwards: Dcy1 rate reads 8, 10, 12 … 36
+across presets 0–14, matching the ladder exactly. Preset 0's zone, non-transpose,
+filter type, cutoff and cord all back to their original values. Nothing was
+written to disk at any point.
