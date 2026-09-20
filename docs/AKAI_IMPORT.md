@@ -786,6 +786,41 @@ lands at `voice[190]`, the start of the 20 × 4-byte modulation matrix.
 All use the same rescaler, `round(clamp(v, −50, 50) × scale/50)`, into the amount
 byte.
 
+### Which of the nine a corpus can actually check
+
+All nine are read from the code with equal confidence — same rescaler, same
+guard, source and destination as literal constants. **Their verifiability is not
+equal at all.** Over the 2690 keygroups of the disc behind the reference import:
+
+| cord | AKAI byte | distinct values | non-zero | corpus evidence |
+|---|---|---:|---:|---|
+| `Vel+ → VEnvAtk` | `0x10` | 14 | 310 (11.5%) | **yes** |
+| `Key+ → FilFreq` | `0x08` | 10 | 201 (7.5%) | **yes** |
+| `Vel+ → VEnvRls` | `0x11` | 5 | 84 (3.1%) | **yes** |
+| `RlsVel → VEnvRls` | `0x12` | 2 | 28 (1.0%) | thin |
+| `Vel+ → FEnvAtk` | `0x18` | 2 | 12 (0.4%) | thin |
+| `Vel+ → FEnvRls` | `0x19` | 2 | 12 (0.4%) | thin |
+| `Key+ → VEnvRls` | `0x13` | 1 | **0** | **none — always zero** |
+| `RlsVel → FEnvRls` | `0x1a` | 1 | **0** | **none — always zero** |
+| `Key+ → FEnvRls` | `0x1b` | 1 | **0** | **none — always zero** |
+
+**Three of the nine cannot be checked against this material at all**, because the
+source field is zero on every keygroup — and the guard means EOS emits nothing
+for them, so the output is equally silent. Three more rest on 12–28 keygroups
+holding two distinct values.
+
+This does not weaken the *derivation*: these offsets come from instructions, not
+from correlating fields against output, so a constant field cannot mislead the
+read. It bounds the *verification*, which is a different thing and easy to
+conflate when both are reported as "confirmed".
+
+The check is one line — a distinct-value count per source field — and it comes
+from mpc2emu, who found the general form while auditing their own voice-window
+offsets: **a field that barely varies cannot identify its own offset, however
+many rows agree.** Their velocity window is 94.4% `(0,127)` across 2530 voices
+and its high byte takes three distinct values in the entire corpus, so agreement
+there was measuring the corpus's uniformity rather than the offset.
+
 ### RETRACTED: keygroup `0x08` is read, and EOS does not invent key tracking
 
 An earlier version of this document listed keygroup `0x08` among the fields the
