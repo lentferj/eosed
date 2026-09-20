@@ -549,6 +549,10 @@ everywhere. **The strength column is.**
 | law | test | strength | agreement | distinct | P(chance) |
 |---|---|---|---:|---:|---:|
 | `header[27]` volume, input → output | **exact** | **definitive** | 100% (363/363) | — | — |
+| `PZT[0]` Attack1 rate, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
+| `PZT[6]` Decay2 rate, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
+| `PZT[7]` Decay2 level, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
+| `PZT[8]` Release1 rate, input → output | **exact** | **definitive** | 100% (141/141) | — | — |
 | `PZT[8]` Release1 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 49 | 2.4 × 10⁻⁹ |
 | `PZT[6]` Decay2 rate ∈ decay table | membership | **strong** | 100% (2800/2800) | 42 | 4.0 × 10⁻⁸ |
 | `PZT[0]` Attack1 rate ∈ attack table | membership | **strong** | 100% (2800/2800) | 30 | 3.8 × 10⁻⁷ |
@@ -591,9 +595,73 @@ it confirms the output could have come from the documented law, not that it did.
 The distinction matters because a membership test cannot detect a second
 transform whose image lies inside the first.
 
-**What would strengthen the rest:** the AKAI source programs for this same disc.
-With them every row becomes exact rather than membership, the way the volume row
-already is. The `.P3` files on the bench are from a different set.
+### The membership rows are now exact
+
+mpc2emu supplied the source disc, and with it every envelope row becomes an exact
+input-to-output check rather than a membership test.
+
+**One trap, and it is caused by this importer's own behaviour: voice *i* is not
+keygroup *i*.** The zone de-duplication at `0x47f08` breaks the correspondence, so
+a naive positional comparison over all programs reports ~2% mismatches that are
+purely alignment. **Restricted to single-keygroup programs the correspondence is
+unambiguous**:
+
+```
+  141 single-keygroup programs, matched to EOS presets by name
+
+    Attack1 rate            141/141   100.00%
+    Decay2 rate             141/141   100.00%
+    Decay2 level (sustain)  141/141   100.00%
+    Release1 rate           141/141   100.00%
+    TOTAL                   564/564   zero mismatches
+```
+
+Predicted straight from the AKAI keygroup bytes `0x0c`–`0x0f` through the
+firmware tables, compared against what EOS actually wrote. **This has a
+false-positive rate of zero rather than 2.4 × 10⁻⁹**, and it closes the loophole
+the membership tests left open — a second transform whose image lies inside the
+first would show here and does not.
+
+mpc2emu ran the same comparison independently and got the same 564/564 from their
+own implementation.
+
+**Name matching needs one detail**: EOS writes the 12-character AKAI name into a
+16-byte field followed by a NUL, so the field is not simply space-padded; cut at
+the NUL before comparing or nothing matches at all.
+
+## How mpc2emu's own converter compares to EOS
+
+The other half of the question: not "did we decode EOS correctly" but "does an
+independent converter agree with it". Measured by mpc2emu against the same
+material, **disagreements included**, which is the half that carries the
+information.
+
+| field | method | corpus | result |
+|---|---|---|---|
+| preset volume (byte 27) | exact in → out | 363 presets | **363/363** after adopting the firmware formula |
+| `filter_resonance` | identical bytes | 1122 voices | **100% identical** |
+| pitch | frequency invariant, \|Δ\| ≤ 0.5 semitone | 2731 zones | **98.6%**; median 0.050, p95 0.300, signed mean +0.001 |
+| zone counts | equal per preset | 359 presets | 336 equal, **23 differ** |
+| `filter_cutoff` | median ratio | 1122 voices | ours **1.88× brighter** |
+| `filter_env_cents` | median | 1122 voices | ours **0**, EOS **797** |
+| amp env decay | median ratio | 1122 voices | ours 1.93× longer — **withdrawn, see below** |
+| filter keytrack | median | 1122 voices | ours 0.000, EOS 0.118 |
+
+**Four caveats that belong with the numbers rather than under them** (mpc2emu's,
+and they asked for them to be carried):
+
+1. **The 1.93× is withdrawn as a statement about EOS's conversion.** Both banks
+   were read by *their* parser, and EOS's decay arrives as `Dcy1 rate 0` + `Dcy2`
+   — the plateau this document shows is hardcoded — which their reader handles on
+   a span-blind branch. It remains a real difference between two files as one
+   parser reads them, and nothing more.
+2. **The 23 differing zone counts are not a defect on either side.** They are the
+   zone de-duplication described above.
+3. **`filter_env_cents` ours-0 is a documented rule** (depth 0 means no filter
+   envelope) meeting an importer that writes a sweep anyway. A disagreement, not
+   a gap.
+4. **Everything except volume and pitch is a median**, which hides the
+   distribution.
 
 ## Confidence, and what is NOT established
 
