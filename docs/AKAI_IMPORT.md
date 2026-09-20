@@ -815,11 +815,25 @@ read. It bounds the *verification*, which is a different thing and easy to
 conflate when both are reported as "confirmed".
 
 The check is one line — a distinct-value count per source field — and it comes
-from mpc2emu, who found the general form while auditing their own voice-window
-offsets: **a field that barely varies cannot identify its own offset, however
-many rows agree.** Their velocity window is 94.4% `(0,127)` across 2530 voices
-and its high byte takes three distinct values in the entire corpus, so agreement
-there was measuring the corpus's uniformity rather than the offset.
+from mpc2emu, who found it auditing their own voice-window offsets. Their first
+phrasing was *"a field that barely varies cannot identify its own offset"*; they
+then sharpened it, on the strength of the rows above, to the form that actually
+covers them:
+
+> **A field that barely varies cannot identify anything downstream of it** — not
+> the offset, not the destination, not the arithmetic.
+
+The sharper form is the one that matters here. `0x1a` is not an offset problem:
+its offset is a literal in the instruction stream and is not in doubt. What its
+all-zero column cannot support is the *destination* and the *scale* that offset
+feeds, and the first phrasing would have passed it.
+
+Their velocity window is 94.4% `(0,127)` across 2530 voices, with its high byte
+taking three distinct values in the entire corpus, so agreement there was
+measuring the corpus's uniformity rather than anything about the field. Three
+instances turned up in one evening — that window, the three all-zero cords above,
+and the six of the thirteen header rescales whose source byte is constant across
+361 programs.
 
 ### RETRACTED: keygroup `0x08` is read, and EOS does not invent key tracking
 
