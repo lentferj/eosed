@@ -891,6 +891,35 @@ rescaled program-header values found nothing in the header or the voice blocks:
 several of them are **cord amounts**, which sit in the matrix beside a source and
 a destination byte rather than at a named field offset.
 
+## The AKAI source offsets ARE file offsets — unlike the other two importers
+
+A later finding in `ENSONIQ_ROLAND_IMPORT.md` — that Ensoniq's source offsets
+index EOS's in-memory structure rather than the disc file — was generalised into
+a rule. **It does not apply to this document, and the exception is provable.**
+
+The nine cords here read AKAI keygroup bytes `0x08`, `0x10`–`0x13` and
+`0x18`–`0x1b`. mpc2emu's parser, written from library discs and with no knowledge
+of this trace, independently places the **amp envelope at `0x0c`–`0x0f`** and the
+**filter envelope at `0x14`–`0x17`**. Laid together:
+
+```
+  0x0c-0x0f   amp envelope        (their parser)
+  0x10-0x13   four cords          (this trace)
+  0x14-0x17   filter envelope     (their parser)
+  0x18-0x1b   four cords          (this trace)
+```
+
+**Two blocks of four, each immediately following an envelope block, and the four
+cords appear in the same order both times** — `Vel+`→attack, `Vel+`→release,
+`RlsVel`→release, `Key+`→release. That regularity is a relation a wrong reading
+cannot produce: a misplaced base would scatter the cords rather than land them
+twice in the same pattern adjacent to two independently-located blocks.
+
+So for AKAI the file is parsed directly — flat, no loader building an
+intermediate — and **the source column of this document is checkable against a
+disc**, which is why mpc2emu's corpus work on it succeeded where the same
+approach failed on Ensoniq. (Observation theirs; the adjacency verified here.)
+
 ## Confidence, and what is NOT established
 
 **High — read directly and checked against data:**

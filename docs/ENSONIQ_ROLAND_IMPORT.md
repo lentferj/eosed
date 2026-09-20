@@ -180,6 +180,14 @@ into the file."** See the address-space section: for Ensoniq this was tested and
 they are *not* file offsets. For Roland it is untested and should be assumed the
 same.
 
+**The AKAI importer is the exception and it is proven, not assumed** — see
+`AKAI_IMPORT.md`. Its cords sit in two blocks of four, each immediately after one
+of the two envelope blocks mpc2emu's parser independently locates in the file, in
+the same order both times. That adjacency only holds if AKAI keygroup bytes are
+read straight from the disc. **So "EOS importers do not use file offsets" is
+false as a general rule** — AKAI parses a flat file directly, and only the other
+two build an intermediate.
+
 ### Preset header — all three importers side by side
 
 | header byte | AKAI | Ensoniq | Roland |
