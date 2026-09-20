@@ -195,6 +195,55 @@ conversion shape should not be assumed to resemble either.
 Corpus available: two Roland S-700 library ISOs (~1.1 GB) under
 `Dokumente/SYNTHS/K2000R/Soundsets/`.
 
+## Corpus status — the two halves validated very differently
+
+**The DESTINATION half is fully validated; the SOURCE half is barely touched.**
+This distinction matters and was easy to blur, because one cross-check arrived
+looking like it validated the whole zone map.
+
+### Destination (E4 zone fields) — independently confirmed, 11 of 11
+
+mpc2emu checked the zone map against their 10 142-entry corpus of real E4B zone
+entries. Adding the `+2` this document already derives for the header base, the
+fields line up **eleven for eleven with no misses** — a firmware trace and a file
+corpus neither of which had seen the other.
+
+It also **resolved two byte pairs their corpus could only mark unknown**. Their
+`[7]`/`[8]` — this document's velocity-fade pair — are non-zero on 36 zones and
+occur in **mirrored pairs**: two samples over one key range and one full velocity
+span, one fading in as the other fades out, 18 pairs of them. The trace supplies
+the name, the corpus supplies the semantics, and neither half was sufficient
+alone.
+
+Their `[3]`/`[4]` — the key-fade pair — are zero across all 10 142 entries, so
+**that pair rests on this firmware trace alone** and no corpus agreed with it.
+
+### Source (Ensoniq file offsets) — one confirmation only
+
+Checked against a real Ensoniq EPS/ASR disc (a Translator-formatted ISO, type-3
+Instrument files under a 26-byte directory entry at block 3):
+
+- **The name at `+10` is confirmed**, and confirmed three times over: the
+  instrument block, a following block at `+656`, and a wavesample block at
+  `+876` each carry their name exactly ten bytes in. That is the firmware's
+  `lea %a0@(10),%a0` seen in real data.
+- **Every other source offset in this document is unconfirmed.** `+66`
+  (transpose), `+170` (root key), `+208`/`+225` (volume and its boost flag),
+  `+221` (pan), `+274`/`+276` (key range), layer `+40`/`+42` (velocity) have
+  **not** been located in a real file. A naive base-plus-offset read of a real
+  instrument produces implausible values (key low 1, key high 1), so the base is
+  wrong, the structure is reached differently, or the firmware reads an unpacked
+  copy.
+
+**One complication that must be solved first:** the on-disc data is
+**word-interleaved** — every parameter byte is followed by a zero byte, so
+"CLARINET" appears as `43 00 4c 00 41 00 ...`. The firmware's name converter
+reads *consecutive* bytes, which on this layout would yield `C L A R I N E T`
+with spaces between. So the firmware is either de-interleaving before the
+structures in this document are addressed, or reading from a different
+representation entirely. **Until that is settled, no source offset here should
+be trusted**, including the ones that look reasonable.
+
 ## What is not established
 
 - **Roland's entire parameter mapping.** Nothing below the module map above.
