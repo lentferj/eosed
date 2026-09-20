@@ -16670,3 +16670,72 @@ as open rather than switch. What this addendum establishes is narrower and
 firmer: **the estimator is sound, the captures are self-consistent, and the
 disagreement is in the byte→Hz cutoff law that both sides inherited rather than
 in anything measured tonight.** That is where the next measurement should point.
+
+## §155 — The cutoff law accelerates, and the region both converters aim at is unmeasurable (2026-09-21, live)
+
+mpc2emu asked for the tilt at bytes 217–255, because that is where their own
+July calibration is thinnest and — their corpus number — **53.6% of their
+AKAI-converted voices carry a chosen cutoff byte, 22 of 41 sitting at byte 245**,
+while EOS's own importer concentrates at byte 221 on 814 voices. Measured on
+KTPOLAR's control preset, cord amount 0, key 60, cutoff byte swept:
+
+```
+  byte  corner Hz   tilt dB    local slope
+   200     4509.2      31.7      0.02572
+   210     5589.2      25.3      0.03098
+   217     6843.1      20.7      0.04172
+   221     7450.8      17.4      0.03069
+   230     9563.1      12.0      0.04001   <- unusable
+   240    15436.9       5.6      0.06908   <- unusable
+   245    19946.2       2.8      0.07395   <- unusable
+   250        —         0.8                <- no corner in band
+   255        —        -0.2                <- no corner in band
+```
+
+**At byte 245 the tilt is 2.8 dB.** The filter is open; there is no corner in the
+band to estimate. Any Hz value reported there — theirs from July, mine tonight —
+is an estimator returning a number for an input that is not present. My earlier
+extrapolation predicted 7.4 dB at byte 240 and zero near 252; measured 5.6 and
+0.8. The extrapolation was sound and slightly conservative.
+
+**So the byte this project's writer most often chooses sits in the region where
+neither calibration can be trusted.** That is a sharper problem than the constant
+disagreement it came from, and it lands on every AKAI→E4B conversion already
+produced.
+
+### And the law genuinely accelerates
+
+Restricting to points with **tilt ≥ 15 dB** — the acceptance rule mpc2emu
+proposed, applied here for the first time:
+
+```
+  bytes  80-200   slope 0.02384 oct/byte   (8 points)
+  bytes 200-221   slope 0.03508 oct/byte   (4 points)
+  quadratic over all 11 usable points: r2 0.999017, max resid 81.5 cents
+```
+
+**The slope rises by ~47% between the two regions, inside the trustworthy band.**
+So §154's addendum was wrong to treat `0.024010 oct/byte` as the law: it is the
+law's *local* slope over 80–200, and extrapolating it across 0–255 to get "6.12
+octaves" understates the total. mpc2emu's July observation that a single
+exponential "badly underestimates the top" is **confirmed, and confirmed in a
+region where the tilt is still 17–31 dB**, which their own top-end points were
+not.
+
+**Both halves of the earlier disagreement therefore resolve the same way**: the
+byte→Hz law is not a single exponential, my 6.12-octave figure was an
+extrapolation of a local slope, and their top-end points are in a region no
+noise-source measurement can reach. Neither calibration was wrong about its own
+measurement; both were wrong about the shape between them.
+
+### The rule that produced this
+
+Record the tilt beside every point and **refuse to report a corner for any point
+below a stated threshold**, rather than reporting one and caveating it. mpc2emu
+proposed it; it is the same shape as checking the absolute level before fitting
+(§153) and checking that conditions differ before trusting a flat control (§154).
+Three sessions, three versions of one rule: **an estimator returns a number
+whether or not its input exists, so the check that the input exists cannot live
+inside the estimator.**
+
+15 dB is used here as the threshold and is itself a judgement, not a measurement.
