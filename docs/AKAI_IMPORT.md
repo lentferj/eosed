@@ -245,6 +245,66 @@ The two shapes are AKAI's signed ±50 controls mapping onto EOS ranges of ±77,
 `clamp(round(clamp(v,-50,50) * 64/50), -64, +63)` — AKAI's ±50 pan onto EOS's
 ±64.
 
+## The mapping in human terms
+
+What a person sees on the AKAI's screen, what happens to it, and what they see on
+the E4's. **The AKAI names are AKAI's own** (from mpc2emu's
+`docs/AKAI_S3000_FORMAT.md`, which derives them from the S1000 structure document
+and confirms them against 5,124 library programs).
+
+### Confirmed both ends
+
+| AKAI parameter (range) | formula | E4 parameter (range) |
+|---|---|---|
+| `PRLOUD` loudness `0x19` (0–99) | `clamp((v − 99) × 8 / 10, −96, +10)` | **Preset Volume** (−96…+10 dB) |
+| `PANPOS` pan `0x18` (−50…+50) | `clamp(round(clamp(v,−50,50) × 64/50), −64, +63)` | **Pan** (−64…+63) |
+| LFO1 Rate `0x21` (0–99) | `T[clamp(v,0,99)]`, table `0x48b24` | **LFO1 Rate** (0–107 observed) |
+| LFO2 Rate `0x1D` (0–99) | same table `0x48b24` | **LFO2 Rate** (0–107 observed) |
+| program name `0x03-0x0e` (12 chars, AKAI charset) | `charset[c]`, non-printable → space | **Preset name** (16 bytes, space-padded) |
+| keygroup count `0x2a` (1–99) | direct | **voice count** |
+
+`PRLOUD` and `PANPOS` are the two that can be stated with full confidence at both
+ends: the AKAI side is named and confirmed independently, and the E4 side is
+pinned by the destination range (−96…+10 is `E4_PRESET_VOLUME` and nothing else;
+−64…+63 is the pan byte). **mpc2emu reimplemented the `PRLOUD` row and matched
+EOS on 363 of 363 presets, zero differences.**
+
+The two LFO rows are confirmed on the E4 side by corpus match rather than by
+range (26 distinct values on the LFO1 path, 11 on LFO2, both satisfying
+`dest == T[src]` across 361 programs).
+
+### E4 side identified only by its range
+
+These have a confirmed formula and a confirmed AKAI source offset, but the E4
+parameter is inferred from the destination range alone. **The AKAI names are not
+established for these offsets** — mpc2emu's field table does not cover them — so
+the left column gives the offset, not a name.
+
+| AKAI offset (range) | formula | E4 destination range |
+|---|---|---|
+| `0x1a` (−50…+50) | `round(clamp(v,−50,50) × 77/50)` | ±77 |
+| `0x5c`, `0x5d` (−50…+50) | `round(clamp(v,−50,50) × 75/50)` | ±75 |
+| `0x59`, `0x5a`, `0x5b`, `0x5f` (−50…+50) | `round(clamp(v,−50,50) × 48/50)` | ±48 |
+| `0x5e` (−50…+50) | `round(clamp(v,−50,50) × 25/50)` | ±25 |
+| `0x1e`, `0x22`, `0x24`, `0x25`, `0x26` (0–99) | `round(clamp(v,0,99) × 32/99)` | 0–32 |
+| `0x4b` (−24…+24 after clamp) | `clamp(v, −24, +24)` | **Preset Transpose** (−24…+24) |
+
+The ±50 group is AKAI's signed modulation depths; the 0–99 group is its unsigned
+depths. That the E4 targets are ±77, ±75, ±48, ±25 and 0–32 rather than one
+common range is itself informative — these are per-destination full scales, which
+is what §139-§141 established for cords.
+
+### Why the E4 names stop here
+
+`%a5` is EOS's **in-memory voice structure**, and it is *not* the E4B file's
+`vpar` layout. Checking two candidates against mpc2emu's `vpar` table gives
+inconsistent offsets — the pan destination at `a5+44` would have to be `vpar[55]`
+(a shift of 11) while the LFO1 destination at `a5+6` would have to be `vpar[42]`
+(a shift of 36). **A single base offset does not satisfy both, so the structure is
+a different layout, not a shifted one.** Until it is aligned, naming the
+range-only rows would be guessing, and the table above says so rather than
+filling the column in.
+
 ## Where the envelopes are NOT
 
 **This function converts the AKAI program HEADER only.** Its buffer is 196
