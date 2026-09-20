@@ -713,19 +713,45 @@ carries pan but not stereo level.
 The keygroup side is otherwise complete: key range, tune offset, filter
 frequency, and both the amp and filter envelopes are all read.
 
-### The inverse question
+### The inverse question — what another converter keeps and EOS discards
 
-"Which parameters does *another* converter handle that EOS does not" cannot be
-answered from this side — it needs the other converter's field list. What the
-table above provides is the half that is decidable here: **the exact set EOS
-ignores.** Any field in it that another importer does convert is a place where
-that importer carries information EOS discards, and the comparison is then a
-lookup rather than an investigation.
+Read from mpc2emu's parser source rather than supplied by them, so **provisional
+until they confirm it**; their field list is theirs to state.
 
-Noted from mpc2emu's own documentation, and needing their confirmation rather
-than mine: they record `OSHIFT`, `STEREO` and `PANPOS` as "read but not yet
-applied", which would make `OSHIFT` and `STEREO` fields *neither* side currently
-converts.
+| AKAI field | EOS | mpc2emu | note |
+|---|---|---|---|
+| `0x17` `STEREO` stereo level | **not read** | read → dB, **applied** | applied with an extrapolation warning: the law was measured over 10–99 |
+| `0x23` `LFODEL` LFO1 delay | **not read** | read → `lfo1_delay` seconds, **applied** | one of s3ked's three losses; the other converter keeps it |
+| keygroup `0x08` filter keyfollow | **not read** | read → applied | but see the caveat below |
+| `0x0f` MIDI program number | **not read** | **applied** as the program number | arguably performance state, not a preset parameter |
+| `0x15` `OSHIFT` octave shift | **not read** | read, **reported as dropped** | **neither side converts it** |
+| `0x11` polyphony | **not read** | read, warning only | neither side converts it |
+
+**So the answer to "does anything survive our path that EOS discards" is yes, and
+`LFODEL` is the clearest case**: EOS drops both LFO delays, and mpc2emu carries
+LFO1's. That is the mirror of s3ked's loss finding, running the other way.
+
+**`OSHIFT` is the more interesting row.** Both sides read it and neither applies
+it — two independent efforts looked at the same octave-shift parameter and both
+deferred it. It is not a place either implementation has an edge; it is a gap
+they share.
+
+Two things needing mpc2emu's confirmation rather than my reading of their code:
+
+- **Their `akai_program_scope_laws.md` says the goal is to settle laws "so
+  `octave_shift`, stereo `LEVEL` and program `PAN` can be applied instead of
+  reported", while the parser appears to apply stereo level already** (it feeds a
+  gain sum and reports an `applied_db`). Either the document is stale or I am
+  misreading the call path.
+- **Their own corpus comparison reports filter keytrack as "ours 0.000, EOS
+  0.118"**, which sits oddly with the parser reading and using keygroup `0x08`.
+  Something between reading the field and emitting it is producing zero.
+
+The EOS side of this table also carries one limit: the keygroup read set was
+enumerated over the zone/envelope path (`0x46da8`–`0x475b0`). A keygroup byte
+read in some other function would not appear in it, so "not read" is firmer for
+the program header — where the whole converter was enumerated and its pointer
+bases checked — than for keygroup `0x08`.
 
 ## Confidence, and what is NOT established
 
