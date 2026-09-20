@@ -15950,3 +15950,72 @@ exercises −17..0, which is consistent with a volume field but far from proof, 
 One SysEx read settles it: load the import, select one of the presets whose byte
 27 is 249 (−7) and read id 1. If it reads −7, byte 27 is the preset volume. If it
 reads 0, the hypothesis is dead and byte 27 is still unidentified.
+
+### §151 addendum — the "704 headers" figure is worthless as an independence claim, and I wrote it
+
+mpc2emu pushed back that the range test carries much less for the wide-range
+fields than for the algorithm bytes. They were right, and checking it properly
+made the problem **larger than their version of it**.
+
+```
+  total non-zero FX blocks : 704
+  DISTINCT blocks          : 6
+  contributing banks       : 3, of which two are the same bank round-tripped
+                             (_rt_new / _rt_orig -- FX blocks byte-identical)
+  690 of the 704 are one single repeated block
+```
+
+**So the real n is six distinct FX blocks from two independent sources, not 704.**
+"1184 preset headers, 704 non-zero, zero range violations" reads like a corpus
+result and is one bank's default effect copied 690 times. I wrote that sentence
+and put it in a commit message; it should have read "6 distinct".
+
+**This is the argument-from-a-large-number failure, again.** §138 was argmax over
+a big array reporting one artefact; this is 704 samples of one value. The count
+was of rows, and the evidence is in distinct rows.
+
+### Which of the sixteen fields actually has evidence
+
+Headroom used = largest value observed against the field's limit. A limit the data
+never approached was never tested:
+
+| field | limit | max seen | headroom | presets non-zero |
+|---|---:|---:|---:|---:|
+| FX_A_ALGORITHM | 44 | 20 | 45% | 704 |
+| FX_A_PARM_0 Decay Time | 90 | 60 | 67% | 704 |
+| FX_A_PARM_1 HF Damping | 127 | 120 | **94%** | 704 |
+| FX_A_PARM_2 FxB==>FxA | 127 | 33 | 26% | **1** |
+| FX_A_AMT_0 Main | 100 | 11 | 11% | 702 |
+| FX_A_AMT_1..3 Sub 1-3 | 100 | 0 | **0%** | **0** |
+| FX_B_ALGORITHM | 32 | 24 | 75% | 704 |
+| FX_B_PARM_0 Feedback | 127 | 48 | 38% | **10** |
+| FX_B_PARM_1 LFO Rate | 127 | 24 | 19% | 704 |
+| FX_B_PARM_2 Delay Time | 127 | 66 | 52% | **9** |
+| FX_B_AMT_0 Main | 100 | 10 | 10% | **9** |
+| FX_B_AMT_1..3 Sub 1-3 | 100 | 0 | **0%** | **0** |
+
+**Six of the sixteen bytes — every Sub 1-3 send — are non-zero nowhere in the
+corpus.** Their placement rests entirely on "the group is four bytes wide and the
+first one behaves", which is an argument from layout symmetry and not evidence.
+`FX_A_PARM_2` rests on a single preset.
+
+**What does survive, and why it is still worth having:**
+
+- `FX_A_PARM_1` reaching **120 against a limit of 127** is the one genuinely tight
+  range result, and it is the byte that cannot sit in the `PARM_0` slot, whose
+  limit is 90. That pins the A-side parameter *order* independently of labels.
+- The field order matches SysEx ids 6-21 exactly across all sixteen positions.
+- **A machine-to-file link exists after all, and I said it did not.** Preset 14 of
+  the loaded bank read over SysEx as FX B = algorithm 24, parms 24, 3, 50. One of
+  the six distinct file blocks carries `... 24 24 3 50 ...` at bytes 68-71 — four
+  bytes, same order, from a different bank. A common factory FX B setting turning
+  up identically in a file read and a SysEx read is real corroboration of the
+  B-half layout, and it is stronger than anything the range test contributed.
+
+**The §151 headline is unaffected.** "All 363 imported presets have an all-zero FX
+block" is a statement about *zeros*, and zero is zero wherever the block sits — it
+needs the offsets to be right but not the fields to be individually validated. The
+byte-27 refutation likewise only needs the block to be at 60-75 and zero there.
+
+What weakens is any claim about *where each individual field sits inside the
+block*, and it weakens most exactly where mpc2emu said it would.
