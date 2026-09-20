@@ -218,31 +218,51 @@ alone.
 Their `[3]`/`[4]` — the key-fade pair — are zero across all 10 142 entries, so
 **that pair rests on this firmware trace alone** and no corpus agreed with it.
 
-### Source (Ensoniq file offsets) — one confirmation only
+### Source (Ensoniq file offsets) — NONE confirmed, and the address space is wrong
 
-Checked against a real Ensoniq EPS/ASR disc (a Translator-formatted ISO, type-3
-Instrument files under a 26-byte directory entry at block 3):
+**Tested and failed.** mpc2emu framed the decisive question: are the firmware's
+offsets in *disc* space or in a *packed* (de-interleaved) copy? The disc data is
+word-interleaved — parameter bytes alternate with zeros — and the firmware's name
+converter reads consecutive bytes, so it cannot be reading the disc bytes
+directly.
 
-- **The name at `+10` is confirmed**, and confirmed three times over: the
-  instrument block, a following block at `+656`, and a wavesample block at
-  `+876` each carry their name exactly ten bytes in. That is the firmware's
-  `lea %a0@(10),%a0` seen in real data.
-- **Every other source offset in this document is unconfirmed.** `+66`
-  (transpose), `+170` (root key), `+208`/`+225` (volume and its boost flag),
-  `+221` (pan), `+274`/`+276` (key range), layer `+40`/`+42` (velocity) have
-  **not** been located in a real file. A naive base-plus-offset read of a real
-  instrument produces implausible values (key low 1, key high 1), so the base is
-  wrong, the structure is reached differently, or the firmware reads an unpacked
-  copy.
+De-interleaving a real instrument confirms **phase 0 carries the data** and finds
+names at packed offsets 5, 333 and 445. Taking the wavesample struct's base as
+`445 − 10 = 435` and reading this document's offsets from it gives **zero for
+every field**. Taking the other block at `323` gives a boost flag of 127 and a
+key range of 0/0. **Neither is a structure this document describes.**
 
-**One complication that must be solved first:** the on-disc data is
-**word-interleaved** — every parameter byte is followed by a zero byte, so
-"CLARINET" appears as `43 00 4c 00 41 00 ...`. The firmware's name converter
-reads *consecutive* bytes, which on this layout would yield `C L A R I N E T`
-with spaces between. So the firmware is either de-interleaving before the
-structures in this document are addressed, or reading from a different
-representation entirely. **Until that is settled, no source offset here should
-be trusted**, including the ones that look reasonable.
+```
+  base 435:  transpose 0, root key 0, volume 0, pan 0, key range 0/0
+  base 323:  transpose 1, root key 40, boost flag 127, key range 0/0
+```
+
+**So the source offsets are not offsets into the disc file at all, packed or
+otherwise.** The most likely reading — and it is the same shape as the AKAI
+module's scratch struct, where thirteen conversions wrote to a caller-owned
+buffer rather than to anything on disk — is that EOS's loader parses the Ensoniq
+file into an in-memory representation, and every source offset in this document
+is an offset into *that*. If so they **cannot be validated against a disc image
+at any base**, and doing it needs the loader traced first.
+
+**And that retracts the one thing this document called confirmed.** The name at
+`+10` matching the disc layout was read as evidence the offsets were disc
+offsets. It is not: an in-memory struct that also places its name ten bytes in
+produces exactly the same observation, and a shared convention is the more likely
+explanation once every other offset fails. **One matching field is a plausible
+neighbour, not a confirmation** — the same lesson as the base-18-versus-22 slip
+and the three all-zero cord rows, arrived at for the third time.
+
+**Status of the source half: nothing in it is validated.**
+
+### One alternative not yet excluded
+
+mpc2emu raised it and it is worth recording: a structure that looks interleaved
+is sometimes **stereo**, not padded. Their own project read the wrong copy of
+every loop point on mono-right Emulator III samples until 2026, because that
+format stores each position twice, once per channel. The zeros argue against it
+here — a second channel would hold a value, not a zero — but a *mono*
+instrument's second channel would be zeros, and this instrument may be mono.
 
 ## What is not established
 
