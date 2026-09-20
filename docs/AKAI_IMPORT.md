@@ -669,6 +669,64 @@ and they asked for them to be carried):
 4. **Everything except volume and pitch is a median**, which hides the
    distribution.
 
+## Everything the importer ignores
+
+This is decidable from the code rather than inferable from output, so it is worth
+stating completely: **every AKAI field the importer reads, and by complement
+every one it does not.**
+
+```
+  program common (192 bytes): 49 offsets read
+    00 03 18 19 1a 1d 1e 21 22 24 25 26 27 28 29 2a 3b 41 42 48 4b 4c 4d 4e 4f
+    50 51 52 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f 61 62 63 64 65 66 6e 6f 70
+```
+
+**The method has one trap and it is checked**: a field read through a *pointer*
+would not appear as an individual read. Inside the converter the only pointer
+bases into the buffer are `0x00` (the buffer itself, handed to the reader) and
+`0x03` (the 12-character name). Everything else is an individual byte read, so
+the complement below is real and not an artefact of how the search was done.
+
+### Named AKAI parameters the importer drops
+
+| AKAI field | what it is | notes |
+|---|---|---|
+| `0x0f` MIDI program number | performance routing | arguably not a preset parameter |
+| `0x10` MIDI channel | performance routing | — |
+| `0x11` polyphony | voice allocation | — |
+| `0x13` `PLAYLO` / `0x14` `PLAYHI` | program play range | key ranges also exist per keygroup |
+| `0x15` `OSHIFT` | octave shift (±2) | **a real pitch parameter, silently lost** |
+| `0x16` `OUTPUT` | individual output assignment | — |
+| `0x17` `STEREO` | stereo level (0–99) | sits directly beside `PANPOS`, which *is* converted |
+| `0x1f` `PANDEL` | delay in growth of LFO2 | beside `PANDEP`, which is converted |
+| `0x23` `LFODEL` | delay in growth of LFO1 | beside `LFODEP`, which is converted |
+| `0x60` `MODVLFOD` | amount of control of LFO1 delay | same signed block as seven that are converted |
+| keygroup `0x1e` | velocity-zone crossfade | the only named keygroup field not read |
+
+`0x1b` `K_LOUD`, `0x1c` `P_LOUD` and `0x20` `K_PANP` are also unread, but those
+are documented "Not used, range 0–0" — see the section above on why that is a
+different kind of observation.
+
+**So EOS carries both LFOs' rate and depth and neither of their delays**, and it
+carries pan but not stereo level.
+
+The keygroup side is otherwise complete: key range, tune offset, filter
+frequency, and both the amp and filter envelopes are all read.
+
+### The inverse question
+
+"Which parameters does *another* converter handle that EOS does not" cannot be
+answered from this side — it needs the other converter's field list. What the
+table above provides is the half that is decidable here: **the exact set EOS
+ignores.** Any field in it that another importer does convert is a place where
+that importer carries information EOS discards, and the comparison is then a
+lookup rather than an investigation.
+
+Noted from mpc2emu's own documentation, and needing their confirmation rather
+than mine: they record `OSHIFT`, `STEREO` and `PANPOS` as "read but not yet
+applied", which would make `OSHIFT` and `STEREO` fields *neither* side currently
+converts.
+
 ## Confidence, and what is NOT established
 
 **High — read directly and checked against data:**
