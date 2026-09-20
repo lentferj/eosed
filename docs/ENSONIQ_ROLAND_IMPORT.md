@@ -192,8 +192,49 @@ it is a patch/split list handler rather than a parameter converter.
 does not map onto AKAI's program/keygroup or Ensoniq's instrument/layer, so the
 conversion shape should not be assumed to resemble either.
 
-Corpus available: two Roland S-700 library ISOs (~1.1 GB) under
-`Dokumente/SYNTHS/K2000R/Soundsets/`.
+### The Roland disc structure, verified
+
+Cross-checked against a library disc (`Sound & Vision - Gigapack I CD 1`) with
+k2kremote, who is decompiling the same three import paths out of the Kurzweil
+K2000 ROM. Their ROM reading supplied the map; this disc confirmed the layout and
+corrected the bases.
+
+```
+  sector 0 [4..7]  "S770"        the model digit at [6] is not tested by the
+                                 K2000's sniffer, so S-750 matches too
+  header LE16 counts at 0x114..0x11C
+      Volume 122   Performance 269   Patch 889   Partial 4004   Sample 5761
+
+  directories, 32-byte records, 16-char ASCII name, class tag at +0x10,
+  LE16 size at +0x1E
+      0x0A0800 .. 0x0A1740   tag 0x40  Volume        122
+      0x0A1800 .. 0x0A39A0   tag 0x41  Performance   269
+      0x0A5800 .. 0x0AC720   tag 0x42  Patch         889
+      0x0CD800 .. 0x0FA820   tag 0x44  Sample       5761
+```
+
+At each base the first and last record carry the expected class tag, the count
+matches the header exactly, and the record after the last is empty.
+
+**k2kremote's ROM-derived bases are each 0x200 lower**, and the reason their
+Performance base looked correct is worth recording: the Volume directory runs to
+`0x0A1740`, so their `0x0A1600` sits **inside it** and returns a real, correctly
+named, 32-byte-aligned record — of class `0x40`, not `0x41`. **A wrong base
+landing on a valid-looking record of the wrong class.** Asserting the class tag
+is what catches it; checking that a name looks like a name does not.
+
+The **Partial directory was not found** — the header counts 4004 of them and
+probes at `0x0AC720`, `0x0AC800` and `0x0AD000` are empty. It lies between the
+Patch and Sample directories, or partials are reached through the patch records'
+links rather than a directory.
+
+**This is the disc's layout, not EOS's reading of it.** EOS's Roland module has
+`"S770 MR25A"` — this disc's volume label — as a literal at `0x17064f`, so it
+matches on content rather than on a filename, but nothing here says which of
+these structures it walks.
+
+Corpus available: `Dokumente/SYNTHS/Roland Samples/` (two raw ISOs plus four
+archives, ~2.4 GB) and `Dokumente/SYNTHS/K2000R/Soundsets/`.
 
 ## Corpus status — the two halves validated very differently
 
