@@ -16887,3 +16887,63 @@ uses the same instrument as the thing it predicts is not an independent check.
 
 **Nothing in either codebase moves on this.** The measurement that settles it is
 still a cutoff sweep against a source with energy flat past 20 kHz.
+
+### §156 addendum — the low end, and the 1.391 partly rehabilitated
+
+mpc2emu asked for a downward extension (bytes 20–70) rather than more of the top,
+on the grounds that if the 0.830 scale error holds down there their table is
+correctable by one multiplication, and if it walks it is a shape error no constant
+fixes. Run, and the first attempt failed in a way that proved the session's own
+rule.
+
+**The estimator floored.** Bytes 20, 30, 40 and 50 all read **401.5 Hz** — the
+same value four times. The estimator searches upward from 400 Hz for a 12 dB
+drop, so any corner below 400 Hz returns the first bin of the search range.
+**A value repeating exactly is a fact about the apparatus**, and it was caught
+immediately for that reason rather than by noticing the physics was wrong.
+
+Re-analysed by dividing each spectrum by the `cut255` capture — mpc2emu's own
+method — which removes the source's shape and allows the search to start at
+80 Hz:
+
+```
+  byte   -12 dB pt   -3 dB pt   ratio
+    20      235.4      170.8    1.378
+    30      261.5      186.2    1.405
+    40      310.8      223.1    1.393
+    50      355.4      256.9    1.383
+    60      436.9      323.1    1.352
+    70      495.4      356.9    1.388
+    80      612.3      449.2    1.363
+   100      847.7      601.5    1.409
+   120     1180.0      821.5    1.436
+   140     1595.4     1004.6    1.588
+   147     1764.6     1069.2    1.650
+   160     2190.8     1235.4    1.773
+   180     2955.4     1466.2    2.016
+   200     4444.6     2155.4    2.062
+```
+
+**Bytes 20–100 average 1.386 against the Butterworth 1.391.** So the filter *is*
+4-pole Butterworth where it can be measured cleanly, and the ratio's climb is
+confined to bytes above ~120.
+
+**This refines §156 rather than reversing it.** The headline stands — no single
+factor converts between conventions across the range, so cross-convention numbers
+remain void. But §156's explanation was wrong in both directions: it said the
+filter is "steeper than 4-pole near its corner" on the strength of a 1.22 reading
+at byte 80, and that reading was contaminated. With the source divided out byte 80
+gives 1.363, not 1.22. **The low end is Butterworth; only the top departs.**
+
+Whether the departure above byte 120 is the filter opening out or the −12 dB
+point running out of measurable spectrum is **not settled here** — §155 showed the
+tilt collapsing over exactly that range, and both explanations predict a climbing
+ratio. That is the same ambiguity as the top-end table points, one convention
+down.
+
+**What mpc2emu asked for** is the `-3 dB` column above: their `table / measured`
+ratio can be computed at bytes 20–70 from it directly, which answers scale-versus-
+shape without further hardware.
+
+**Machine state:** cutoff restored to 147, KTPOLAR otherwise untouched, nothing
+written to disk. Captures kept in `~/temp/eosed-bench/ktcal/`.
