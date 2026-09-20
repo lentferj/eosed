@@ -168,7 +168,89 @@ by a formula rather than this table will diverge most for quiet wavesamples.
 identical routine at `0x78f28` reads offset `+182` instead, presumably the
 layer-level pan.
 
-## Roland (S-700 series) — LOCATED, NOT TRACED
+## THE CONVERSION TABLES
+
+Both importers build an E4 preset the same way AKAI's does — `a5 = header + 2`,
+the name field space-padded to 16, the `0x52` constant at `header[18:20]`, and
+the same three trailing memsets at `+54`/`+58`/`+74`. What differs is everything
+below that.
+
+**Read the source column as "offset into the structure EOS holds", not "offset
+into the file."** See the address-space section: for Ensoniq this was tested and
+they are *not* file offsets. For Roland it is untested and should be assumed the
+same.
+
+### Preset header — all three importers side by side
+
+| header byte | AKAI | Ensoniq | Roland |
+|---|---|---|---|
+| `[2:18]` name | 6-bit charset table, 12 chars | ASCII, non-printable → space, src `+10` | **16-byte memcpy**, ASCII |
+| `[18:20]` | `0x0052` | `0x0052` | `0x0052` |
+| `[20:26]` | zeroed | zeroed | zeroed |
+| `[26]` transpose | `clamp(src, −24, +24)` | `src+66`, **unclamped** | **`src[24] × 12`** (octave → semitones) |
+| `[27]` volume | `clamp((v−99)×8/10, −96, +10)` | **0** | **0** |
+| `+54`/`+58`/`+74` | memset 4/16/8 | same | same |
+
+**Only AKAI sets a preset volume.** Ensoniq and Roland both write zero.
+
+### Zone — Ensoniq (`0x7b0e0`) and Roland (`0x171434`)
+
+| zone byte | field | Ensoniq source | Roland source |
+|---:|---|---|---|
+| `0` | key low | wavesample `+274` | patch `+12` |
+| `1` | key low fade | **0** | patch `+13` |
+| `2` | — | **0** | patch `+14` |
+| `3` | key high | wavesample `+276` | patch `+15` |
+| `4` | velocity low | layer `+40` | partial `+7` |
+| `5` | velocity low fade | **0** | partial `+8` |
+| `6` | velocity high fade | **0** | partial `+10` |
+| `7` | velocity high | layer `+42` | partial `+9` |
+| `8:10` | sample index | word | word |
+| `10:12` | fine tune | **0** | **`(partial[6] × 64 + 32) / 100`** |
+| `12` | root key | wavesample `+170` | sample `+68` |
+| `13` | volume | `TABLE[…]`, clamp −96…+10 | **0** |
+| `14` | pan | `(ws[221] × 63)/127`, clamp −64…+63 | `partial[4] × 2`, clamp −64…+63, **or 0** |
+| `15`–`21` | — | not written here | zeroed |
+
+**Three differences that matter for a converter:**
+
+- **Ensoniq discards fine tune and every crossfade; Roland carries both.** Roland
+  is the richer import by some margin.
+- **Roland discards zone volume** (writes 0) where Ensoniq converts it through a
+  128-entry table. So the two formats lose *opposite* things.
+- **Roland's velocity high and its fade are crossed**: `partial+9` → zone `7`
+  (velocity high) and `partial+10` → zone `6` (fade). Written in that order in
+  the code, so it is deliberate rather than a reading error, but it is the one
+  row here most worth a corpus check.
+
+### The laws in full
+
+**Ensoniq volume** (`0x78edc`) — a table, not a formula:
+
+```
+  v = wavesample[208]
+  if wavesample[225] != 0:  v = min((v + 12) & 0xff, 127)     ; boost flag
+  return TABLE_0x796a4[v]                                     ; signed, −72…0 dB
+```
+
+**Ensoniq pan** (`0x78f10`): `(wavesample[221] × 63) / 127`, signed, truncating.
+
+**Roland fine tune**: `(partial[6] × 64 + 32) / 100` — the `+32` is round-half-up
+on a divide by 100, so this is `round(cents × 0.64)`. Roland stores ±50 cents;
+±32 in E4 units is a half-semitone, so the E4 unit here is 1/64 semitone.
+
+**Roland pan**: `clamp(partial[4] × 2, −64, +63)`, **but forced to 0** when
+`(sample[58] >> 1) & 3 == 3` — a sample-format flag, almost certainly the
+mono/stereo selector. So a Roland stereo sample imports centred regardless of its
+partial's pan setting.
+
+**Roland stereo pairs**: when a helper (`0x50d38`) returns 2, the builder writes a
+second set of key-range bytes at **negative** offsets from the current zone
+(`a5@(-22)`…`a5@(-9)`), i.e. back-patching the *previous* zone, and rewrites the
+source partial's own bytes (`a3@(3) = 127`, `a3@(0,1,2) = 0`). That is a
+stereo-pair fixup and it mutates the source structure as it goes.
+
+## Roland (S-700 series) — module map
 
 | address | what |
 |---|---|
