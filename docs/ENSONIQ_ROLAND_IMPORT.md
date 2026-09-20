@@ -184,9 +184,28 @@ same.
 `AKAI_IMPORT.md`. Its cords sit in two blocks of four, each immediately after one
 of the two envelope blocks mpc2emu's parser independently locates in the file, in
 the same order both times. That adjacency only holds if AKAI keygroup bytes are
-read straight from the disc. **So "EOS importers do not use file offsets" is
-false as a general rule** — AKAI parses a flat file directly, and only the other
-two build an intermediate.
+read straight from the disc.
+
+**So the distinction is not "EOS importers" but "is there a loader between the
+disc and the converter":**
+
+```
+  AKAI      flat file, parsed directly        source offsets ARE file offsets
+  Ensoniq   loader builds a representation    disproven on real discs
+  Roland    assumed the same, untested        nobody has tried
+```
+
+**The conflation that produced the wrong rule is worth recording**, because both
+projects made it independently and it is subtle (mpc2emu's diagnosis, and better
+than the one offered here first). AKAI's `%a5` scratch struct — the thirteen
+program-header rescales that a corpus search could not find anywhere in a file —
+is about **program-level values being staged for a keygroup pass that runs N
+times**. It says nothing about how that pass *reads its source*, and the reading
+is a flat file. One importer doing both things at once is exactly what made "not
+the file" look like a property of the importer rather than of one code path
+inside it.
+
+**A negative result generalises no further than the thing it was measured on.**
 
 ### Preset header — all three importers side by side
 
