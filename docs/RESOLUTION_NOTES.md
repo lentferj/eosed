@@ -15483,3 +15483,93 @@ review. A separate claim attributed to §30, that it fit slopes *on noise*, is
 **not supported by §30**, which describes a source with its own slow decay. The
 proposition is now established by s3ked's measurement tonight rather than by
 either section.
+
+## §149 — The decay rate law measured on a purpose-built ladder: bytes 32–127 (2026-09-20, live)
+
+mpc2emu built a 15-rung ladder (`CD4-DCYLADDER`) for this: one shared 20 s looped
+white-noise sample at −6 dBFS, root key 69, one zone on key 69 only, sustain 0,
+attack 0, release 0, and `Dcy1` swept 8 → 127. Every Dcy1 byte was read back out
+of the written file before the bank was accepted, so the bytes are measured and
+only the generator's *implied seconds* column is arithmetic to be checked.
+
+Method, with the provenance of each rule since all three came from other sessions:
+
+- **Play only note 69.** Any other key resamples the noise and tilts its spectrum,
+  and an off-list note still sounds at a plausible level — it looks like a valid
+  take. (mpc2emu)
+- **Fit a dB slope, never a threshold crossing.** On noise a crossing inherits the
+  source's own amplitude fluctuation sample by sample; a slope over hundreds of
+  windows averages it away. s3ked established this directly rather than by
+  inference: their DECAY1 sweep with a slope fit reproduced an independently
+  measured constant to **0.49%** where a crossing estimator on the same material
+  gave non-monotonic results with no region reaching r² 0.99.
+- **Size the analysis window per rung from that rung's own rate**, require a span
+  floor, and report per-curve r² so a bad rung declares itself. (s3ked, after
+  their own byte-20 point died at r² 0.948 with only 42 windows across 61.8 dB.)
+
+### The overlap check, which is what makes the ends believable
+
+Bytes 48–86 sit inside the existing 44–86 fit **by design**. A ladder with no
+overlap cannot be validated against anything.
+
+| byte | measured | existing law | diff |
+|---:|---:|---:|---:|
+| 48 | 93.26 | 91.77 | +1.6% |
+| 60 | 47.01 | 47.53 | −1.1% |
+| 69 | 28.14 | 28.54 | −1.4% |
+| 80 | 15.05 | 15.00 | +0.4% |
+| 86 | 10.88 | 10.47 | +4.0% |
+
+Mean |error| 1.7%. **The overlap reproduces, so the new ends stand.**
+
+### The law
+
+```
+ln(dB/s) = −0.0001222·b² − 0.040902·b + 6.8135      bytes 32–127, 12 rungs, r² 0.998042
+```
+
+Against the old 44–86 fit extrapolated: −2.3% at byte 32, +3.6% at 118, **+7.3%
+at 127.** So the earlier extrapolation was better than feared — the caution was
+right and the error was modest.
+
+**Three rungs refused and one recovered.** Bytes 8, 16 and 24 give no window with
+≥60 points: byte 8 falls 22 dB in about 30 ms, which is a limit of the rig's time
+resolution and not of its level — more gain cannot buy it. Byte 127 failed on the
+first pass at span 18.0 dB because the note was still decaying at note-off; its
+floor read −45 dBFS against −82 elsewhere, which is the tell. A hold sized from
+the *measured* rate rather than the generator's implied time recovered it at
+r² 0.99938.
+
+### Gain: measured, not argued
+
+Jan offered more output gain; mpc2emu cautioned against it, having clipped one of
+their own captures that day (267 samples at full scale). Both were right about
+different material. Measured on this ladder at the original setting: worst peak
+**−15.33 dBFS, zero samples at full scale** on all 15 rungs. After Jan raised the
+hardware gain 50% → 60%: peak −11.75 dBFS, still zero clipped.
+
+**The measured rates did not move**: byte 32 236.63 → 233.44, byte 69 28.19 →
+28.14, byte 110 2.51 → 2.51. A slope fit is level-independent, and the gain change
+is an unplanned control demonstrating it.
+
+A clipping gate now runs before the sweep and aborts it, because **a clipped
+source flat-tops the start of every decay and fits a shallower slope on every
+rung with a clean r²** — a failure that survives the r² check.
+
+### What it says about the generator's arithmetic
+
+Its implied/measured ratio is **flat at ~0.92 from byte 32 to 102, then breaks**.
+A flat ratio is a span-definition difference, not a law error — the same shape
+mpc2emu found in the 1.93× — and it resolves: their span is ~30 dB where this
+measurement uses 28.1 dB.
+
+| | |
+|---|---|
+| bytes 32–102, span-matched at 30 dB | ratio **0.983 ± 0.012** — right to ~1% |
+| byte 110 | 1.095 |
+| byte 118 | 1.185 |
+| byte 127 | **1.780** |
+
+**So the generator's rate law is sound to ~1% across bytes 32–102 and diverges
+above ~110**, reaching 1.78× at the top of the range. That is the actionable half:
+not a scale factor, a range limit.
