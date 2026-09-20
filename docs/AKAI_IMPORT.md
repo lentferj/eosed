@@ -281,22 +281,28 @@ S2800-S3000-S3200 / S2000-S3000XL-S3200XL SysEx documents. The offset convention
 was validated before use: s3ked's keygroup-count offset matches the `0x2a` anchor
 the importer's own loop bound confirms.
 
-| AKAI parameter (range) | formula | E4 destination |
-|---|---|---|
-| `V_LOUD` `0x1a` (−50…+50) — velocity → loudness | `round(clamp(v,−50,50) × 77/50)` | ±77 |
-| `MODVAMP1` `0x5c` (−50…+50) — loudness by assignable source 1 | `× 75/50` | ±75 |
-| `MODVAMP2` `0x5d` (−50…+50) — loudness by assignable source 2 | `× 75/50` | ±75 |
-| `MODVPAN1` `0x59` (−50…+50) — pan by assignable source 1 | `× 48/50` | ±48 |
-| `MODVPAN2` `0x5a` (−50…+50) — pan by assignable source 2 | `× 48/50` | ±48 |
-| `MODVPAN3` `0x5b` (−50…+50) — pan by assignable source 3 | `× 48/50` | ±48 |
-| `MODVLVOL` `0x5f` (−50…+50) — LFO1 depth control | `× 48/50` | ±48 |
-| `MODVLFOR` `0x5e` (−50…+50) — LFO1 speed control | `× 25/50` | ±25 |
-| `PANDEP` `0x1e` (0–99) — depth of **LFO2** | `round(clamp(v,0,99) × 32/99)` | 0–32 |
-| `LFODEP` `0x22` (0–99) — depth of **LFO1** | `× 32/99` | 0–32 |
-| `MWLDEP` `0x24` (0–99) — modwheel → LFO1 depth | `× 32/99` | 0–32 |
-| `PRSDEP` `0x25` (0–99) — aftertouch → LFO1 depth | `× 32/99` | 0–32 |
-| `VELDEP` `0x26` (0–99) — velocity → LFO1 depth | `× 32/99` | 0–32 |
-| `TRANSPOSE` `0x4b` (**−50…+50**) | `clamp(v, −24, +24)` | Preset Transpose (−24…+24) |
+| AKAI parameter (range) | formula | E4 parameter modulated | dest scale |
+|---|---|---|---|
+| `V_LOUD` `0x1a` (−50…+50) — velocity → loudness | `round(clamp(v,−50,50) × 77/50)` | Velocity → **Amp Volume** | ±77 |
+| `MODVAMP1` `0x5c` (−50…+50) — loudness by assignable source 1 | `× 75/50` | cord → **Amp Volume** | ±75 |
+| `MODVAMP2` `0x5d` (−50…+50) — loudness by assignable source 2 | `× 75/50` | cord → **Amp Volume** | ±75 |
+| `MODVPAN1` `0x59` (−50…+50) — pan by assignable source 1 | `× 48/50` | cord → **Pan** | ±48 |
+| `MODVPAN2` `0x5a` (−50…+50) — pan by assignable source 2 | `× 48/50` | cord → **Pan** | ±48 |
+| `MODVPAN3` `0x5b` (−50…+50) — pan by assignable source 3 | `× 48/50` | cord → **Pan** | ±48 |
+| `MODVLVOL` `0x5f` (−50…+50) — LFO1 depth control | `× 48/50` | cord → **LFO1 Amount** | ±48 |
+| `MODVLFOR` `0x5e` (−50…+50) — LFO1 speed control | `× 25/50` | cord → **LFO1 Rate** | ±25 |
+| `PANDEP` `0x1e` (0–99) — depth of **LFO2** | `round(clamp(v,0,99) × 32/99)` | **LFO2 Amount** | 0–32 |
+| `LFODEP` `0x22` (0–99) — depth of **LFO1** | `× 32/99` | **LFO1 Amount** | 0–32 |
+| `MWLDEP` `0x24` (0–99) — modwheel → LFO1 depth | `× 32/99` | Modwheel → **LFO1 Amount** | 0–32 |
+| `PRSDEP` `0x25` (0–99) — aftertouch → LFO1 depth | `× 32/99` | Pressure → **LFO1 Amount** | 0–32 |
+| `VELDEP` `0x26` (0–99) — velocity → LFO1 depth | `× 32/99` | Velocity → **LFO1 Amount** | 0–32 |
+| `TRANSPOSE` `0x4b` (**−50…+50**) | `clamp(v, −24, +24)` | **Preset Transpose** | −24…+24 |
+
+> **The "E4 parameter modulated" column is an inference, not a decompilation
+> result.** It follows from the AKAI parameter's own meaning, corroborated by the
+> destination scale (pan cords ±48, volume ±75, LFO-rate ±25). What the code
+> establishes is the arithmetic and the scratch-struct offset; **which E4 cord
+> slot each one lands in has not been traced** and is the remaining gap.
 
 `0x59`–`0x60` is a **source/amount** structure: `0x55`–`0x58` hold source bytes
 (which modulator, 0–255) and `0x59`–`0x60` the signed amounts. That is why the
@@ -330,9 +336,30 @@ transposed beyond two octaves is silently narrowed.
 These are invisible to any agreement metric between two converters — both sides
 write a constant and agree perfectly. (s3ked, who also supplied the names.)
 
-Conversely, `0x1b K_LOUD`, `0x1c P_LOUD` and `0x20 K_PANP` are documented "Not
-used", range 0–0, and sit inside the same run. **The importer does not read
-them** — checked directly — so the code and the document agree.
+### Two different kinds of "never read" — do not merge them
+
+`0x1b K_LOUD`, `0x1c P_LOUD` and `0x20 K_PANP` are documented "Not used", range
+0–0, and the importer does not read them either. **That is not the same
+observation as the three above**, even though the disassembly says the same
+thing about all six:
+
+- for `0x1b`/`0x1c`/`0x20`, "never read" **agrees** with the parameter being
+  absent — nothing is lost;
+- for `MODVLFOD`/`PANDEL`/`LFODEL`, "never read" means EOS **drops a parameter
+  the AKAI really has**.
+
+**And the agreement on the first three is weaker than it looks.** Whoever wrote
+EOS's importer very likely worked from Akai's published SysEx documents — the
+same documents s3ked's table is transcribed from. So "EOS ignores the fields
+Akai's doc calls unused" may be evidence that two parties read one document, not
+evidence about the machine. It does rule out a transcription slip on the table's
+side for those rows, since an error introduced there would not be mirrored in
+E-mu's binary, but it cannot establish that the hardware ignores those bytes.
+**Only the machine can.** (s3ked, who raised it against their own contribution.)
+
+This is the shared-bias rule with a shared *source* rather than a shared method,
+and it is harder to see: the two artefacts genuinely are independent objects — a
+disassembly and a parameter table — while their provenance is one.
 
 ### Why the E4 names stop here
 
@@ -478,8 +505,37 @@ pattern.
     80  82  84  85  87  89  90  92  93  94  96  97  99 100 102 103 104 106 108 110
 ```
 
-**This settles the decay-span question: there is no span convention in EOS's
-importer, because the importer does no time arithmetic at all.** Attack, decay
+### Tested against EOS's own output
+
+s3ked pointed out that this claim contradicts a mechanistic one made from the
+corpus — that "EOS computes them over a fixed reference of about 29–30 dB" — and
+proposed the discriminator: if the table is the whole mechanism, EOS's output
+values must all be **members of the table**, and if something computes after the
+lookup they will drift off it.
+
+Across **2800 voices** of EOS's own AKAI import:
+
+```
+  PZT[4] Decay1 rate  : one distinct value, 0          -- the plateau, as written
+  PZT[0] Attack1 rate : 30 distinct, ALL in the attack table, 0 outliers
+  PZT[6] Decay2 rate  : 42 distinct, ALL in the decay  table, 0 outliers
+```
+
+The decay table holds 74 distinct values spread over 0–110. Forty-two distinct
+outputs landing inside that set with no exception is not what post-lookup
+arithmetic produces.
+
+**So the table is the mechanism, and a ~30 dB reference — if it is there at all —
+is a property of the table's CONTENTS, presumably of whatever generated it.**
+That makes a 29.99 dB inference a correct statement about the table's *origin*
+and a wrong one about the importer's *behaviour*. The distinction matters for a
+reimplementation: copy the table, do not reconstruct the arithmetic.
+
+The honest limit: a post-lookup transform that happens to be the identity on
+every value in this corpus would be invisible to this test.
+
+**So there is no span convention in EOS's importer, because the importer does no
+time arithmetic at all.** Attack, decay
 and release are table lookups and sustain is a proportion. Any attempt to derive
 what "span" EOS assumed is deriving a quantity the code never computes — the same
 answer the LFO rate gave, and for the same reason.
