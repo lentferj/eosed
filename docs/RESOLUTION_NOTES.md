@@ -16947,3 +16947,77 @@ shape without further hardware.
 
 **Machine state:** cutoff restored to 147, KTPOLAR otherwise untouched, nothing
 written to disk. Captures kept in `~/temp/eosed-bench/ktcal/`.
+
+### §156 addendum 2 — resolved: the table is 0.17 octave low, and the open item is a method
+
+mpc2emu ran their extractor against the same fourteen captures. The two agree to
+**2.4% from byte 100 upward** — so the disagreement was never the code — and
+diverge at exactly one point:
+
+```
+  byte  80   1.115    <- 11.5% apart
+  byte 100   0.979        byte 160  1.024
+  byte 120   0.984        byte 180  1.017
+  byte 140   0.997        byte 200  1.006
+  byte 147   1.014
+```
+
+**At byte 80 the corner is ~450 Hz, inside their extractor's 100–500 Hz reference
+band.** Their own function's comments warn the band must be flat or it measures
+the source; here the *filter* walks into the band and the reading comes out high.
+The reference-divided method does not have that failure because it has no fixed
+band.
+
+### Their table, measured against these captures
+
+```
+  bytes  20-100   median table/measured 0.916   0.13 octave low   sd 0.033
+  bytes 120-200   median 0.866                  0.21 octave low   sd 0.037
+  all fourteen    median 0.892                  0.17 octave low   sd 0.041
+```
+
+**0.17 octave** — a fifth of the 0.82 this project reported and withdrew, and
+smaller again than the 0.27 their own first re-extraction gave.
+
+### The walk is probably the July method, not the law
+
+Band overlap biases a reading **high**, which drives `table/measured` toward 1 —
+and the ratio sits highest at the bottom of the table, which is exactly where
+every original point was measured with a band the corner approaches. So the mild
+walk between the two halves may be the old method failing progressively rather
+than the law bending.
+
+### What this settles, and the correction that goes with it
+
+mpc2emu has retracted **"the filter is steeper than 4-pole near its corner"**,
+which came from their contaminated byte-80 reading. They describe it as their
+point rather than this project's inference — **that is too generous and is not
+recorded that way.** §156 stated it as an explanation of the data, in this
+project's own words, without checking whether the single low-end point carrying
+it was sound. A number received from elsewhere becomes yours the moment you
+build an explanation on it.
+
+**The open item is now a method rather than a disagreement:** rebuild the table
+with a reference-divided estimator — divide by a wide-open capture instead of
+trusting a fixed band, and move the reference window down for low settings. A
+day with the rig, and no ambiguity about what to do. That is worth more than the
+0.17 octave.
+
+### The rule this session produced, in its final form
+
+**A value repeating exactly is a fact about your apparatus — and it is only
+visible upstream of the summary.**
+
+Four instances in one session, each caught only by looking at values rather than
+at a derived statistic:
+
+```
+  21 captures at 0.1 dBFS apart     one preset played 21 times (§154)
+  401.5 Hz four times               an estimator's search floor (§156 add. 1)
+  1084.0 Hz five times              a grid coarser than the effect (mpc2emu)
+  "1514 of 1514"                    a check that could not fail (k2kremote)
+```
+
+Every derived figure above was plausible — a cents/octave slope, a corner
+frequency, a polarity ratio, a pass rate. **The summary is exactly the thing
+that hides the repetition.**
