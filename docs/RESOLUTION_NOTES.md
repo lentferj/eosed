@@ -18556,3 +18556,33 @@ name first.
 Locating every wavesample record — O1 — is untouched, and the `+224`/`+448`
 residuals must **not** be re-derived from `92 + 48`. That is the residual-fitting
 retracted yesterday, and KIMIK3 flagged it unprompted before anyone asked.
+
+### §170 addendum — verifying the text has its own failure modes
+
+mpc2emu caught a commit of theirs whose message described edits an aborted
+script never applied, and filed the rule: **verify the text, not the exit code.**
+Right, and this project's command shape is vulnerable to exactly that — several
+edits today ran `python3` and then `git add && git commit` on a *separate line*,
+so a failed assertion would not have blocked the commit.
+
+Checked. **The tree is clean and every commit's content is real.** But the check
+itself raised **three false alarms, from three different causes**:
+
+```
+  grep -i "a\|b"        this host's grep does not take BRE alternation
+  wrapped text          "Not refuted, not \n found: recorded as..."
+  markdown emphasis     "the walker **allocates** its starting id"
+```
+
+Each looked exactly like a missing edit. Acting on any of them would have meant
+re-applying text that was already there.
+
+So the rule needs its second half: **verify the text — and re-check a MISSING
+result before acting on it, because a text search fails in more ways than the
+text does.** The flattening command for wrapped prose is
+`tr '\n' ' ' < FILE | grep -o -i "phrase"`; it does not help with emphasis
+inside a phrase, and nothing helps if the pattern syntax is wrong for the host's
+grep. Search for the shortest distinctive fragment that contains no markup.
+
+A verifier that produces false alarms trains its user to discount it, which is
+worse than not having one.
