@@ -110,7 +110,7 @@ Two details worth pinning:
 
 | record offset | use |
 |---:|---|
-| `+1` (byte) | a type code → `0x78c84` (maps to an E4-side object kind) |
+| `+1` (byte) | ~~a type code → `0x78c84` (maps to an E4-side object kind)~~ **CORRECTED 2026-09-21: a WAVESAMPLE INDEX.** `0x78c84` multiplies it by **288** — the wavesample stride — and adds the wavesample array base, so it is an array accessor, not a kind lookup. A type code is not multiplied by a struct stride. See RESOLUTION_NOTES §166 addendum 2. |
 | `+10` (long) | a count/length — copied into the built sample at `a5@(28)` |
 | `+32` (long) | pointer — carried into the object at `a1@(52)` |
 | `+40`, `+44` | loop start/end: `end − start + 12` with `+2` nudges gated by a flag — **this is where the "Adjust Akai/Ensoniq fractional loops" option reaches the Ensoniq path** (`0x7ae3c`: the option byte is read, `if >= 8: end += 2`, landing in `a5@(44)`) |

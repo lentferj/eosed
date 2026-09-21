@@ -18045,3 +18045,45 @@ The operational form: **a flagged assumption should block the computation that
 depends on it, not annotate it.** Had `req` been unavailable until `%fp@(12)`
 was read, none of the four numbers would exist, and none of them was worth
 having.
+
+### §166 addendum 2 — candidate 1 eliminated on the right evidence, and record `+1` is an index, not a type
+
+My message retracting candidate 1 cited `0x7ab84` (`moveal %a1,%a5`). **That was
+the wrong evidence for the claim.** It establishes that `0x7ab78` reads the
+struct `0x79024` filled; it says nothing about whether `0x79024`'s *source*
+object is the disc wavesample block. Right conclusion, wrong reason — which on
+today's record is worth one line of its own.
+
+The right evidence is `0x78c84`:
+
+```
+  78c8c:  movel #288,%d1           ; stride 288 -- the WAVESAMPLE stride
+  78c92:  moveb %sp@(7),%d0
+  78c96:  mulsl %d1,%d0
+  78c9a:  addal %d0,%a0            ; base + index*288
+```
+
+Compare the neighbours: `0x78c60` returns the instrument global at
+`0x100037c4`; `0x78c68` is `0x102bede0 + i*224`, the layer array. **`0x78c84` is
+the wavesample accessor**, and the wavesample array is the raw disc copy. So
+`+240…+264` really are offsets into the same 288-byte struct being read at the
+located base. **Candidate 1 is eliminated**, and the `%fp@(12)` error of the
+previous addendum is the sole surviving explanation.
+
+### The correction this forces on the loader trace
+
+`GLM_ENSONIQ_LOADER_TRACE.md` records the walker's record fields as:
+
+```
+  +1 (byte) | a type code -> 0x78c84 (maps to an E4-side object kind)
+```
+
+`0x7aebe` reads `%a5@(1)` and passes it to `0x78c84`, which multiplies it by
+**288** and adds it to the wavesample array base. **A type code is not
+multiplied by a struct stride.** Record `+1` is a **wavesample index**, and
+`0x78c84` is an array accessor rather than a kind lookup.
+
+That also retires the phrase "maps to an E4-side object kind" wherever it
+appears, and it is a better fact than the one it replaces: it means the block
+record names its wavesample directly, which is consistent with the confirmed
+finding that positions are listed rather than computed.
