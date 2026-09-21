@@ -879,7 +879,8 @@ incomplete. `0x78edc` in full:
   volume = TABLE_0x796a4[ ws[225] ? min((ws[208] + 12) & 0xff, 127) : ws[208] ]
 ```
 
-`+225`, described throughout this document as a "boost flag" of unknown effect,
+`+225`, labelled "a boost flag" in the prose of this document though its effect
+was given correctly in the law from the first commit onward,
 **adds 12 to the volume table index** — truncated to a byte, then clamped to
 127. Measured: the one instrument in a 25-instrument bank with `ws[225] != 0`
 has `ws[208] = 80`, and `TABLE[92] = -3` is what the E4XT reports, where

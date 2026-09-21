@@ -17078,6 +17078,12 @@ is exactly where that disappears from view.
 
 ### Base 880 is fixed, not found by name
 
+> **NARROWED 2026-09-21 by §161 — true on this disc (97 of 97), false in
+> general: a second disc gives bases of 656, 1104, 1328, 2544 and larger, and
+> 880 holds for 13 of 25 there. The argument below refutes name-location, which
+> stands; it never established universality. Marked here as well as in §161
+> because this is where the claim is stated.**
+
 The earlier reading had the wavesample struct located via its `UNNAMED WS`
 string, with a `+10` name match as the supporting evidence. One instrument in
 this bank (`ACOUS-GTR`) carries no such string anywhere, and `B = 880` still
@@ -17105,6 +17111,12 @@ is 360 bytes regardless, but the `*0` variant carries **62 non-zero bytes agains
 **`*0` selects channel 1 alone, which a mono source does not have.** Three
 populated and one empty is what a mono instrument predicts. The test that would
 confirm it is a stereo Ensoniq instrument — all four variants should populate.
+
+> **RETRACTED 2026-09-21 by §159 — the four suffixes are LAYER masks, and the
+> channel picture is the reverse of this: everything sits on channel 1 and
+> channel 0 is empty on every instrument. `*0` is layer 1 alone, which these
+> instruments do not populate. Marked here because this paragraph is where the
+> claim is made; §159 has the firmware gate.**
 
 ### The pan prediction is VOID
 
@@ -17523,15 +17535,31 @@ of just the table it indexes. The function is:
   78f00:  TABLE_0x796a4[d1], sign-extended
 ```
 
-So the documented law was incomplete:
+So the law, as my **scoring script** applied it, was incomplete:
 
 ```
   volume = TABLE_0x796a4[ ws[225] ? min((ws[208] + 12) & 0xff, 127) : ws[208] ]
 ```
 
 **`+225` is not a separate parameter. It is a +12 shift on the volume index.**
-Every earlier description of it as a "boost flag" whose effect was unknown can be
-replaced with this.
+
+> **CORRECTED 2026-09-21, same day, by a stale-claim sweep.** The sentence that
+> stood here said "the documented law was incomplete" and that every earlier
+> description of `+225` as a flag of unknown effect could now be replaced.
+> **Both are false.** `docs/ENSONIQ_ROLAND_IMPORT.md` has carried
+> `if ws[225] != 0: v = min((v + 12) & 0xff, 127)` since that file's **first
+> commit** (`67fd16f`). The law was documented correctly all along.
+>
+> What was incomplete was **my scoring script**, which applied
+> `TABLE[min(ws[208],127)]` with no boost branch — which is why exactly one
+> instrument mismatched and why reading `0x78edc` in full "found" a term the
+> project already had written down.
+>
+> The real finding is smaller and still worth having: **the boost term was
+> documented but never exercised, and is now measured** — at one instrument,
+> n=1. A documented law and a measured one are different things, and claiming
+> to have completed a law that was already complete is the overstatement this
+> document spent the day cataloguing.
 
 Re-scored across the bank:
 
