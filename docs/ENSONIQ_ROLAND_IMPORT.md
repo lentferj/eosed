@@ -521,3 +521,72 @@ table corpus-checkable the way AKAI's already is.
 That is a much sharper target than the three block builders the external trace
 proposed as next steps — those build the *sample* objects, not the wavesample
 parameter records.
+
+## The disc→RAM link: CONFIRMED against a real disc, with one correction
+
+A second external trace (`GLM_ENSONIQ_DISC_FORMAT.md`) argues the wavesample
+array is filled by a **bulk copy of the Ensoniq disc block**, so the source
+offsets are literal disc offsets. **Tested on a real disc, and it is right** —
+this retires §153's conclusion and makes the Ensoniq table corpus-checkable.
+
+### The verification
+
+Locating the struct by its name (the converter reads `+10`), the base falls at
+raw disc offset **880** within an instrument file, and it is consistent across
+every instrument on the disc:
+
+```
+  instrument    base   root  vol  pan  flag  klow  khigh
+  1+2 HARMS      880     69  127    0     0    21    108
+  AGOGO-BEL      880     60  127    0     0    21    108
+  ANVIL-LP       880     50  127    0     0    21    108
+  CLARINET       880     69  127    0     0    21    108
+  CRUNCH-LP      880     67  127    0     0    21    108
+```
+
+**The root key varies — 50, 60, 67, 69 — and every value is musical.** That is
+the discriminating evidence: a wrong base gives either constants or nonsense,
+and this gives sensible per-instrument values at a fixed offset across ten
+files. Volume reads 127 and the key range 21–108 on all ten, which is plausible
+as this library's defaults and is *not* itself evidence.
+
+**So §153 was wrong, and wrong for an identifiable reason.** Its searches used
+a *de-interleaved* copy, and the struct is the **raw** block. The `+10` name
+match that §153 dismissed as "a plausible neighbour, a shared convention" was
+the real thing all along — it was discarded because every other offset was
+being read from the wrong representation.
+
+### The correction: pan and boost read structurally-zero bytes
+
+The disc data is word-interleaved — values at even offsets, zeros at odd — and
+the field offsets are not all the same parity:
+
+```
+  +170 root key   even    real value
+  +208 volume     even    real value
+  +274 key low    even    real value
+  +276 key high   even    real value
+  +221 pan        ODD     always 0
+  +225 boost flag ODD     always 0
+```
+
+Measured over the parameter area: **102 non-zero bytes at even offsets against
+4 at odd.** So `+221` and `+225` land on the interleave's dead bytes, and they
+read **0 on all ten instruments**.
+
+**The consequence is a behavioural prediction about EOS**: every Ensoniq import
+is panned centre and never volume-boosted, regardless of what the source
+specifies — `pan = (0 × 63)/127 = 0`, and the boost flag never fires. Either
+those two parameters live somewhere this reading has not found, or **EOS's
+Ensoniq importer reads them from the wrong offsets.**
+
+That is testable without a rig the moment an Ensoniq disc is imported on the
+E4XT: read the resulting zone's pan byte. Non-zero refutes this; zero on a
+source with a panned wavesample confirms an importer defect.
+
+### What this unblocks
+
+Every source offset in the Ensoniq tables above is now a **disc offset** and can
+be checked against the corpus the way AKAI's can. The loader is not the gate it
+was thought to be — `0x78dcc` copies rather than parses, so tracing it is no
+longer required to validate the mapping.
