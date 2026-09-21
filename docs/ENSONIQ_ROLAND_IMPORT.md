@@ -985,3 +985,34 @@ distinct values, over the non-header records:
 MB against 589 MB, with 2880 partials against 4004. Picking on size would have
 picked the weaker test, which is the §157 lesson arriving before the experiment
 instead of after it.
+
+### The Roland object graph, and choosing a bank by content
+
+The parameter records link downward by index, all **LE16, `0xffff`-terminated,
+1-based**:
+
+```
+  Volume      +32   -> performance ids   (256-byte record)
+  Performance +256  -> patch ids         (512-byte record, 127 slots)
+  Patch       +256  -> partial ids       (512-byte record, 128 slots = a key map)
+```
+
+The patch's array is 128 entries filling the record exactly, one per MIDI key —
+so a patch maps keys to partials directly rather than holding a zone list.
+
+Walking that graph makes a bank's content measurable before any import. Counting
+parameter-byte offsets in `+16…+63` of the reachable partials that take six or
+more distinct values ("rich") and those that vary at all:
+
+```
+  rich  vary  perf  patch  part   bank
+    12    22     3      8   140   (E-guitars)
+     9    27     4     97   153   (synth basses)
+     9    24     8     78   165   (analog synth, large)
+     9    23     2     18    51   (two mono synths)
+```
+
+on a disc with 69 banks that reach any partials. **The richest bank is also one
+of the smallest** — 8 patches against 97 — so richness and size are not the same
+axis here, which is the whole reason for measuring rather than taking the
+biggest.
