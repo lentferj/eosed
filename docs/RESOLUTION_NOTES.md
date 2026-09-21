@@ -18511,6 +18511,12 @@ in the 1..999 space — not a file position and not an audio offset.**
 
 ### Two corrections to the relay
 
+> **BOTH RETRACTED 2026-09-22. Both were wrong, and both were mine.** See
+> §170 addendum 2: `0x19d93c` is a two-instruction alias for the **getter**, so
+> the lifecycle is read-modify-write and the relay's verb was right; and the
+> update formula **is** in `0x7A9C4`, in a tail I did not read. The text below
+> is kept for the record.
+
 **It is not read from `0x10004FF0`.** It is initialised from an allocator:
 
 ```
@@ -18788,3 +18794,70 @@ tail of single-digit counts. Recorded, not accounted for.
 **EOS Ensoniq → E4B: the law is measured, O2 closed, the audio format known,
 O1's position list found and validated against hardware, and the pools
 identified on five discs.**
+
+## §170 addendum 2 — both of §170's "corrections" were wrong, and the bytes say so plainly (2026-09-22)
+
+Two external reviews challenged §170. **They are right on both counts.** Four
+reads settle it, all in this project's own ROM.
+
+### 1. `0x19d93c` is a getter alias. The lifecycle is read-modify-write.
+
+```
+  19d93c:  jsr 0x13e808
+  19d942:  rts
+
+  13e808:  movel 0x10004ff0,%d0
+  13e80e:  rts
+```
+
+**Two instructions, no allocation.** So `0x7AFEA` *reads* the current object id,
+`0x7AFF0` stores it, and `0x7B062`/`0x7B066` writes it back — textbook
+read-modify-write, which is exactly what §170 declared it was *not*.
+
+The real allocator `0x19D8E0` was **named three lines above** the sentence
+denying it, in this project's own relayed table, and is not reached from
+`0x7AFEA` at all. **§170 corrected a relay that was right**, and told a sibling
+project to record the correction.
+
+### 2. The update formula IS in `0x7A9C4` — in the tail
+
+```
+  7ab50:  movel %a5@(28),%d6       ; entry[+28]
+  7ab54:  addl  %a5@(60),%d6       ; + entry[+60]
+  7ab58:  movel %d6,%a3@           ; store
+  7ab5c:  jsr   0x13de88           ; returns 92
+  7ab62:  addl  %d0,%a3@           ; + 92
+```
+
+```
+  accumulator := entry[+28] + entry[+60] + 92
+```
+
+Exactly as relayed. §170 reported it **not found** after reading
+`0x7a9c4`–`0x7aa20` — the function's *head*. The formula is at `0x7ab50`, some
+0x190 bytes further on.
+
+**§170's own caveat was correct and was not acted on.** It said *"it may sit
+elsewhere in the function than the window I read"* — and then filed the result
+as "not found" rather than widening the window. **A stated limitation on a
+search is a reason to redo the search, not a licence to report its result.**
+That is the flagged-assumption rule in its cheapest possible form: the fix was
+one larger address range.
+
+### 3. Where the two reviews disagreed, the bytes side with one of them
+
+```
+  GLM:   7ab62:  addl %d0,%a3@     the 92 IS added
+  QWEN:  7ab64:  moveq #0,%d0      the 92 is DISCARDED
+```
+
+Both instructions exist. `0x7ab62` adds; `0x7ab64` then loads 0 into `%d0` as
+the **function's return value**, two instructions before `rts`. **GLM read it
+correctly; QWEN mistook a return value for a discard.** The 92 is added.
+
+### What still stands
+
+The identification is untouched: `%fp@(12)` is an **object id** in the 92-byte
+arena, a small integer, not a file position — which is why the composite reads
+as unremarkable. **Only the lifecycle verb was wrong**, and it is the part a
+converter author would copy.
