@@ -18586,3 +18586,51 @@ grep. Search for the shortest distinctive fragment that contains no markup.
 
 A verifier that produces false alarms trains its user to discount it, which is
 worse than not having one.
+
+## §171 — The EPS header table at +100 is real on an EOS-readable disc, and does not solve O1 (2026-09-21)
+
+mpc2emu, tracing the **K2000's** Ensoniq importer, found it reading 644 bytes
+and decomposing them as 100 bytes plus **136 × 4**, split 8 / 128 by index, with
+each entry's value built as `(byte0 << 8) + byte2` — bytes 1 and 3 ignored. They
+measured 120 instrument headers on an EPS CD: pool 1 never exceeds 8 and 43 of
+120 fill it; pool 2 never exceeds 128 and reaches it.
+
+`O1` on this side is *locate every wavesample record*, and §164 concluded that
+positions are **listed rather than computed**. A 136-entry table of
+`(index, value)` pairs in the instrument header is the shape of that list, so it
+was worth testing here.
+
+### What reproduces
+
+On the EOS-readable EPS disc used all day, at instrument `+100`:
+
+```
+  idx  9   00 00 37 00    ->     55
+  idx 10   19 00 95 00    ->   6549
+  idx 11   30 00 16 00    ->  12310
+```
+
+**The encoding matches exactly** — bytes 1 and 3 are zero, so each entry is a
+16-bit value zero-padded to 32 bits, which is the same convention EPS uses for
+its instrument names. Independent confirmation of their reader on different
+material.
+
+The pool split is consistent too: most instruments here show **one** entry in
+pool 1 and one in pool 2, and that is expected rather than disappointing —
+§159 established that every instrument on this disc populates **layer 0 only**.
+One layer, one entry. The multi-sample instruments show two or three in pool 2.
+
+### What does NOT follow
+
+**The values are not wavesample positions.** Tried raw, doubled, × 512, and
+offset from the known base of 880: none lands on a plausible wavesample struct
+in the file. `6549` and `12310` are 16-bit quantities in a 244736-byte
+instrument, and nothing connects them to the offsets where its structs actually
+sit.
+
+So the table is **confirmed present and correctly decoded, and it is not the
+list O1 needs** — or if it is, the mapping from these values to file offsets is
+a further step nobody has. Recorded as a tested lead rather than a pending one,
+so the next session does not re-run it.
+
+`O1` remains open and remains the only Ensoniq blocker.
