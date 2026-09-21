@@ -17660,8 +17660,17 @@ Both are firmware reading. Neither needs the rig.
 > addendum. The rule may still be wrong; it was not refuted by this number,
 > because this number is not a test.
 
-**Status: REFUTED. `+248` is probably the sample count; the layout rule built on
-it is not. The locator and the audio layout remain one unsolved problem.**
+**Status: UNTESTED, not refuted — and `+248` is NOT a sample count. The locator
+and the audio layout remain one unsolved problem.**
+
+> **Status line corrected twice over.** It read *"REFUTED. `+248` is probably
+> the sample count."* Neither half survives. The 1-of-18 came from `req`, which
+> was never the extent (§166 addendum), so the rule is **untested** rather than
+> refuted — still not believed, because it was derived from its own single
+> datum, but the distinction matters to whoever decides whether to re-test it
+> once adjacency is knowable. And `0x790ca` puts `decode(+248)` into
+> `struct[+4]`, which §166 addendum 3 measures as the sample **END**. Caught by
+> mpc2emu applying the labels to their own copy.
 
 §162 left two Ensoniq blockers, the locator and the audio layout, and the
 obvious thought is that they are the same blocker: if a wavesample's struct is
@@ -17716,10 +17725,16 @@ The predictions land close:
 ```
 
 Several misses are exactly 224 or 448 — the same 224 that appeared among the
-small bases in §161 and that matches the layer-array stride. So **`+248` is
+small bases in §161 and that matches the layer-array stride. ~~So **`+248` is
 plausibly the sample count** and the per-wavesample overhead is not a constant
-288: there is additional structure between the audio and the next struct, and
-sometimes a multiple of 224 of it.
+288~~ — **retired.** `decode(+248)` is `struct[+4]`, the sample **end**, not a
+count. The gloss came from arithmetic using `2 × decode(+248)` on an instrument
+where `decode(+240)` was 0: **a start of zero made an endpoint look like a
+length.**
+
+That is a shape worth keeping: **a quantity that equals a count in the one case
+where the other endpoint is zero is not a count.** And the residuals it was
+offered to explain are void anyway, since `req` was never the extent.
 
 That is a better-specified open problem than §162 left, and it is still open.
 
