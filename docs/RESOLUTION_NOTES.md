@@ -18700,3 +18700,40 @@ that nobody would re-run it. mpc2emu re-ran it anyway, on different material,
 varying one transform. **That is the argument for recording failures with their
 method attached rather than just their verdict** — a verdict tells the next
 person not to bother; a method tells them what to change.
+
+### §172 addendum — two shapes from the solve, and a corrected count
+
+**mpc2emu reported nine of ten bases present with `93200` absent.** All ten are
+present; theirs was a capped scan. They left the wrong number visible in their
+document rather than quietly fixing it, on the grounds that *"nine of ten with
+one stubborn exception"* is exactly the shape that invites a story about the
+exception — and they would have been the one telling it. **An anomaly that is an
+artifact of your own search window is the most tempting kind, because it comes
+with a ready-made narrative and no one to contradict it.**
+
+### A number and its own confirmation can sit on one page without meeting
+
+§171 printed `idx 9 -> 55`. Three paragraphs above, the same commit states the
+base as `880`. **55 × 16 = 880**, and the section concluded the values were *not*
+positions.
+
+Both numbers were correct. Both were on the same page, in the same commit,
+written by the same session within minutes. **Nothing makes a reader apply an
+operation they have not thought of** — so no sweep, no heading rule, no
+denominator audit and no verifier catches this. Only a different reader does,
+and only if the failure was written down in a form they can vary.
+
+### The method rule, which is why the lead survived being killed
+
+§171 filed the lead as **tested and failed** so nobody would re-run it. That was
+right. What made the failure re-usable was writing down **what had been tried** —
+raw, doubled, ×512, offset-from-880 — because the missing transform is visible
+only against the list of attempted ones.
+
+```
+  "tested, failed"                       the lead is dead
+  "tested: raw, x2, x512, 880+v"         the lead names its own gap
+```
+
+**A verdict tells the next person not to bother. A method tells them what to
+change.** Had §171 recorded only its verdict, O1 would still be open.
