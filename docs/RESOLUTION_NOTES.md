@@ -17971,3 +17971,77 @@ Validate the decoder before anything else. `0x78cc4` on a group whose true value
 is known independently — the sample length of an instrument whose audio extent
 can be measured from the file — separates candidate 2 from candidates 1 and 3 in
 one test, and every further inference rests on it.
+
+### §166 addendum — the contradiction dissolves, and it takes §163–§165's arithmetic with it
+
+Both candidates from §166 are eliminated, and the third explanation is worse
+than either.
+
+**The decoder is validated.** `0x790be` *enforces* `g0 ≤ g2` and `g1 ≥ g3`
+(clamping `g0 = min(g0,g2)`, `g1 = max(g1,g3)`). Real data satisfies both
+**17 of 18** before any clamp. A wrong decoder does not satisfy two independent
+inequalities across values spanning 0…123440 by accident. `0x78cc4` as
+implemented is right, and the structure it reveals is textbook:
+
+```
+  g0 .. g1   the OUTER range   (sample start, sample end)
+  g2 .. g3   the INNER range   (loop start, loop end), with g3 ≈ g1
+```
+
+**The object is the right one.** `0x7ab84` is `moveal %a1,%a5`, and the caller
+passes `a1 = %fp@(-32)` — the struct `0x79024` just filled. So
+`length = struct[+12] − struct[+8]` really is `g3 − g2`, the **loop** length.
+
+### The actual error is mine, and it is four sections deep
+
+`0x7ae84`'s prologue: `%fp@(12) → %d7`, an **argument**. And at `0x7af1c`:
+
+```
+  d7 = %fp@(-8) + %fp@(12) + 48
+```
+
+**`%fp@(12)` is a position threaded into the walker by its caller.** It is not
+the wavesample struct's offset within the instrument file. §164 flagged exactly
+this — *"what this does NOT establish is that `%fp@(12)` is the previous
+struct's position — that is assumed, not read"* — and then §163, §164 and §165
+all computed `req = next − base − 48` as though it were.
+
+**So `req` was never the extent**, and neither number tests the extent law:
+
+```
+  §163  chain rule            1/18     not a test
+  §164  family search         3/18     not a test
+  §165  g1 − g0 fits          6/18     not a test
+  §166  g3 − g2 fits          0/18     not a test
+```
+
+The "contradiction" between 6/18 and 0/18 dissolves because neither side was
+measuring what it claimed. **§165's supported-mechanism result is withdrawn in
+full** — the tight 1.0032…1.0121 cluster is unexplained rather than meaningful,
+and I should have treated an unexplained tight cluster as a reason to re-check
+the apparatus, which is the rule I applied correctly to the pan survey this
+morning and not here.
+
+### What survives
+
+Only what was read from instructions and never depended on the arithmetic:
+
+- positions are **listed and read back** — `0x7ac24` stores length at
+  `entry[+60]` and reads position from `entry[+28]`
+- the decoded 32-byte struct's layout, now with semantics:
+  `+0/+4` sample start/end, `+8/+12` loop start/end, `+16` a 4-bit rate,
+  `+20` a mapped flag from source `+238`
+- `length = struct[+12] − struct[+8]` is the **loop** length
+- `0x78cc4` as implemented, validated 17/18 on the enforced invariants
+
+### The shape, which is the day's fifth distinct one
+
+**An assumption flagged as unread, then built on four times.** §164 wrote the
+caveat down correctly and in the right place. Writing a caveat down does not
+retire it, and it does not stop the next section from treating the caveated
+thing as a given — the caveat stayed in §164 while the quantity travelled.
+
+The operational form: **a flagged assumption should block the computation that
+depends on it, not annotate it.** Had `req` been unavailable until `%fp@(12)`
+was read, none of the four numbers would exist, and none of them was worth
+having.
