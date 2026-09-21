@@ -17376,3 +17376,127 @@ a result for them is not evidence either way.
 Wavesample 0 only. Later wavesamples interleave with their audio at a stride
 that is still unknown, so nothing here predicts voices beyond the first of each
 layer, and a mismatch in a later voice is out of scope rather than a refutation.
+
+## §161 — The result: pan confirmed 25/25, the layer model confirmed 100/100, and the fixed base refuted (2026-09-21, live)
+
+**Status: the pan law and the layer-mask model are both confirmed on
+out-of-sample data. §158's and §159's retractions are now positively vindicated
+rather than merely argued. One assumption failed — the fixed base — and it was
+the one carrying the pre-registered predictions.**
+
+Jan loaded the bank at directory block 4213 (Load, not Merge, so the previous
+bank was cleared — chosen because a part-full sample RAM would have produced
+missing variants, which is exactly what test 2 measures). EOS built 100 presets,
+25 instruments × 4 variants. All 100 were dumped over SysEx.
+
+### The pre-registered scores (§160), read exactly as written
+
+```
+  TEST 2  variants populated   76/76    PASS
+  TEST 1  pan                  17/19
+  TEST 3  root key             14/19
+  TEST 4  volume (post-hoc)    15/19
+```
+
+Every failure in tests 1, 3 and 4 is an instrument whose wavesample struct is
+**not at offset 880**. No failure is a law failing.
+
+§160 said the three implausible predicted roots (2, 2, 6) were predicted anyway
+and would not be quietly dropped. All three failed. They were the tell: a root
+key of 2 is not a root key, and the structural filter — `1 <= root <= 127` —
+was too lenient to catch it. That is the pre-registered failure and it is
+recorded as a failure.
+
+### Re-scored from the located base: the laws hold
+
+Locating each struct by the relation (root, klow, khigh) — three simultaneous
+byte constraints — and then reading the fields that were **not** in the search
+key:
+
+```
+  pan       25/25     OUT OF SAMPLE
+  volume    24/25
+```
+
+**Pan is confirmed on every instrument in the bank**, across all six distinct
+values:
+
+```
+  source  -127   -85   -42    0   +42   +127
+  E4 pan   -63   -42   -20    0   +20    +63
+```
+
+Pan was never part of the search key, so this is prediction, not fitting.
+§158's refutation of "every Ensoniq import lands centre" is now positive: EOS
+reads pan, reads it from `+221`, and reads it signed. The "importer defect"
+claim is dead in both directions — it was wrong, and the correct law is known.
+
+### The layer-mask model: 100/100, and the retracted model refuted 25/25
+
+TEST 5, derived from the §160 gate with no new law: variants admitting the same
+lowest layer must report an identical zone 0.
+
+```
+  variants agreeing with their layer class      100
+  variants in conflict                            0
+  instruments whose masks PARTITION the four      25/25
+```
+
+Every instrument's four variants split into more than one layer class, and every
+variant agrees with its class and differs from the others exactly as the masks
+on the disc dictate. **The retracted channel reading (§157) predicts all four
+variants draw identical content. It is refuted on all 25.**
+
+The clearest case: an instrument with masks `(3, 2, 1, 3)` — `00` and `**`
+take layers {0,1}, `*0` takes layer {0}, `0*` takes layer {1} alone. Three
+variants report pan −20 and the fourth reports 0, because layer 1's wavesample
+is centred and layer 0's is not. Nothing about channels predicts that.
+
+### The correction: base 880 is not fixed
+
+`ENSONIQ_ROLAND_IMPORT.md` recorded that the wavesample base is a fixed 880,
+on the strength of one instrument that resolved correctly without the
+`UNNAMED WS` landmark. That holds on the reference disc — 97 of 97 — and does
+**not** generalise. Located bases in this bank:
+
+```
+  656, 880, 1104, 1328, 2544, 93200, 97120, 105552, 115280, 129088
+  880 holds for 13 of 25
+```
+
+The four small values are 224 apart, which is the layer-array stride, but 2544
+does not fit that progression and the rule is not established. **The base is an
+open problem**, and it is the same open problem as the later-wavesample stride
+(§158) seen from the other end.
+
+"Fixed offset, survives a file missing the landmark" was a sound argument
+against name-location. It was not an argument for universality, and it got
+recorded as one.
+
+### Two smaller results
+
+**The volume table is now exercised at 11 indices** instead of one. §157 could
+confirm `TABLE_0x796a4` only at index 127, every zone on the reference disc
+reading 0. This bank exercises 0, 2, 74, 80, 89, 100, 101, 105, 109, 116, 127
+and matches at all but one. The exception: a source index of 80 maps to −5 in
+the table while the E4 reports −3. Index 74 maps to the same −5 and matched on
+a different instrument, so the table entry is not obviously wrong; none of the
+six candidate structs for that instrument yields −3 either. **Unexplained, and
+left unexplained.**
+
+**A velocity-range guess failed and was never a law.** Offsets `+278`/`+280`
+were tried as velocity low/high and scored 0/25. They are not velocity. Recorded
+so the next session does not retry them, and flagged as an invented offset
+rather than a documented one that failed.
+
+### What this bank could test that the reference disc could not
+
+```
+  field          reference disc        this bank
+  pan            1 value  (0)          6 values
+  volume         1 index  (127)        11 indices
+  variant masks  1 tuple x97           25 distinct partitions
+  velocity high  1 value  (127)        at least 2
+```
+
+That is the whole content of §158's lesson, as a table.

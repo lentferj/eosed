@@ -638,6 +638,11 @@ right *at index 127* is established; the other 127 entries are not.
 
 ### Base 880 is fixed, not name-derived
 
+> **NARROWED 2026-09-21 — true on this disc (97 of 97), false in general. A
+> second disc gives bases of 656, 1104, 1328, 2544 and larger; 880 holds for 13
+> of 25 instruments there. See RESOLUTION_NOTES §161. The argument below
+> refutes name-location, which stands; it never established universality.**
+
 `ACOUS-GTR` has no `UNNAMED WS` string at all, yet `B = 880` gives root 57 and key
 range 36–67, matching the E4XT exactly. So the wavesample struct sits at a fixed
 offset within the instrument file rather than being located by its name — which
