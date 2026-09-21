@@ -17307,3 +17307,72 @@ Disc A, **bank #40 of 64** (directory block 4213), 25 instruments:
 
 The reference disc could not test the mask model at all — every instrument there
 predicts the same thing. This bank predicts 25 different things.
+
+## §160 — Pre-registration: what the bank at block 4213 must produce (2026-09-21, written before the import)
+
+**This section is committed before the disc is imported.** It exists so the
+result cannot be read back onto the prediction afterwards, which is the failure
+mode of §157 (`*0` explained from the observation it then explained) and §158
+(a corpus property recorded as a format property). The laws are fixed here; the
+next section records what the machine did.
+
+Disc A, directory block 4213, 25 instrument entries, of which **19** pass the
+structural check at +880 and are predicted. The other 6 are not predicted, and
+a result for them is not evidence either way.
+
+### The laws being tested
+
+```
+  pan_e4 = (int8) ws[221] * 63 / 127          signed, truncating   (0x78f10)
+  layer L enters variant v  iff (inst[44+2v] >> L) & 1
+                            and (chanmask >> L) & 1                (0x78d64)
+  chanmask = chan ? inst[52] : inst[54]
+  suffix   = bit1 of v, bit0 of v  ('*' set, '0' clear)            (0x7be64)
+```
+
+### The predictions
+
+```
+   blk   variant masks        ch1/ch0    root   pan src -> E4
+ 112833  (3, 144, 6, 10)      (255, 0)     67    -127     -63
+ 210225  (7, 5, 2, 3)         (7,   0)     60     +42     +20
+ 177370  (3, 12, 48, 192)     (255, 0)     63    -127     -63
+ 213136  (7, 2, 1, 3)         (255, 0)     60     -42     -20
+ 213173  (3, 2, 1, 3)         (255, 0)     72     -42     -20
+ 124287  (5, 96, 24, 108)     (255, 0)     72     -85     -42
+ 208892  (3, 1, 4, 7)         (255, 0)     60     +42     +20
+ 211817  (3, 2, 1, 12)        (255, 0)     60     -85     -42
+ 102543  (192, 12, 48, 3)     (247, 8)     72    -127     -63
+ 208596  (3, 1, 7, 4)         (255, 0)     48     -42     -20
+  64799  (3, 12, 48, 192)     (255, 0)     67    -127     -63
+ 209758  (7, 1, 2, 3)         (255, 0)     72     -85     -42
+   6121  (1, 2, 4, 8)         (255, 0)     69       0       0
+   7385  (3, 12, 48, 192)     (255, 0)     49       0       0
+  62418  (3, 12, 48, 192)     (255, 0)      2       0       0
+ 124636  (3, 60, 192, 42)     (255, 0)      6       0       0
+ 238943  (3, 12, 48, 192)     (255, 0)      2       0       0
+ 124509  (3, 224, 28, 23)     (255, 0)     72    +127     +63
+ 217044  (7, 19, 11, 96)      (255, 0)     56    -127     -63
+```
+
+### What counts as a pass, decided now
+
+1. **Pan.** 14 of 19 non-zero, and the distinct E4 pan values must be exactly
+   **{−63, −42, −20, 0, +20, +63}**. Five distinct non-zero values is the point:
+   a wrong offset or an unsigned read cannot land all five. If every zone reads
+   centre, the retracted "importer defect" claim of §158 was right after all.
+2. **Layers.** Every one of the 19 predicts **all four variants populated** —
+   no empty `*0`. This is the sharpest available discriminator against §157's
+   retracted channel reading, which predicted an empty `*0` per instrument on
+   the ground that these are mono. If `*0` comes back empty here, the layer-mask
+   model is wrong too and both readings fail together.
+3. **Root key.** The 19 roots above, including the two reading 2 and the one
+   reading 6 — implausible as musical roots, predicted anyway because the law
+   says so. Quietly dropping them afterwards would be fitting the apparatus to
+   the answer.
+
+### What is NOT being tested
+
+Wavesample 0 only. Later wavesamples interleave with their audio at a stride
+that is still unknown, so nothing here predicts voices beyond the first of each
+layer, and a mismatch in a later voice is out of scope rather than a refutation.
