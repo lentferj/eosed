@@ -1016,3 +1016,75 @@ on a disc with 69 banks that reach any partials. **The richest bank is also one
 of the smallest** — 8 patches against 97 — so richness and size are not the same
 axis here, which is the whole reason for measuring rather than taking the
 biggest.
+
+## EOS's Roland import unit, and a volume-level import that silently drops most of a bank (2026-09-21, live)
+
+First Roland import ever run on the E4XT. Two findings, both from Jan's own
+experiments at the panel rather than from the disc analysis.
+
+### The import unit is the PATCH; the bank list shows PERFORMANCES
+
+The panel lists a volume's **performances**. Importing one performance produces
+**one preset per patch it references**. Confirmed on a 3-performance volume:
+
+```
+  volume  ->  performance A  ->  2 patches   ->  2 presets
+              performance B  ->  2 patches   ->  2 presets
+              performance C  ->  6 patches   ->  6 presets
+                                              --------------
+              all three, loaded individually    10 presets
+```
+
+The operator sees three entries in the bank and gets ten presets, because the
+third entry is a six-patch container. **This corrects the session's own
+planning error:** the bank was chosen and sized in *patches* from the object
+graph, and quoted as though patches were presets. They are — but the bank list
+is one level above them, so "8 patches, a small bank" described something the
+operator never sees.
+
+### A volume-level import yields a strict subset
+
+Importing the **whole volume** gives **2 presets**, not 10. The two are the
+*second* patch of the first performance and the *first* patch of the second —
+nothing at all from the six-patch third.
+
+**It is not a memory limit.** Measured on the device immediately after:
+
+```
+  sample memory   128 MB total, 117.2 MB free   (~11 MB used)
+  preset memory   4485 KB total, 4443 KB free   (99% free)
+```
+
+Nor is it a merge artifact: a clean **Load** of the volume gives the same 2.
+
+**So EOS's volume-level Roland import silently produces a fraction of the
+material, with no error and no resource pressure.** Anyone converting a Roland
+library volume-by-volume would lose most of it and have nothing to indicate the
+loss. The selection rule is not established — 2 of 10, taking one patch from
+each of the two small performances and none from the large one, is the whole of
+what is known.
+
+**Practical consequence: import performance-by-performance, never by volume.**
+
+### Field variation in the result
+
+Across the first 14 presets dumped (a different pair of banks):
+
+```
+  velocity ranges   VARY   94..101, 1..66, 89..97, 1..58, 1..70, 101..110, 1..63
+  key ranges        vary   21..21, 36..47, 36..49, 0..127
+  root key          varies 36, 45, 48, 52, 60
+  pan               0 on all 14      <- constant
+  volume            0 on all 14      <- constant
+  coarse tune      -1 on all 14      <- constant
+  fine tune         0 on all 14      <- constant
+```
+
+The velocity spread is the useful part: it is what the **crossed velocity-high
+and fade row** needs — the row this document already flags as surprising, where
+`partial+9` → zone 7 and `partial+10` → zone 6 appear swapped in the
+instruction stream.
+
+**Pan, volume and both tunes are constant, so those Roland rows remain
+untestable on this material** — declared before the analysis rather than after
+it, which is the one habit §158 was supposed to leave behind.
