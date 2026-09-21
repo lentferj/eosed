@@ -18362,3 +18362,81 @@ This project sized its work in patches, quoted patch counts as bank sizes, and
 read a defect into the gap. **The failure was invisible rather than merely
 unanswered**, and that is the difference between lacking a fact and lacking the
 words for one.
+
+## §169 — `%fp@(12)` READ at last, and the flagged assumption closed with a caveat (2026-09-21)
+
+Two claims relayed from a third-party analysis, both checked here rather than
+adopted. **Both traces are correct. One needs a qualification the relay omitted,
+and the other's incoherence is in its interpretation, not its reading.**
+
+### 1. `entry[+60]` and the bulk-read length: the same value, except +8
+
+§166 addendum 3 flagged this and refused to build on it: *"`0x7ac24` stores a
+length at `entry[+60]` and passes an extent to `0x77a48`, and that these are the
+same value is assumed, not read."* Now read:
+
+```
+  7ac4e:  movel %d6,%a4@(60)     ; entry[+60] = d6, as passed in
+  7ac52:  tstb  %fp@(31)         ; a flag
+  7ac56:  beqs  0x7ac6a          ; clear -> skip
+  7ac5c:  jsr   0x4a4ac          ; -> d5
+  7ac68:  addl  %d5,%d6          ; d6 += d5
+  ...
+  7ac8e:  addl  %d6,%d1          ; bounds:  file_size > entry[+28]+2 + d6
+  7aca8:  jsr   0x77a48          ; read(file, entry[+28]+2, d6 | 0x40000000, cb)
+```
+
+`0x4a4ac` returns **8 or 0**: `d0 = 12 + obj[20]; return (d0 > obj[36]) ? 8 : 0`.
+
+**So the stored length, the bounds term and the read length are one value — but
+the read length is 8 bytes larger when that flag is set and the helper fires.**
+The relay said "one value" without the `+8`. A converter that used `entry[+60]`
+as the audio extent would be short by 8 on those records.
+
+**The assumption is now read rather than assumed**, which is what §166 asked for,
+and it is closed in the qualified form rather than the clean one.
+
+### 2. `%fp@(12)` is the caller's own local, passed by value AND by address
+
+The one term everything rested on. From the only caller of `0x7ae84`, at
+`0x7b046`, pushes resolve as:
+
+```
+  fp@(8)  = 0                    a literal clrl
+  fp@(12) = caller's %fp@(-4)
+  fp@(16) = the block record
+  fp@(20) = caller's %fp@(32)
+```
+
+and `0x7ae84` also receives `%a0 = &caller's %fp@(-4)` — **the same local, by
+value and by address.** So it is an accumulator the walker reads and writes
+back, not a constant and **not the wavesample struct's offset in the file.**
+§166 addendum's conclusion stands, now on a reading rather than an inference.
+
+### 3. The composite is really in the instruction stream
+
+The relay's second claim — that the walker's `d7` at `0x7af1c` becomes the bulk
+read length — was doubted on the grounds that a length growing with position is
+incoherent. **The trace is right.** Counting the nine pushes at `0x7af32`–
+`0x7af48` into `0x7ac24`'s frame:
+
+```
+  d2 -> fp@(8)    a4 -> fp@(12)    d4 -> fp@(16)    d7 -> fp@(20)
+```
+
+and `0x7ac24` takes `%fp@(20)` into `d6` — the value stored at `entry[+60]` and
+passed to `0x77a48`. **So `d7 = extent + fp@(12) + 48`, 2-aligned, is the read
+length.**
+
+The incoherence objection therefore applies to the *interpretation*, not the
+disassembly: either `%fp@(12)` is not a position, or it is small or zero in the
+cases observed. **Naming it "the chained position" was a label, and the label is
+what was incoherent.** It is an accumulator of *something*; what it accumulates
+is not established, and nothing downstream of that gets computed here.
+
+### What this leaves
+
+O2 closes on the read-length question and does not close on the layout. The
+flagged term is read; what it means is the next thing, and it is a smaller
+question than it was this morning because it is now one local variable in one
+function rather than a missing convention.
