@@ -590,3 +590,94 @@ Every source offset in the Ensoniq tables above is now a **disc offset** and can
 be checked against the corpus the way AKAI's can. The loader is not the gate it
 was thought to be — `0x78dcc` copies rather than parses, so tracing it is no
 longer required to validate the mapping.
+
+## End-to-end validation against EOS's own import (2026-09-21, live)
+
+Jan imported the first bank of `CD7-ENSVFX` on the E4XT. Every loaded preset was
+dumped over SysEx and compared against the ISO run forward through the laws
+documented above — source bytes → law → EOS's actual output.
+
+### The forward check
+
+```
+  30 non-empty presets (10 instruments x 3 populated variants)
+  120 / 120 field comparisons match
+
+    root key   ISO +170            -> E4 zone root        every preset
+    volume     TABLE_0x796a4[+208] -> E4 zone volume      every preset
+    key low    ISO +274            -> E4 zone key low     every preset
+    key high   ISO +276            -> E4 zone key high    every preset
+```
+
+**But 120/120 overstates it, and the distinct-value count says by how much:**
+
+```
+  root    6 distinct  (50,55,57,60,62,69)   STRONG
+  klow    2 distinct  (21,36)               weak
+  khigh   2 distinct  (67,108)              weak
+  volume  1 distinct  (0)                   NONE -- constant, proves nothing
+  pan     1 distinct  (0)                   NONE
+  ftune   1 distinct  (0)                   NONE
+```
+
+**Only the root key is strongly validated.** Six distinct values, each predicted
+correctly from a fixed disc offset across ten instruments — that is a relation a
+wrong offset cannot satisfy. The key range carries two values, which is real but
+thin. **Volume, pan and fine tune are constant across the whole bank and
+validate nothing**, even though every one of them "matched".
+
+The volume law is confirmed at exactly one point: `+208` reads 127 on every
+instrument, `TABLE_0x796a4[127] = 0`, and the E4 reads 0. That the table is
+right *at index 127* is established; the other 127 entries are not.
+
+### Base 880 is fixed, not name-derived
+
+`ACOUS-GTR` has no `UNNAMED WS` string at all, yet `B = 880` gives root 57 and key
+range 36–67, matching the E4XT exactly. So the wavesample struct sits at a fixed
+offset within the instrument file rather than being located by its name — which
+also retires the last trace of §153's "the `+10` name match was the evidence"
+reading. The name was never the evidence; the fixed base is.
+
+### Four presets per instrument, and why one is empty
+
+EOS writes **four** presets per Ensoniq instrument, named with the two-character
+channel suffix the trace predicted at `0x7be64`:
+
+```
+  '1+2 HARMS     00'   sample=1   populated
+  '1+2 HARMS     0*'   sample=1   populated
+  '1+2 HARMS     **'   sample=1   populated
+  '1+2 HARMS     *0'   sample=0   EMPTY
+```
+
+The `*0` preset is **genuinely empty, not a miscounted one** — its dump is the
+same length with fewer non-zero bytes and a zone sample index of 0. (The
+discriminating check, and the warning that a low voice count can be a size bug
+rather than an empty preset, are mpc2emu's; their writer shipped exactly that
+fault in June.)
+
+**`*0` selects channel 1 alone, which a mono instrument does not have.** Three
+populated and one empty is what a mono source predicts; a stereo instrument
+should populate all four differently, which is the test that would confirm it.
+
+### The pan prediction is VOID, not confirmed
+
+`ENSONIQ_ROLAND_IMPORT.md` predicted every import lands centre because `+221`
+and `+225` are odd offsets on word-interleaved data. **Every imported zone did
+land centre — and the prediction still proves nothing**, because the source is
+centre too:
+
+```
+  source +221 (pan)   across 10 instruments: {0: 10}
+  source +225 (boost) across 10 instruments: {0: 10}
+```
+
+Centre output is what a correct converter and a broken one both produce here.
+**And the original argument was circular**: the byte was said to read zero
+*because* it is filler, with "it reads zero" as the support. Those are one
+observation.
+
+**Both rows are marked unverifiable, not verified.** Discriminating them needs an
+Ensoniq disc with a genuinely panned wavesample. (Control proposed by mpc2emu,
+who also supplied the generalisation: the uniform-field trap applies to the field
+being *predicted about*, not only to the fields being read.)
