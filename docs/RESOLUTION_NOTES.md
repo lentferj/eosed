@@ -18315,3 +18315,50 @@ The off-by-one touched the performance→patch narrative only. The velocity
 mapping (384/384) and the key-range law both locate their records **by name**,
 and the key-map run analysis uses only where ids *change*, never their values.
 Re-checked, all three stand.
+
+### §168 addendum — a retraction can inherit the frame of what it retracts
+
+Named by mpc2emu after both projects wrote successive retractions of the Roland
+volume-import finding. Worth recording because it is not on any other list here
+and it happened twice in twenty minutes.
+
+The original claim: *EOS silently drops most of a Roland bank.*
+
+```
+  retraction 1   "a narrower scope was loaded than intended"
+  retraction 2   "the machine announces the scope and offers the choice"
+  the truth      there is no volume-level import; every Load is bank-level
+```
+
+**Both retractions concede a wider scope that was never on offer.** Each is more
+accurate than the last and each keeps the premise of the thing it withdraws —
+that there exists a volume-level operation which loaded less than it might have.
+There is no such operation. The dialogue's `Bank:` field is a chooser, both
+routes to it are the same bank-level load, and the finding described something
+that does not exist.
+
+**A retraction inherits the frame of the claim it withdraws and can go on being
+wrong in the same direction, more quietly each time.** A first retraction gets
+scrutiny; a second reads as diligence and gets less. Ours got less.
+
+The check: **state what the correct claim is, not what the wrong claim should
+have said.** The two differ exactly when the frame is the error, which is the
+case where a retraction is most likely to be trusted and least likely to be
+read.
+
+### The vocabulary rule, which outranks the operator-state one
+
+mpc2emu's rule was *when behaviour depends on operator state, no amount of
+disassembly contains the answer.* That says the ROM lacks a fact.
+
+The sharper version: **the display carries vocabulary that the data does not.**
+`Folder`, `Bank` and `preset` are the operator's names for the three levels of
+the Roland hierarchy. They are not in the ISO, and they are not in the firmware
+strings traced today. So two sessions could not disagree *productively* about
+counts, because neither could say which level a count was of — and nothing in
+either the image or the ROM would have told them.
+
+This project sized its work in patches, quoted patch counts as bank sizes, and
+read a defect into the gap. **The failure was invisible rather than merely
+unanswered**, and that is the difference between lacking a fact and lacking the
+words for one.
