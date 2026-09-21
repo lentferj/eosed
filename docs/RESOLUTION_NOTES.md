@@ -17653,7 +17653,12 @@ stand between the current state and a path that could be attempted:
 
 Both are firmware reading. Neither needs the rig.
 
-## §163 — The chain rule: a clean hypothesis, tested, refuted 1/18 (2026-09-21)
+## §163 — The chain rule: a clean hypothesis, and a score that turned out to measure nothing (2026-09-21)
+
+> **Heading corrected. It read "tested, refuted 1/18".** The 1/18 was computed
+> from `req = next − base − 48`, and `req` was never the extent — see §166
+> addendum. The rule may still be wrong; it was not refuted by this number,
+> because this number is not a test.
 
 **Status: REFUTED. `+248` is probably the sample count; the layout rule built on
 it is not. The locator and the audio layout remain one unsolved problem.**
@@ -17729,7 +17734,15 @@ The remaining route is unchanged and offline: the three builders under the file
 walker (`0x7ad44`, `0x7ac24`, `0x7a9c4`), which is where the loader computes
 these positions rather than guessing at them.
 
-## §164 — The layout is not an arithmetic chain: a family of hypotheses ruled out, and two code increments (2026-09-21)
+## §164 — Two code increments, and a family search whose score measured nothing (2026-09-21)
+
+> **Heading corrected. It read "The layout is not an arithmetic chain: a family
+> of hypotheses ruled out".** The 3/18 behind it was computed from `req`, which
+> was never the extent (§166 addendum). **The family conclusion survives on a
+> different argument entirely** — the firmware's extent is a rate-compensated
+> *difference* of two decoded fields, read directly at `0x7ab8c`, and no rule of
+> the form `mult × decode(field)` can express that. That argument rests on the
+> instruction stream, not on the score. The two code increments are unaffected.
 
 **Status: the layout problem stays open, but a whole family of guesses is now
 closed, and the walker's own arithmetic is partly read.**
@@ -17809,7 +17822,14 @@ or ratio conversion rather than a byte count. Reading it properly is the next
 step and it is more than a single pass. `0x7ad44`, `0x7ac24` and `0x7a9c4`
 remain the three builders to trace, unchanged from §162.
 
-## §165 — GLM's chain rule tested: supported where testable, and §164's evidence base was confounded (2026-09-21)
+## §165 — WITHDRAWN IN FULL: a chain rule "supported" by a quantity with no meaning (2026-09-21)
+
+> **Heading corrected and the section withdrawn.** It read "supported where
+> testable". Every number in it derives from `req = next − base − 48`, and
+> `req` was never the extent (§166 addendum). The 6-of-18 fit and its tight
+> 1.0032–1.0121 cluster are **unexplained, not meaningful**. The confound this
+> section identified in §164 is real and stands; its own positive result does
+> not.
 
 **Status: the structure is supported on the 6 pairs where it can be tested. And
 §164's "best fit 3 of 18" was measured on a set in which 12 of the 18 pairs
