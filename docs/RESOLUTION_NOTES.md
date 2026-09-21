@@ -18737,3 +18737,54 @@ only against the list of attempted ones.
 
 **A verdict tells the next person not to bother. A method tells them what to
 change.** Had §171 recorded only its verdict, O1 would still be open.
+
+### §172 addendum 2 — the pools replicate on four more discs, and the exceptions are block padding
+
+mpc2emu identified the pools from gaps between listed positions on **one** EPS
+disc, and flagged that two discs is not a corpus. Four more were already
+extracted here from the morning's pan survey.
+
+```
+  disc          instruments   pool1  224+n*288      pool2  n*288
+  reference          97       (no pool-1 gaps)         1/1     100%
+  A                 613       1792/1823    98.3%    5933/8301   71.5%
+  B                  49         38/40      95.0%    1206/1322   91.2%
+  C                 235        376/379     99.2%    2344/2982   78.6%
+  D                 741         97/97     100.0%    1636/1768   92.5%
+```
+
+**Pool 1 holds at 95–100% on every disc that has pool-1 gaps at all.** The
+reference disc has none, which is not a gap in the evidence: §159 established
+that its instruments populate layer 0 only, so each has a single pool-1 entry
+and no gap to measure. The rule predicts exactly that.
+
+`224 + n*288` is the layout as arithmetic — a **224-byte layer record**, then
+`n` **288-byte wavesample records** belonging to it, then the next layer. Those
+are the two strides of EOS's own byte-indexed arrays, and they now appear in the
+**disc's** position gaps, which is a fact about the file rather than about the
+ROM's memory layout. **That is why the [S] parallel was right to refuse: a
+stride in a ROM is not evidence about a disc; the same number in the disc's own
+gaps is.**
+
+### The 25% exception is block padding
+
+Of pool-2 gaps that are not multiples of 288, across two discs:
+
+```
+   512   2875  95.6%     <- the block size
+   736     61   2.0%
+   everything else      < 0.5% each
+```
+
+**512 is the block size, and it accounts for 95.6% of the exceptions.** So
+pool-2 gaps are `n*288` or a 512-byte block boundary, and those two together
+cover about **99%** of informative gaps. mpc2emu's untested guess — *"mostly 512
+and 736, probably padding to a 512-byte boundary"* — is confirmed on different
+material.
+
+The residue is genuinely small and genuinely unexplained: 736 at 2%, and a long
+tail of single-digit counts. Recorded, not accounted for.
+
+**EOS Ensoniq → E4B: the law is measured, O2 closed, the audio format known,
+O1's position list found and validated against hardware, and the pools
+identified on five discs.**
