@@ -77,6 +77,12 @@ decoded by `0x78cc4`.**
 
 ## 3. Envelopes and cords: dropped, not converted
 
+> **Heading states as settled what is code-only.** This section's reading — two
+> 16-byte memsets at `0x7bb90` and nothing read from the source — has never been
+> checked against hardware, and the consolidated cross-project document buckets
+> it as *suggested, not confirmed*. One preset dump would settle it. Noted here
+> rather than rewritten, since this is an external session's trace.
+
 The channel builder `0x7bcdc` loops eight layers and, per layer, calls only
 the layer walker `0x7bbe4`, which per wavesample calls only the voice builder
 `0x7bb90` and the zone builder `0x7b0e0`. The zone builder writes the zone

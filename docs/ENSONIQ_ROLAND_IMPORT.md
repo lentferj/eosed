@@ -891,10 +891,20 @@ variant-mask prediction that the reference disc could not make at all, since
 there every instrument predicted the same thing.
 
 
-## The volume law completed: `+225` is a +12 index boost (2026-09-21)
+## The volume law MEASURED (not completed): `+225`'s +12 index boost, n=1 (2026-09-21)
 
-The Ensoniq volume law as documented above reads the table directly. It is
-incomplete. `0x78edc` in full:
+> **Heading and opening sentence corrected the same day.** They read "The
+> volume law completed" and "as documented above reads the table directly. It
+> is incomplete." **Both false** — the law in this document's own conversion
+> table has carried the `+225` branch since the file's first commit
+> (`67fd16f`). What was incomplete was the *scoring script*. This section
+> survived a correction pass three minutes earlier that fixed a different
+> sentence in this same paragraph and left the heading and the opening line
+> standing: the exact failure the heading rule had just been written to
+> describe. See RESOLUTION_NOTES §161 addendum.
+
+The Ensoniq volume law was documented with its boost branch from the start, but
+that branch had **never been exercised by any measurement**. `0x78edc` in full:
 
 ```
   volume = TABLE_0x796a4[ ws[225] ? min((ws[208] + 12) & 0xff, 127) : ws[208] ]
