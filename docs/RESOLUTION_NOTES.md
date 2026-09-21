@@ -17700,3 +17700,83 @@ audio begin and end, and the same unknown structure governs both.
 The remaining route is unchanged and offline: the three builders under the file
 walker (`0x7ad44`, `0x7ac24`, `0x7a9c4`), which is where the loader computes
 these positions rather than guessing at them.
+
+## §164 — The layout is not an arithmetic chain: a family of hypotheses ruled out, and two code increments (2026-09-21)
+
+**Status: the layout problem stays open, but a whole family of guesses is now
+closed, and the walker's own arithmetic is partly read.**
+
+### Two things the trace established
+
+**`0x79024` is the packed-group decoder wrapper.** Called from the file walker
+at `0x7aed2` with the block record and a 32-byte local (`%fp@(-32)`), it invokes
+`0x78cc4` four times on the record's `+240`/`+248`/`+256`/`+264` groups. So the
+decoded wavesample parameters live in a **32-byte structure**, and every
+consumer downstream takes that local rather than the raw groups.
+
+**The walker's running position uses +48 and 2-alignment, not 288 and 16.**
+At `0x7af1c`:
+
+```
+  d7 = %fp@(-8) + %fp@(12) + 48      ; extent + base + 48
+  if (d7 & 1) d7 += 1                ; round up to EVEN
+```
+
+`%fp@(-8)` is an output of `0x7ab78`, `%fp@(12)` an argument. **This is why
+§163's chain rule failed**: it assumed a 288-byte struct and 16-byte alignment,
+and the firmware uses neither. What it does *not* establish is that `%fp@(12)`
+is the previous struct's position — that is assumed, not read, and the next
+section is consistent with it being something else.
+
+### The family that is now ruled out
+
+Searching every rule of the form
+
+```
+  next = align( X + overhead + mult * decode(X + field) )
+  field    in {240, 248, 256, 264}
+  mult     in {1, 2, 4}
+  overhead in 0..1200 even
+  align    in {1, 2, 4, 8, 16, 32, 256, 512}
+```
+
+against the 18 struct pairs whose *both* ends are hardware-derived — located by
+matching the root and key range the E4XT reported for each variant:
+
+```
+  best fit over the whole family: 3 of 18
+```
+
+**No simple arithmetic chain describes this layout.** Not with any of the four
+packed fields, any plausible sample-size multiplier, any small overhead, or any
+alignment. The next wavesample's position is not a function of the current one
+plus a decoded length.
+
+That is worth more than it sounds. §163 refuted one rule; this refutes the
+shape. Anyone who reaches for "struct, then audio, then the next struct" now has
+a measured reason not to.
+
+It also means the real structure is one of: variable-size per-record headers,
+records not contiguous with their audio, a separate record table the walker
+indexes, or block-granular placement the file doesn't express arithmetically.
+The walker reading `%a5@(10)` (length) and `%a5@(32)` (pointer) **from a block
+record** rather than from the wavesample struct points at the last of these:
+the positions may simply be listed, not computed.
+
+### A note on the held-out set
+
+The fit used 18 pairs from one disc and the held-out set came back **empty** —
+on the reference disc every instrument yields only one locatable struct, because
+its instruments are single-layer and all four variants draw the same wavesample.
+So this is an unvalidated fit that happened to fit nothing, which is the only
+reason it can be reported as a clean negative. Had something scored 17/18, it
+would have needed a second disc before it could be believed, and that disc does
+not currently exist in a usable form.
+
+### Where the trace stops
+
+`0x7ab78` computes the extent at `%fp@(-8)`, and it calls `0x49ad4` three times
+with shifted operands (`d0 << 28`) — fixed-point arithmetic, most likely a rate
+or ratio conversion rather than a byte count. Reading it properly is the next
+step and it is more than a single pass. `0x7ad44`, `0x7ac24` and `0x7a9c4`
+remain the three builders to trace, unchanged from §162.
