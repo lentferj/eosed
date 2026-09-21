@@ -1044,6 +1044,23 @@ operator never sees.
 
 ### A volume-level import yields a strict subset
 
+> **RETRACTED 2026-09-21, within the hour, by the machine's operator.** There is
+> no silent loss and no selection rule. **Pressing Load with the cursor on the
+> VOLUME loads the first performance in it** — Jan's hypothesis, and it is
+> exactly right: performance 1 holds 2 patches, and 2 is what a volume-level
+> load produced. The section below reads a defect into a cursor position.
+>
+> It survived as long as it did because of an **off-by-one in this project's own
+> index resolution**: the patch ids in a performance's list are **0-based**, and
+> reading them 1-based made the two loaded presets look as though they came from
+> two different performances, which no "first performance" rule could explain.
+> Resolved 0-based, performance 122 alone is `['E-Guitar 1', 'E-Guitar 2']` —
+> precisely what loaded — and the union of all three performances is precisely
+> the 10 that a per-performance load produced.
+>
+> **The correct statement is that a volume-level Load has a narrower scope than
+> the operator expects, not that EOS discards material.** See §168.
+
 Importing the **whole volume** gives **2 presets**, not 10. The two are the
 *second* patch of the first performance and the *first* patch of the second —
 nothing at all from the six-patch third.

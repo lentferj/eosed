@@ -18227,3 +18227,60 @@ matched at all. So the "crossed velocity" note is refuted by measurement
 regardless of which pointer origin it meant — one of the two rows flagged as
 surprising in the Roland tables closes without needing the convention question
 settled.
+
+## §168 — The "silent data loss" was a cursor position, and an off-by-one of mine hid it (2026-09-21)
+
+**Status: RETRACTED. EOS does not silently drop most of a Roland bank. The
+volume-level Load loads the first performance, which is what the operator's own
+hypothesis said and what the data says once my indices are read correctly.**
+
+Earlier today this project recorded, and told a sibling project to put in its
+scope statement, that *"EOS's volume-level Roland import silently produces a
+fraction of the material, with no error and no resource pressure"* — 2 presets
+where per-performance loading gives 10, with 117 of 128 MB free.
+
+Jan's reading: **pressing Load with the cursor on the VOLUME may simply load the
+first performance in it.** Tested:
+
+```
+  patch ids in a performance's list are 0-BASED, not 1-based
+
+  performance 122, 0-based   ['E-Guitar 1', 'E-Guitar 2']
+  the volume-level load produced   ['E-Guitar 1', 'E-Guitar 2']    IDENTICAL
+
+  union of all three performances, 0-based   the 10 named presets
+  the per-performance load produced          the same 10           IDENTICAL
+```
+
+**Confirmed.** Nothing was discarded. A narrower scope was loaded than intended.
+
+### Why it looked like a defect, and the shape of the error
+
+Read **1-based**, performance 122 resolves to `['E-Mute/Dampd', 'E-Guitar 1']`
+while the load produced `['E-Guitar 1', 'E-Guitar 2']` — one patch from each of
+two different performances. **No "first performance" rule can explain that**, so
+the hypothesis that would have closed it in one step looked refuted before it
+was raised, and the remaining explanations were all about firmware behaviour.
+
+An off-by-one did not merely mislabel the data. **It excluded the correct
+explanation from the space of candidates**, which is worse than a wrong value:
+a wrong value gets caught when something downstream disagrees, and this agreed
+with everything except a hypothesis nobody had yet made.
+
+### The larger shape, and it is the day's last
+
+**Both projects went looking in the ROM for a rule governing something that was
+a cursor position.** The firmware cannot answer a question about where the
+cursor was. The person operating the machine can, and did, in one sentence.
+
+The generalisable form: **when a machine's behaviour depends on operator state,
+no amount of disassembly contains the answer.** The trace budget spent on
+"which patches does EOS select" was spent on a question the code does not have
+an opinion about.
+
+### What is unaffected
+
+The off-by-one touched the performance→patch narrative only. The velocity
+mapping (384/384) and the key-range law both locate their records **by name**,
+and the key-map run analysis uses only where ids *change*, never their values.
+Re-checked, all three stand.
