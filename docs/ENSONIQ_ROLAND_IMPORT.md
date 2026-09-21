@@ -1322,3 +1322,71 @@ its application was local: four rows corrected, two identical rows left standing
 in the same table, for hours, while the reasoning that condemned them sat two
 sections above. A rule discovered while solving one case does not apply itself
 to the others.
+
+### The Roland zone builder read in full: the crossing is real, and the +2 convention is confirmed
+
+`0x171434`, the eight bytes it writes, with their sources:
+
+```
+  171476:  a4@(12) -> a5@(0)        a4 = the PATCH
+  17147a:  a4@(13) -> a5@(1)
+  171480:  a4@(14) -> a5@(2)
+  171486:  a4@(15) -> a5@(3)
+  17148c:  a3@(7)  -> a5@(4)        a3 = the PARTIAL
+  171492:  a3@(8)  -> a5@(5)
+  171498:  a3@(9)  -> a5@(7)        <- crossed
+  17149e:  a3@(10) -> a5@(6)        <- crossed
+```
+
+**The crossing is in the instruction stream and it is deliberate**: `partial+9`
+to `a5@(7)` and `partial+10` to `a5@(6)`, written in that order.
+
+### The `+2` convention is now read, not inferred
+
+Measured earlier: `partial+7` = velocity low and `partial+9` = velocity high.
+The sibling project's E4B entry layout has `[6]` = lo_vel and `[9]` = hi_vel. So
+
+```
+  a5@(4) must be entry[6]     and    a5@(7) must be entry[9]
+  both require a5 = entry + 2
+```
+
+**Two independent endpoint matches**, so the `+2` pointer convention holds for
+the **Roland** builder specifically, rather than being carried over from the
+Ensoniq one. That was the single inferred step in the sibling's `[S]` bridge and
+it is now read.
+
+### Both quartets, resolved
+
+```
+  entry[2] = patch+12    lo_key
+  entry[3] = patch+13    key fade      <- the [S] row's own offsets, confirmed
+  entry[4] = patch+14    key fade
+  entry[5] = patch+15    hi_key
+
+  entry[6] = partial+7   lo_vel
+  entry[7] = partial+8   LOW fade
+  entry[8] = partial+10  HIGH fade
+  entry[9] = partial+9   hi_vel
+```
+
+**`entry[7]` is the low fade and `entry[8]` the high fade** — the sibling
+project's undecidable row, closed from the destination side. And the key quartet
+is **nested exactly like the velocity one**: low, fade, fade, high. Roland stores
+both ascending; **the nesting transform is the crossing**, so an importer writing
+them in source order would be the broken one.
+
+### Why the file-based search for the key fades failed
+
+`patch+12…+15` are offsets into **what EOS holds**, not into the file record.
+A file-side rebase of `+13`/`+14` by 16 finds one binary-valued byte and one
+fade-shaped byte, because the in-memory patch is not the disc record shifted by
+a constant. **The destination mapping settles the row without needing the source
+rebase at all.**
+
+### And the key fades are zero on this import
+
+116 zones across the imported bank: `klowfade` and `khighfade` are **0 on every
+one**, while `vlowfade`/`vhighfade` on the *same zones* carry 0 and 7. So the
+importer demonstrably writes fades on this material and writes **zero** key
+fades — the source has no key crossfades, rather than the path being untaken.
