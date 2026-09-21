@@ -17624,3 +17624,79 @@ stand between the current state and a path that could be attempted:
 ```
 
 Both are firmware reading. Neither needs the rig.
+
+## §163 — The chain rule: a clean hypothesis, tested, refuted 1/18 (2026-09-21)
+
+**Status: REFUTED. `+248` is probably the sample count; the layout rule built on
+it is not. The locator and the audio layout remain one unsolved problem.**
+
+§162 left two Ensoniq blockers, the locator and the audio layout, and the
+obvious thought is that they are the same blocker: if a wavesample's struct is
+followed by its audio, then the next struct's position falls out of the audio
+length, and one decoded field solves both.
+
+### The hypothesis, and the single observation that generated it
+
+Decoding the `0x78cc4` packed groups of the one instrument where two struct
+positions are known exactly (880 and 71072):
+
+```
+  +240  00 00 00 00 00 00 00 00  ->  0
+  +248  01 00 11 00 02 00 00 00  ->  34945
+  +256  00 00 ab 00 aa 00 00 00  ->  21973
+  +264  01 00 11 00 02 00 00 00  ->  34945
+```
+
+`880 + 288 + 2×34945 = 71058`, and `align16(71058) = 71072`. Exact.
+
+```
+  next_struct = align16(X + 288 + 2 * decode(X+248))
+```
+
+### The test, with both ends hardware-derived
+
+Each of an instrument's four variants may draw a different layer and hence a
+different wavesample. Locating each variant's struct by the E4XT's reported
+(root, klow, khigh) gives several struct positions per instrument, none of them
+derived from the rule. Then ask whether the rule connects consecutive ones.
+
+```
+  consecutive pairs tested   18
+  rule connects               1
+  rule fails                 17
+```
+
+**Refuted.** The single fit that generated it was one observation, and a rule
+generated from one observation fits that observation perfectly. This is the same
+shape as §157's `*0` explanation and §158's "always zero" — the third time
+today — and the only difference is that this one was tested before it was told
+to anybody.
+
+### What survives, because the failures are not random
+
+The predictions land close:
+
+```
+   40608 vs  40832   (+224)        278240 vs 278464  (+224)
+  105104 vs 105552   (+448 = 2x224)  97104 vs  97120  (+16)
+  112496 vs 113520                  70224 vs  72208
+```
+
+Several misses are exactly 224 or 448 — the same 224 that appeared among the
+small bases in §161 and that matches the layer-array stride. So **`+248` is
+plausibly the sample count** and the per-wavesample overhead is not a constant
+288: there is additional structure between the audio and the next struct, and
+sometimes a multiple of 224 of it.
+
+That is a better-specified open problem than §162 left, and it is still open.
+
+### The correction to §162's framing
+
+§162 listed the locator and the audio layout as blockers #1 and #2. They are
+**one problem** — the file's layout — and ranking them against each other is the
+wrong question. A converter needs to know where every wavesample's struct AND
+audio begin and end, and the same unknown structure governs both.
+
+The remaining route is unchanged and offline: the three builders under the file
+walker (`0x7ad44`, `0x7ac24`, `0x7a9c4`), which is where the loader computes
+these positions rather than guessing at them.
