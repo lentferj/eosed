@@ -17891,3 +17891,83 @@ consistent with `+8` = start and `+12` = end, with the difference in **samples**
 and ×2 for 16-bit bytes. The rate at `+16` is not identified: `g2` varies from
 2847 to 63833 across pairs whose implied rate excess is near-constant, so `g2`
 is not the rate in any direct reading.
+
+## §166 — The field mapping is NOT pinned: the code and the data disagree (2026-09-21)
+
+**Status: do not build on §165's field-mapping inference. Reading `0x79024`'s
+tail was supposed to close the mapping and instead produced a contradiction
+that is not yet resolved.**
+
+### The code, read directly, twice
+
+`0x790ca` — the tail of `0x79024`, storing the four decoded groups:
+
+```
+  decode(src+240) -> struct[+0]    (clamped: if > struct[+8], take struct[+8])
+  decode(src+248) -> struct[+4]    (clamped: if < struct[+12], take struct[+12])
+  decode(src+256) -> struct[+8]
+  decode(src+264) -> struct[+12]
+  LO of the +264 decode -> struct[+16]        a 4-bit value
+  map(src[+238])        -> struct[+20]        2->1, 3->2, 1->3, 4->4, else 0
+```
+
+`0x7ab8c` — the extent computation, confirming the relayed reading exactly:
+
+```
+  7ab8c:  movel %a5@(12),%d7
+  7ab90:  subl  %a5@(8),%d7        ; length = struct[+12] - struct[+8]
+```
+
+Both are unambiguous. Composing them, **length must be
+`decode(src+264) − decode(src+256)`.**
+
+### The data says otherwise
+
+Across the 18 pairs, required extent against `2 × length`:
+
+```
+  length = decode(264) - decode(256)   what the code composes    0 of 18
+  length = decode(248) - decode(240)   what §165 tested          6 of 18
+```
+
+and the six are not a loose 5% window — five of them sit at **1.0032, 1.0044,
+1.0054, 1.0091, 1.0121**, with one at 1.0360. A tight cluster just above 1 is
+what a small rate compensation looks like. A coincidence would scatter.
+
+**These cannot both be right, and I am not going to pick the one that suits the
+story.** Recorded as a disagreement.
+
+### The candidates, none tested
+
+1. **The object is not the struct I am reading.** `0x79024` is called from
+   `0x7aed2` as `0x79024(a2, &fp@(-32))` where `a2` comes from
+   `0x78c84(record type)` — an object selected by type, not necessarily the
+   disc wavesample block at my located base. If `a2` is a different structure,
+   then `+240…+264` are offsets into *it*, and my reading them at
+   `located_base + 240` is the error.
+2. **My `dec_hi` is wrong.** The signed shift was flagged as load-bearing by the
+   source that supplied it; I implemented `(b0<<15) + (b2<<7) + ((int8)b4 >> 1)`
+   but have never validated the decoder against a known value.
+3. **The 6 of 18 is coincidence.** Least likely given the cluster, but it is the
+   explanation that costs nothing to hold and it has not been excluded.
+
+### What this retracts
+
+§165 said the data was "consistent with `+8` = start and `+12` = end, with the
+difference in samples". **That inference is withdrawn.** It was built on
+`g1 − g0` fitting, and the code says `g1`/`g0` are `struct[+0]`/`struct[+4]`,
+which the extent computation does not read. The *structure* — that the extent is
+a rate-compensated difference of two decoded fields — survives, because the code
+shows it directly. Which two fields does not.
+
+**Nothing here changes the confirmed half:** positions are listed and read back
+(`0x7ac24`: length stored at `entry[+60]`, position read from `entry[+28]`),
+and the `+48` / align-2 chaining at `0x7af1c`. Those are read from instructions
+and do not depend on the field mapping.
+
+### The cheapest next step
+
+Validate the decoder before anything else. `0x78cc4` on a group whose true value
+is known independently — the sample length of an instrument whose audio extent
+can be measured from the file — separates candidate 2 from candidates 1 and 3 in
+one test, and every further inference rests on it.
