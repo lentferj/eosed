@@ -18087,3 +18087,52 @@ That also retires the phrase "maps to an E4-side object kind" wherever it
 appears, and it is a better fact than the one it replaces: it means the block
 record names its wavesample directly, which is consistent with the confirmed
 finding that positions are listed rather than computed.
+
+### §166 addendum 3 — the labels are now measured, and that makes the anomaly real
+
+mpc2emu objected that "outer = sample, inner = loop" was **inference, not
+measurement**: the enforced containment (`g0 ≤ g2`, `g1 ≥ g3`) establishes which
+pair is inside, not which pair is the audio. Correct, and it matters, because
+the extent computation reads the inner pair — and a loader that reads only the
+loop region is a strange loader.
+
+Tested on the 25-instrument bank. Their first proposed discriminator — does the
+doubled difference fit in the instrument file — **does not separate them**:
+0/25 for both pairs. Two other things do.
+
+**Single-voice instruments.** Two instruments in the bank report one voice, so
+their audio should fill essentially the whole file:
+
+```
+  file-header   outer   cov    inner   cov   voices
+       116592  113164  0.97    96802  0.83        1
+       117104  113164  0.97    96802  0.83        1
+```
+
+**Outer covers 97%; inner leaves 17% — about 20 000 bytes — unaccounted, with
+no second wavesample to hold it.** Across the bank the medians are 0.35 outer
+against 0.13 inner, and outer's maximum is 0.97 where inner's is 0.84.
+
+**A negative inner difference.** One instrument has `g3 < g2`, giving a length
+of −75 samples. A sample extent cannot be negative. The clamps at `0x790be`
+order `g0` against `g2` and `g1` against `g3` but never order `g2` against `g3`,
+so the firmware would compute it too.
+
+**So `+0`/`+4` is the sample and `+8`/`+12` is the subrange.** The labels are
+measured now, and the consequence is the opposite of reassuring:
+
+```
+  0x7ab8c:  length = struct[+12] - struct[+8]      = the INNER pair
+```
+
+**The extent really is built from the loop length, not the sample length.**
+mpc2emu's unease was not a naming artifact — it is a measured property, and it
+is now an open question rather than a resolved one. Whether `0x7ab78`'s output
+is the size of the bulk audio read, or something else that happens to be
+rate-compensated, is not established here; `0x7ac24` stores *a* length at
+`entry[+60]` and passes *an* extent to `0x77a48`, and that they are the same
+value is assumed, not read.
+
+**Flagged accordingly, and not built on.** That is the rule from the previous
+addendum applied on its first opportunity: the assumption is named, and nothing
+downstream of it gets computed until it is read.
