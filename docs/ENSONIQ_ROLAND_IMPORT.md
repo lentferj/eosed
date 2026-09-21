@@ -1088,3 +1088,78 @@ instruction stream.
 **Pan, volume and both tunes are constant, so those Roland rows remain
 untestable on this material** — declared before the analysis rather than after
 it, which is the one habit §158 was supposed to leave behind.
+
+## The Roland record base SOLVED, and the velocity mapping measured (2026-09-21, live)
+
+The section above recorded that the Roland source offsets cannot be file offsets
+— every one below 16 lands inside the record's name — and that no Roland row
+could be corpus-checked until a base was found. **The base is found.**
+
+### The structure
+
+```
+  partial record   0x1D5800 + (id - 1) * 128
+  sub-records      +16 + k*16          one per E4 velocity zone
+  within a sub-record:
+      +7   velocity low
+      +8   velocity low fade
+      +9   velocity high
+      +10  velocity high fade
+```
+
+**The documented law offsets were right all along** — they are offsets into the
+**16-byte sub-record**, not into the partial record and not into the file. That
+is the same shape as Ensoniq's base 880: a correct table addressed from the
+wrong origin.
+
+### How it was found
+
+One imported preset had **overlapping** velocity zones where every other preset
+in the bank was contiguous — 5–6 units of overlap with a fade of 7, against fade
+0 everywhere else. Searching the whole partial region for a record containing
+all three of that preset's velocity split points returned 13 of 2880 records,
+and the offsets were **25, 41, 57** — a stride of 16, which is the sub-record
+structure already identified. `25 = 16 + 9`, and `+9` is exactly where the table
+says velocity high lives.
+
+**A single preset with non-default values did what a whole bank of defaults
+could not.** The bank was chosen for parameter variation, and the one preset
+that varied is the one that solved it.
+
+### Validation against EOS's own output
+
+```
+  384 field comparisons, 384 match, 0 mismatch
+
+  field        distinct   strength
+  vlow             10     STRONG
+  vhigh             9     STRONG
+  vlowfade          2     weak  (0 and 7)
+  vhighfade         2     weak  (0 and 7)
+```
+
+The partial is located **by name**, independently of the mapping under test, so
+only the offsets are being tested. Velocity low and high are strongly validated.
+**The two fade rows rest on two values each** — but the non-default value 7
+appears at exactly the internal zone boundaries and 0 at the outer edges, which
+a wrong offset does not reproduce.
+
+### The "crossed" row needs re-examination, by its owner
+
+This document flags a row as surprising: Roland's velocity high and its fade
+appearing **crossed**, `partial+9` → zone byte 7 and `partial+10` → zone byte 6.
+
+Measured, the four fields map in **natural ascending order** to velocity low,
+low fade, high, high fade — `+7`, `+8`, `+9`, `+10` — 384/384.
+
+Whether that contradicts the crossed reading depends on the **E4B zone-entry
+byte indexing**, which is mpc2emu's, not this project's. So the finding here is
+the semantic mapping, stated as such; the byte-index question goes to them
+rather than being resolved from this side.
+
+### What this unblocks
+
+Every Roland row in the tables above can now be addressed and corpus-checked,
+against 2880 partial records on this disc alone. The Roland path moves from
+"nothing hardware-confirmed" to "velocity mapping confirmed, the rest
+addressable."
