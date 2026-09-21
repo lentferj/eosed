@@ -17220,3 +17220,90 @@ where EOS reads pan.
 
 Either outcome closes the row. It needs one bank imported on the E4XT; writing
 the image to the card is Jan's to authorise.
+
+## §159 — The `*0` preset is an empty layer, not a missing channel: §157's explanation refuted (2026-09-21)
+
+**Status: §157's channel reading is withdrawn. The firmware names the mechanism
+and it is a layer mask. The same uniform-corpus trap as §158, in the same disc.**
+
+§157 explained the empty fourth preset by saying `*0` selects channel 1, which a
+mono instrument does not have, and proposed a stereo instrument as the
+confirming test. mpc2emu accepted it as the cheapest open row and asked for a
+stereo census. The census was run, and on the way to it the firmware answered
+the question directly — differently.
+
+### The gate
+
+```
+  0x78d24:  TABLE[0..3] <- instrument@(44), @(46), @(48), @(50)
+  0x78d64:  if layer object null                 -> skip
+            if !(TABLE[v] & (1<<L))              -> skip
+            chanmask = chan ? instrument@(52) : instrument@(54)
+            if !(chanmask & (1<<L))              -> skip
+            else include layer L in variant v
+```
+
+`0x7bdf0` builds each variant by calling the channel builder twice — `chan=1`
+then `chan=0` — and writes the suffix from the two bits of `v` at `0x7be64`
+(42 `'*'` for a set bit, 48 `'0'` for a clear one).
+
+**Two independent gates.** A per-variant *layer* mask at `+44/+46/+48/+50`, and
+a per-channel layer mask at `+52`/`+54`. The suffix bits index the first one.
+They carry no channel meaning at all.
+
+### What the disc holds, and why the wrong reading fitted
+
+All 97 instruments on the reference disc are identical in both:
+
+```
+  variant masks (v0,v1,v2,v3) = (7, 1, 2, 3)   97 of 97
+  channel masks (ch1, ch0)    = (255, 0)       97 of 97
+```
+
+So `v2` = layer {1} alone, and only layer 0 is populated — hence empty. And the
+channel picture is the **reverse** of what was claimed: everything sits on
+channel 1, channel 0 is empty on every instrument. The retracted reading had the
+content on channel 0 with `*0` reaching for an absent channel 1.
+
+"Mono lacks channel 1" fitted three-populated-one-empty exactly as well as "only
+layer 0 exists", and nothing on that disc could separate them, because **the
+mask is constant across all 97 instruments**. §158's lesson arriving a second
+time in the same session and on the same disc: a field that never varies cannot
+tell you what it means, and here the field was the explanation itself.
+
+Worth naming the specific failure: the explanation was *generated* from the
+observation it then explained, and no independent measurement was taken before
+it was published to a peer as settled and used to commission work from them.
+mpc2emu's stereo census was requested on the strength of it.
+
+### The census, delivered anyway
+
+```
+  disc   instruments   distinct variant-mask tuples   both channels populated
+  ref         97                    1                        0
+  A          547                 many                       74
+  B           39                 many                       14
+  C          222                 many                       25
+  D           45                 several                     0
+  ------------------------------------------------------------------------
+                                                      113 of 850
+```
+
+Dual-channel instruments do exist — 113 across the corpus. The answer stands;
+it is simply no longer the answer to the `*0` question. Common variant tuples on
+disc A include `(3, 12, 48, 192)`, a clean four-way split of eight layers, and
+`(1, 24, 6, 96)`.
+
+### One import now tests three things
+
+Disc A, **bank #40 of 64** (directory block 4213), 25 instruments:
+
+```
+  pan:      14 non-zero; predicted E4 pans -63, -42, -20, +20, +63
+  layers:   variant masks vary per instrument, so each instrument predicts a
+            different pattern of populated/empty variants
+  channels: at least one instrument carries (ch1, ch0) = (247, 8)
+```
+
+The reference disc could not test the mask model at all — every instrument there
+predicts the same thing. This bank predicts 25 different things.

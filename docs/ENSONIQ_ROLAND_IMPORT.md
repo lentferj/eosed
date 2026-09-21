@@ -666,6 +666,10 @@ fault in June.)
 populated and one empty is what a mono source predicts; a stereo instrument
 should populate all four differently, which is the test that would confirm it.
 
+> **RETRACTED 2026-09-21 — the four suffixes are LAYER masks, not a channel
+> selection, and the firmware says so. See "The four variants are layer masks"
+> below.**
+
 ### The pan prediction is VOID, not confirmed
 
 `ENSONIQ_ROLAND_IMPORT.md` predicted every import lands centre because `+221`
@@ -768,3 +772,94 @@ is not where EOS reads pan. Either way the row stops being unverifiable.
 
 This needs one hardware import and costs nothing else; it is Jan's call, since
 writing a disc image to the card is his to authorise.
+
+
+## The four variants are layer masks, not channel selection (2026-09-21)
+
+The `*0`-is-empty explanation above — that the suffix picks a channel and a mono
+instrument lacks channel 1 — is **wrong**. The firmware names the mechanism
+exactly, and it is not channels.
+
+### The gate
+
+`0x78d64` decides whether layer `L` enters variant `v`:
+
+```
+  0x78d24:  TABLE[0..3] <- instrument@(44), @(46), @(48), @(50)
+  0x78d64:  if layer object is null            -> skip
+            if !(TABLE[v] & (1<<L))            -> skip
+            chanmask = chan ? instrument@(52) : instrument@(54)
+            if !(chanmask & (1<<L))            -> skip
+            else include
+```
+
+and `0x7bdf0` builds each variant by calling the channel builder twice, `chan=1`
+then `chan=0`, writing the suffix from the two bits of `v` at `0x7be64`
+(`'*'` = 42 for a set bit, `'0'` = 48 for a clear one).
+
+So there are **two independent gates**: a per-variant layer mask at
+`+44/+46/+48/+50`, and a per-channel layer mask at `+52` (channel 1) and `+54`
+(channel 0). The suffix bits index the first. They say nothing about channels.
+
+### What the reference disc actually holds
+
+All 97 instruments carry **identical** masks:
+
+```
+  variant masks (v0,v1,v2,v3) = (7, 1, 2, 3)    on 97 of 97
+  channel masks (ch1, ch0)    = (255, 0)        on 97 of 97
+```
+
+Read through the gate: `v0` = layers {0,1,2}, `v1` = layer {0}, `v2` = layer
+{1}, `v3` = layers {0,1}. Every layer is present on **channel 1**, and
+**channel 0 is empty on every instrument** — the exact opposite of the retracted
+claim, which had the content on channel 0 and `*0` reaching for a missing
+channel 1.
+
+`*0` is `v2` = **layer 1 alone**, and these instruments only have layer 0
+populated. That is the whole explanation. It is not about mono or stereo, and
+the E4 voice counts confirm it: `v0`, `v1` and `v3` all return the same voices
+(layer 0's), `v2` returns none.
+
+### Why the error survived
+
+"Mono instrument lacks channel 1" fitted the observation — three populated, one
+empty — and the observation could not distinguish it from "these instruments
+have only layer 0", because **on that disc the masks are constant**. Identical
+on 97 of 97 instruments. The same uniform-corpus trap as the pan row, in a disc
+that also happens to be uniform in exactly this field.
+
+A mask that never varies cannot tell you what the mask means.
+
+### The other discs vary, which is what makes the model testable
+
+```
+  disc   instruments   distinct variant-mask tuples   both channels populated
+  ref         97                    1                        0
+  A          547                 many                       74
+  B           39                 many                       14
+  C          222                 many                       25
+  D           45                 several                     0
+```
+
+Common tuples on disc A include `(3, 12, 48, 192)` — a clean four-way split of
+eight layers, two per variant — and `(1, 24, 6, 96)`. Where the reference disc
+offers one mask repeated 97 times, disc A offers a genuine distribution, and
+**113 of 850 instruments across the corpus have both channel masks non-zero**,
+so dual-channel instruments do exist. They are simply not what `*0` was about.
+
+### The designed test, updated
+
+Disc A, **bank #40 of 64** (directory block 4213), 25 instruments, tests both
+open questions in one import:
+
+```
+  pan:      14 instruments non-zero, predicted E4 pans -63, -42, -20, +20, +63
+  layers:   variant masks vary per instrument -- (3,144,6,10), (7,5,2,3),
+            (3,12,48,192), (1,2,4,8), (3,224,28,23) among them
+  channels: at least one instrument carries (ch1,ch0) = (247, 8)
+```
+
+Five distinct predicted pans no wrong law satisfies, and a per-instrument
+variant-mask prediction that the reference disc could not make at all, since
+there every instrument predicted the same thing.
