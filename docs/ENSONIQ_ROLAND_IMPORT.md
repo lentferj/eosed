@@ -920,3 +920,68 @@ has `ws[208] = 80`, and `TABLE[92] = -3` is what the E4XT reports, where
 
 Confirmed at one point only — one instrument carries the flag. See
 RESOLUTION_NOTES §161 addendum.
+
+## The Roland parameter regions located, and the source-offset assumption refuted (2026-09-21)
+
+The Roland tables above carry source offsets — `partial[4]` pan, `partial[6]`
+fine tune, `partial[9]`/`[10]` the crossed velocity pair, `patch[13]`/`[14]` the
+key fades, `src[24]` transpose. This document said those are offsets into what
+EOS *holds*, and that their being file offsets was **assumed by analogy with
+Ensoniq, not established**. That assumption is now **refuted**.
+
+### Where the parameter records are
+
+The directories at `0x0A0800`…`0x0CD800` are name plus a doubly-linked index
+list (`+0x10` class tag, `+0x12` index, `+0x14` prev, `+0x16` next) with **no
+file pointer**. The parameter records are a separate area, located by scanning
+for runs of name-bearing slots whose length equals the header's own count:
+
+```
+  class         base        stride   records   count matches header
+  Volume        0x10D800       256       122   exact
+  Performance   0x115800       512       269   exact
+  Patch         0x155800       512       889   exact
+  Partial       0x1D5800       128      4004   exact
+  Sample        not located — no name-bearing run after the Partial region
+```
+
+**These bases are identical on both discs of a two-disc library with different
+counts**, so they are fixed format offsets rather than per-disc values. Each
+record begins with the same 16-byte name as its directory entry.
+
+### Why the source offsets cannot be file offsets
+
+Every law offset below 16 lands **inside the name**. Surveyed across 3987
+partials, `+4`, `+6`, `+9`, `+10` all read 32…120 — printable ASCII, on every
+record. The same for `patch[13]`, `[14]`, `[24]`.
+
+**A field that is 100% printable ASCII on four thousand records is a name, not a
+parameter.** So the Roland source columns need a base offset within the record,
+exactly as Ensoniq's needed 880, and **no row in the Roland tables can be
+corpus-checked until that base is found.**
+
+### What the record looks like instead
+
+The 128-byte partial record's parameter area begins at `+16` and contains a
+**repeating 16-byte sub-record**: offsets `+16…+30`, `+32…+46`, `+48…+62` have
+matching profiles field for field, and `+27`/`+43`/`+59` are zero on every
+record. That is the partial's sample slots, which is consistent with a Roland
+partial addressing several samples.
+
+### Choosing a test disc by measurement rather than by size
+
+Counting parameter bytes that vary at all, and those taking eight or more
+distinct values, over the non-header records:
+
+```
+                 records   varying bytes   rich (>=8 values)
+  disc 1 Patch       872              92                  51
+  disc 1 Partial    3987              82                  48
+  disc 2 Patch       910             101                  92
+  disc 2 Partial    2874              91                  59
+```
+
+**Disc 2 is the richer disc on every measure, and it is the smaller one** — 497
+MB against 589 MB, with 2880 partials against 4004. Picking on size would have
+picked the weaker test, which is the §157 lesson arriving before the experiment
+instead of after it.
