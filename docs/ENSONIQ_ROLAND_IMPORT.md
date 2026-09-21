@@ -1226,3 +1226,38 @@ import came back as one `0..127` zone rather than a key map, and which presets
 do this is not established. **The law is recorded as holding on 11 of 14, not as
 general**, and the three exceptions are the next thing to chase — offline, from
 captures already in hand.
+
+### EOS's own names for the Roland hierarchy, from the LOAD dialogue
+
+Photographed at the panel. The import dialogue reads:
+
+```
+  Drive:  D7 <cd-rom>
+  Folder: F065 <name>          <- the Roland VOLUME
+  Bank:   B123 <name>          <- the Roland PERFORMANCE   (a selector)
+  [Cancel]      [Merge]      [Load]
+```
+
+So the terminology maps:
+
+```
+  EOS "Folder"  =  Roland Volume
+  EOS "Bank"    =  Roland Performance
+  EOS preset    =  Roland Patch
+```
+
+**`Bank:` is a chooser with the first entry pre-filled**, and Load acts on the
+selected bank. That is the whole of the "volume-level import drops material"
+episode: a bank was chosen and that bank was loaded.
+
+**This naming is why the level question was hard.** The browser's top list
+(`F061`…`F070`) shows folders, so "the bank I loaded" and "the bank in the
+object graph" were two different levels throughout, and this project spent the
+session sizing work in the wrong unit and then reading a defect into the gap.
+The operator's screen names all three levels unambiguously; nothing in the disc
+image or the ROM does.
+
+**And the dialogue confirms the index base independently**: the performance this
+project indexes as 122 displays as `B123`. Internal numbering is **0-based**,
+display is **1-based** — the same off-by-one that produced the retracted
+finding, visible on the front panel the whole time.
