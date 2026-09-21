@@ -17553,3 +17553,74 @@ Worth noting what made this findable: the discrepancy was **left in the commit
 as unexplained** rather than rounded off or attributed to a bad table entry. An
 anomaly recorded with its exact numbers is a question a colleague can answer;
 the same anomaly smoothed away is gone.
+
+## §162 — The Ensoniq sample audio: in-file, 16-bit big-endian PCM (2026-09-21)
+
+**Status: the encoding is identified. Where each wavesample's audio begins and
+ends is not, and that is now the second Ensoniq blocker behind the locator.**
+
+mpc2emu asked a question nobody had asked: the survey of 853 wavesamples read
+**parameter records only** — had anything ever touched the sample audio? It had
+not. A converter needs PCM, and an untouched audio path is a blocker sitting
+behind the locator rather than beside it.
+
+### What was measured
+
+The audio is inside the instrument file, not in a separate object. Instrument
+file sizes in one bank run from 8 blocks (4096 bytes, parameters only) to 976
+blocks (499712 bytes), and the large files are 96–98% dense where a parameter
+struct is about 35% dense.
+
+Endianness by successive-difference roughness — real PCM is smooth, so
+`mean(|x[i+1]-x[i]|) / mean(|x[i]|)` is small for the correct interpretation and
+near or above 1 for the wrong one. On the 499712-byte instrument at three
+offsets:
+
+```
+  offset     BE       LE
+   60000   0.077    1.344
+  249856   0.095    1.304
+  479712   0.186    1.325
+```
+
+**16-bit big-endian.** A 17× separation is not a judgement call.
+
+Strength: corpus-only, one instrument, three sample points, no hardware
+cross-check. Enough to fix the encoding, not enough to claim there is no second
+format elsewhere on a disc.
+
+### What is still missing, and why the obvious probe failed
+
+Where each wavesample's audio starts and ends. Two struct positions are known
+exactly on the reference disc — 880 and 71072, a gap of 70192 bytes — and no
+plain big-endian long anywhere in the struct equals that gap, the absolute
+offset, the gap halved, or the file size.
+
+That probe could not have worked. The struct's own longs read `0x23004600`,
+`0x08800000`, `0x20000000` — **byte-interleaved**, which is the packed-group
+encoding the GLM trace attributes to `0x78cc4`, decoding 4-byte groups at struct
+`+240`, `+248`, `+256`, `+264` into a 23-bit and a 4-bit value:
+
+```
+  hi = (b0 << 15) | (b2 << 7) | (b4 >> 1)
+  lo = ((b4 & 1) << 3) | ((b6 >> 5) & 7)
+```
+
+Those four groups are the best candidates for the audio pointer, length and loop
+points. **That decoder is not implemented here and not validated**, and
+implementing it against the two structs whose positions are known exactly is the
+specific next piece of offline work — no hardware, no disc write.
+
+### Why this reframes the Ensoniq estimate
+
+The law inventory is in good shape: pan 25/25, volume 25/25, layer masks
+100/100, root and key range confirmed. **None of it is reachable by a converter
+that cannot find the struct, and none of it produces audio.** Two offline traces
+stand between the current state and a path that could be attempted:
+
+```
+  0x7ad44 / 0x7ac24 / 0x7a9c4   the three builders under the file walker  -> the locator
+  0x78cc4                        the packed-group decoder                 -> the audio
+```
+
+Both are firmware reading. Neither needs the rig.
