@@ -1247,8 +1247,13 @@ So the terminology maps:
 ```
 
 **`Bank:` is a chooser with the first entry pre-filled**, and Load acts on the
-selected bank. That is the whole of the "volume-level import drops material"
-episode: a bank was chosen and that bank was loaded.
+selected bank. There are **two routes to the same operation** — set `Bank:` in
+this dialogue, or navigate into the folder and choose the bank there.
+
+**There is no volume-level import at all.** Every load is bank-level; the
+"volume-level import drops material" finding described an operation that does
+not exist. A bank was chosen — by the pre-filled default — and that bank was
+loaded.
 
 **This naming is why the level question was hard.** The browser's top list
 (`F061`…`F070`) shows folders, so "the bank I loaded" and "the bank in the
