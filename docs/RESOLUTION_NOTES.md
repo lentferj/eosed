@@ -18482,3 +18482,77 @@ would have been believed had nobody re-derived it. **The explanation was the
 thing nobody checked.**
 
 The common form: **the load-bearing part of a claim is often not the claim.**
+
+## §170 — The accumulator is an object-id cursor: O2's last third, and the label was wrong in the strongest way (2026-09-21)
+
+Two external analyses, relayed via mpc2emu, independently identified what
+`%fp@(12)` indexes. **Checked here rather than adopted — the core claim holds,
+with two corrections.**
+
+### Confirmed
+
+```
+  13e808:  movel 0x10004ff0,%d0              ; getter, current object id
+  13e810:  movel %sp@(4),0x10004ff0          ; setter
+  13e81c:  d0 = 92 * arg + [0x10004ff8]      ; arena accessor, 92-byte stride
+  13e82c:  ... table at 0x102d01d0, stride 92
+  13de88:  zeroes 92 bytes (23 x 2 clrw), then pea 0x5c
+```
+
+and decisively, in the walker's caller:
+
+```
+  7b062:  movel %fp@(-4),%sp@-
+  7b066:  jsr   0x13e810                     ; writes fp@(-4) back as the object id
+```
+
+**`%fp@(12)` is a cursor in EOS's 92-byte imported-object arena — an object id
+in the 1..999 space — not a file position and not an audio offset.**
+
+### Two corrections to the relay
+
+**It is not read from `0x10004FF0`.** It is initialised from an allocator:
+
+```
+  7afea:  jsr 0x19d93c
+  7aff0:  movel %d0,%fp@(-4)
+```
+
+so the walker **allocates** its starting id and writes the final one back.
+
+**`0x7A9C4` does not show `accumulator := entry[+28] + entry[+60] + 92`.** That
+range operates on `a4@(52)`/`a4@(56)` through the fixed-point helpers `0x49984`
+and `0x49ad4` — no `+92`, no `entry[+28]`, no `entry[+60]`. Not refuted, not
+found: recorded as unlocated rather than wrong.
+
+### And this is why the composite looked incoherent
+
+`d7 = extent + %fp@(12) + 48` reads as nonsense only if `%fp@(12)` is a large
+file offset. **It is a small integer — an object id under 1000.** So the sum is
+dominated by the extent and the arithmetic is unremarkable. mpc2emu's
+alternative — *"either the path is mis-traced, or `fp@(12)` is small or zero"* —
+was right in its second branch.
+
+**Nobody's disassembly was ever wrong. The noun was.** `%fp@(12)` was flagged in
+§164 as assumed-not-read and called *"the previous struct's position"* in the
+same sentence; four withdrawn scores, an external analysis and a sibling
+project's objection all inherited the word. It is an **id**. Not merely an
+unverified offset — a quantity of a different kind entirely, which is the
+strongest form the label failure could take.
+
+### The discipline, arriving in the right order for once
+
+GPTLUNA's own wording, adopted:
+
+> *"The strongest safe wording is 'index/cursor in EOS's 92-byte staging-object
+> arena', not 'next file position' and not 'audio offset'."*
+
+That is §169's rule applied **before** the label travels rather than after. This
+project paid for the other order today; an outside session wrote the careful
+name first.
+
+### What remains
+
+Locating every wavesample record — O1 — is untouched, and the `+224`/`+448`
+residuals must **not** be re-derived from `92 + 48`. That is the residual-fitting
+retracted yesterday, and KIMIK3 flagged it unprompted before anyone asked.
