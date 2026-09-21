@@ -1266,3 +1266,59 @@ image or the ROM does.
 project indexes as 122 displays as `B123`. Internal numbering is **0-based**,
 display is **1-based** — the same off-by-one that produced the retracted
 finding, visible on the front panel the whole time.
+
+### Pan and fine tune rebase to the same sub-record — and a class this project failed to sweep
+
+The velocity quartet was rebased to `+16 + k*16` and validated 384/384. **The
+same defect sat in two more rows of the same table and this project did not look
+for it.** The argument that solved the quartet — *every offset below 16 lands
+inside the record's 4-byte tag and 12-byte name* — is a statement about **all**
+rows. It was applied to the four rows in hand.
+
+Found by mpc2emu sweeping the rest, and reproduced here independently over all
+four sub-records per partial rather than one:
+
+```
+  field             range        within the formula's assumed span
+  sub[4]  pan       -32 .. 32    CD1 16016/16016    CD2 11520/11520   both rails
+  sub[6]  tune      -50 .. 50    CD1 16016/16016    CD2 11520/11520   CD1 both rails
+```
+
+```
+  pan       = clamp(sub[4] * 2, -64, +63)
+  fine tune = (sub[6] * 64 + 32) / 100
+```
+
+`sub[4]` is confined to ±32 and touches both rails, so doubling covers the E4's
+±64 **exactly** and the clamp never fires on real material. `sub[6]` is confined
+to ±50 and touches both rails on CD 1 — Roland's documented ±50 cents, **read
+off the disc rather than inferred from the arithmetic**, so the 1/64-semitone
+argument now rests on measured bounds instead of on the formula's own
+assumption.
+
+mpc2emu's framing of the strength, which is better than a percentage: **a field
+whose observed extremes land exactly on the rails of the range its formula
+assumes is not fitting a range, it IS the range.** Centre is modal on both
+discs.
+
+### Still pointing somewhere else
+
+```
+  transpose's src[24]        partial +24 is 0 on 2866 of 2880 and 25 on 14
+                             (25 x 12 = 300 semitones); sub +8 runs 0..127.
+                             A third structure, unidentified.
+  the stereo force-to-zero   reads sample[58], beyond the end of the 48-byte
+                             sample record. Also a third structure.
+```
+
+So *"the source columns are offsets into what EOS holds, not into the file"* is
+**confirmed** for the quartet, pan and tune — all three resolve to the same
+16-byte sub-record — and **still open** for transpose and the stereo selector.
+
+### The shape
+
+**Fixing an instance without sweeping the class.** The finding was general and
+its application was local: four rows corrected, two identical rows left standing
+in the same table, for hours, while the reasoning that condemned them sat two
+sections above. A rule discovered while solving one case does not apply itself
+to the others.
