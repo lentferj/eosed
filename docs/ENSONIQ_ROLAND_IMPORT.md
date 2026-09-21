@@ -458,3 +458,66 @@ instrument's second channel would be zeros, and this instrument may be mono.
   AKAI document's history is the warning: three of its thirteen rescale rows
   turned out to be unverifiable, and one "not read" claim was wrong and had a
   published finding built on it.
+
+## The in-memory representation, identified
+
+A loader trace contributed from an external session
+(`GLM_ENSONIQ_LOADER_TRACE.md`) located the machinery behind this document's
+blocker. Its instruction-level claims were re-derived here and **all verify**:
+`0x7a4b8` is the module entry with a `-520` frame, it pushes the `"PRST"` tag
+(`0x50525354`) to `0x19abdc`, takes `lea %fp@(-516),%a1`, fills it via
+`bsrw 0x7a1bc`, and passes it as the **fifth** argument to `0x7bf0c`.
+
+**Its headline is wrong, and the correction is the unblock.** That 516-byte
+local is *not* the structure this document's source offsets index — it is the
+scanner's slot list, 128 records of 4 bytes with a count at `+512`, which is
+exactly how `0x7bbe4` consumes it (`movel %a0@(512),%d2` for the count,
+`%a0@(0,%d7:l:4)` and `%a0@(2,%d7:l:4)` for the records). A wavesample offset of
+`+208` would land inside record 52 of a slot list, which is meaningless.
+
+The accessors give the real answer, and they are three lines each:
+
+```
+  0x78c60  instrument   = the long at 0x100037c4            (a single global)
+  0x78c68  layer        = 0x102bede0 + index * 224          (fixed array)
+  0x78c84  wavesample   = 0x102b5b50 + index * 288          (fixed array)
+```
+
+**So EOS's Ensoniq representation is three fixed RAM arrays, not a parsed
+buffer.** Every source offset in this document indexes one of them:
+
+| this document's source | array | stride | offsets used | fits |
+|---|---|---:|---|---|
+| instrument `+10`, `+66` | global at `0x100037c4` | — | 10, 66 | — |
+| layer `+40`, `+42` | `0x102bede0` | 224 | 40, 42 | yes |
+| wavesample `+170`, `+208`, `+221`, `+225`, `+274`, `+276` | `0x102b5b50` | 288 | max 276 | **yes, 276 of 288** |
+
+**Every wavesample offset falls inside the 288-byte stride and the largest sits
+near its top.** That is a consistency check the offsets could have failed and did
+not — a wrong reading would scatter past the stride or bunch at the bottom.
+
+### Why the disc search could never have worked
+
+These are absolute RAM addresses populated by the loader. **No base offset into
+a disc image can reach them**, which is why §153's packed and raw searches both
+failed at every base, and why the `+10` name match was a coincidence of
+convention rather than evidence.
+
+### The next target is now specific
+
+The wavesample array is referenced from seven places:
+
+```
+  0x78c86   the accessor itself
+  0x78dea   inside 0x78dcc -- the per-slot disc loader
+  0x78ebe   0x79102   0x79214   0x793b8   0x7946c
+```
+
+**`0x78dcc` is where a disc record becomes a 288-byte wavesample.** Tracing it
+converts every source offset in this document from "offset into what EOS holds"
+to a chain "disc byte → array offset → E4 field", and makes the whole Ensoniq
+table corpus-checkable the way AKAI's already is.
+
+That is a much sharper target than the three block builders the external trace
+proposed as next steps — those build the *sample* objects, not the wavesample
+parameter records.
