@@ -18634,3 +18634,69 @@ a further step nobody has. Recorded as a tested lead rather than a pending one,
 so the next session does not re-run it.
 
 `O1` remains open and remains the only Ensoniq blocker.
+
+## §172 — O1 SOLVED: the wavesample positions are listed at instrument +100 (2026-09-21)
+
+**Status: CLOSED. The last Ensoniq blocker is gone.** §164 predicted that
+positions are *listed rather than computed* and that this would explain a base
+scatter with no rule connecting it. **This is that list.**
+
+### The rule
+
+```
+  instrument header +100, 136 entries of 4 bytes
+  value  = ((byte0 << 8) + byte2) << 4          ; bytes 1 and 3 are zero padding
+  value  = the wavesample struct's byte offset within the instrument file
+```
+
+The `<< 4` is the firmware's own — `0x162FF2` builds `(byte0 << 8) + byte2` and
+shifts left 4. **§171 tried raw, doubled, ×512 and offset-from-880, and did not
+try ×16.** The proof was in §171's own printed output: its `idx 9` decoded to
+**55**, and 55 × 16 = **880**, the base this project has quoted all day.
+
+### Validation
+
+```
+  reference disc, 97 instruments, 232 table values
+      land on a plausible wavesample struct   230
+      land on something else                    2
+      outside the file                          0
+```
+
+and the decisive cross-check — the ten struct bases located **from the E4XT's
+own output** on a different disc, by matching root key and key range:
+
+```
+  656, 880, 1104, 1328, 2544, 93200, 97120, 105552, 115280, 129088
+  present as table values:  all ten
+  absent:                   none
+```
+
+Four of those are large and specific. They were derived from hardware without
+reference to this table and they are all in it.
+
+### What this retires
+
+- **§171's "NOT the list O1 needs" is withdrawn.** It was the right lead, tested
+  with an incomplete set of transforms.
+- **§161's "the base is an open problem" closes.** 880 held on 97 of 97 on one
+  disc and 13 of 25 on another because 880 is simply the commonest *listed*
+  value, not a constant. There was never a rule to find.
+- **§163/§164's chain-rule work** is retrospectively explained: no arithmetic
+  chain exists because the positions are not arithmetic.
+
+### Still open
+
+Which pool holds which kind. Pool 1 (indices 0–7) and pool 2 (8–135) split 98 /
+134 here. Gaps between sorted pool-1 values are frequently **224**, the layer
+stride, and 656 / 880 / 1104 / 1328 are 224 apart — consistent with pool 1 being
+layers, **not shown**. And 2 of 232 values land on something that is not a
+struct.
+
+### How it was found, which is the part worth keeping
+
+§171 filed this lead as **tested and failed**, with its method written out, so
+that nobody would re-run it. mpc2emu re-ran it anyway, on different material,
+varying one transform. **That is the argument for recording failures with their
+method attached rather than just their verdict** — a verdict tells the next
+person not to bother; a method tells them what to change.
