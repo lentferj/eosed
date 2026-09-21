@@ -253,7 +253,20 @@ the E4's. **The AKAI names are AKAI's own** (from mpc2emu's
 `docs/AKAI_S3000_FORMAT.md`, which derives them from the S1000 structure document
 and confirms them against 5,124 library programs).
 
-### Confirmed both ends
+### Endpoints identified both ends — which is NOT the same as the formula being verified
+
+> **Corrected 2026-09-21.** This heading read "Confirmed both ends", and the
+> paragraph below it named `PRLOUD` and `PANPOS` together as statable "with full
+> confidence". That conflates two different things. `PRLOUD`'s **formula** is
+> checked against EOS's own output, 363/363. `PANPOS`'s formula is **read from
+> the instruction stream and has never been checked against anything.** What is
+> confirmed for pan is that both *endpoints* are identified — the AKAI parameter
+> by name, the E4 field by its destination range. An identified source and an
+> identified destination do not verify the arithmetic between them.
+>
+> This overstatement propagated: it is where mpc2emu's consolidated document got
+> its "AKAI pan = Confirmed" bucket, which was corrected on review. Fixed at the
+> source here.
 
 | AKAI parameter (range) | formula | E4 parameter (range) |
 |---|---|---|
@@ -264,11 +277,21 @@ and confirms them against 5,124 library programs).
 | program name `0x03-0x0e` (12 chars, AKAI charset) | `charset[c]`, non-printable → space | **Preset name** (16 bytes, space-padded) |
 | keygroup count `0x2a` (1–99) | direct | **voice count** |
 
-`PRLOUD` and `PANPOS` are the two that can be stated with full confidence at both
-ends: the AKAI side is named and confirmed independently, and the E4 side is
-pinned by the destination range (−96…+10 is `E4_PRESET_VOLUME` and nothing else;
-−64…+63 is the pan byte). **mpc2emu reimplemented the `PRLOUD` row and matched
-EOS on 363 of 363 presets, zero differences.**
+`PRLOUD` and `PANPOS` both have **identified endpoints**: the AKAI side is named
+independently, and the E4 side is pinned by the destination range (−96…+10 is
+`E4_PRESET_VOLUME` and nothing else; −64…+63 is the pan byte).
+
+They differ completely in what that buys:
+
+- **`PRLOUD` — formula VERIFIED.** mpc2emu reimplemented the row and matched EOS
+  on 363 of 363 presets, zero differences.
+- **`PANPOS` — formula UNVERIFIED.** Instruction stream only. No corpus check, no
+  hardware. The row could have the wrong rounding, the wrong clamp order, or the
+  wrong scale constant and nothing here would show it.
+
+The AKAI-side naming also carries the provenance caveat below: it may be EOS's
+author and this project reading the same Akai document, not two independent
+reads of the machine.
 
 The two LFO rows are confirmed on the E4 side by corpus match rather than by
 range (26 distinct values on the LFO1 path, 11 on LFO2, both satisfying
