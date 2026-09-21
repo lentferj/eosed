@@ -868,3 +868,23 @@ open questions in one import:
 Five distinct predicted pans no wrong law satisfies, and a per-instrument
 variant-mask prediction that the reference disc could not make at all, since
 there every instrument predicted the same thing.
+
+
+## The volume law completed: `+225` is a +12 index boost (2026-09-21)
+
+The Ensoniq volume law as documented above reads the table directly. It is
+incomplete. `0x78edc` in full:
+
+```
+  volume = TABLE_0x796a4[ ws[225] ? min((ws[208] + 12) & 0xff, 127) : ws[208] ]
+```
+
+`+225`, described throughout this document as a "boost flag" of unknown effect,
+**adds 12 to the volume table index** — truncated to a byte, then clamped to
+127. Measured: the one instrument in a 25-instrument bank with `ws[225] != 0`
+has `ws[208] = 80`, and `TABLE[92] = -3` is what the E4XT reports, where
+`TABLE[80] = -5` is what the table alone predicts. With the term, volume scores
+25/25 on that bank; without it, 24/25.
+
+Confirmed at one point only — one instrument carries the flag. See
+RESOLUTION_NOTES §161 addendum.

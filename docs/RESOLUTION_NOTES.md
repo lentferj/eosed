@@ -17500,3 +17500,56 @@ rather than a documented one that failed.
 ```
 
 That is the whole content of §158's lesson, as a table.
+
+### §161 addendum — the index-80 anomaly was a missing term, and it closes the boost row (2026-09-21)
+
+§161 left one volume discrepancy unexplained: a source index of 80 maps to −5 in
+`TABLE_0x796a4` while the E4 reported −3. mpc2emu proposed checking whether the
+E4 value was a *sum* of zone, voice and preset volumes rather than one field —
+a reader taking one where the machine summed two gives exactly that shape of 2 dB
+error on one instrument and not others.
+
+It is not a sum. But the instinct — *the discrepancy is a second term, not a bad
+table entry* — was right, and it prompted reading the whole of `0x78edc` instead
+of just the table it indexes. The function is:
+
+```
+  78edc:  moveb %a0@(208),%d1        ; the volume byte
+  78ee6:  tstb  %a0@(225)            ; the BOOST flag
+  78eea:  beqs  0x78f00              ; clear -> straight to the lookup
+  78ef0:  addl  #12,%d0              ; set   -> +12 on the INDEX
+  78ef6:  moveb %d0,%d1              ; truncated to a byte
+  78efa:  cmpl  ... #127             ; then clamped
+  78f00:  TABLE_0x796a4[d1], sign-extended
+```
+
+So the documented law was incomplete:
+
+```
+  volume = TABLE_0x796a4[ ws[225] ? min((ws[208] + 12) & 0xff, 127) : ws[208] ]
+```
+
+**`+225` is not a separate parameter. It is a +12 shift on the volume index.**
+Every earlier description of it as a "boost flag" whose effect was unknown can be
+replaced with this.
+
+Re-scored across the bank:
+
+```
+  volume, TABLE[ws208] only        24/25
+  volume, with the +12 boost term  25/25
+```
+
+and the one instrument that differed is the one instrument with `ws[225] != 0`:
+index 80 + 12 = 92, `TABLE[92]` = −3, E4 reports −3.
+
+**The boost row of §158 moves from unverifiable to measured — at exactly one
+point.** One instrument in 25 has the flag set. That is better than the zero
+observations it had this morning and is not a distribution: it is the same
+standing as `TABLE_0x796a4[127]` after §157. A second disc's boosted instruments
+would settle whether the term is always +12 or whether 12 is itself a field.
+
+Worth noting what made this findable: the discrepancy was **left in the commit
+as unexplained** rather than rounded off or attributed to a bad table entry. An
+anomaly recorded with its exact numbers is a question a colleague can answer;
+the same anomaly smoothed away is gone.
