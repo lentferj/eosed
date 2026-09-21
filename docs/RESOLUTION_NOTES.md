@@ -17131,3 +17131,92 @@ The generalisation is mpc2emu's and it is the sharper form of §154's rule: **th
 uniform-field trap applies to the field you are predicting about, not only to
 the fields you are reading.** A prediction of "always X" tested on a corpus that
 is always X has been restated, not tested.
+
+## §158 — "Always zero" was a property of one disc: the pan row refuted from a four-disc corpus (2026-09-21)
+
+**Status: §157's unverifiable pan row is now refuted, not merely untested. A
+hardware test with five distinct predicted values is designed and waiting.**
+
+§157 closed with pan and boost marked unverifiable: every imported zone landed
+centre, but the source was centre on all ten instruments, so the run could not
+discriminate. mpc2emu's response was that four more Ensoniq discs were sitting
+unscanned on this machine and that a prediction of "always zero" cannot be
+tested on a corpus that is always zero.
+
+Scanned. 853 wavesamples across five discs:
+
+```
+  disc      wavesamples   non-zero +221   non-zero +225
+  ref            97             0               0
+  A             547           241              13
+  B              39             0               6
+  C             222            43              39
+  D              45            38               1
+  ---------------------------------------------------
+  total         853           322              59
+```
+
+**Only the disc Jan imported is centred throughout.** The document's claim that
+`+221` and `+225` are odd-parity bytes of word-interleaved data and therefore
+structurally zero — and its consequence, that every EOS Ensoniq import is panned
+centre regardless of source, an importer defect — is **withdrawn**. The parity
+count it rested on (102 non-zero at even offsets against 4 at odd) was measured
+over one disc's parameter area and generalised to the format.
+
+This is the same error as §157's, one level up. There the caution was *a field
+that barely varies cannot identify anything*; here the corpus itself barely
+varied, and a property of the content got recorded as a property of the format.
+**The uniform-field trap does not stop at the field — the corpus can be the
+uniform thing.**
+
+### The field is signed, and my survey read it unsigned
+
+`0x78f10` is `moveb %a0@(221),%d0; extbl %d0; mulsl #63,%d0; divsll #127,%d0`.
+The `extbl` makes it a **signed** −127…+127 mapping to the E4's −63…+63:
+
+```
+  source  -127   -85   -42    0   +42   +85  +127
+  E4 pan   -63   -42   -20    0   +20   +42   +63
+```
+
+Those six non-zero values are essentially the entire population. Random bytes
+would be uniform over 256 values; a seven-point cluster is a control surface.
+
+The first pass of the survey read the byte **unsigned** and reported 213 values
+"out of range 0…127", which made a real result look like apparatus failure — and
+it nearly got discarded on that basis. The tables have said "signed, truncating"
+since they were written; the defect was in the analysis script only. Worth
+keeping because the failure mode is the inverse of the usual one: **an apparatus
+bug that disguises a true finding as garbage is as expensive as one that
+disguises garbage as a finding**, and the instinct that saved it was checking
+whether the suspect records were structurally worse than the rest. They were
+better.
+
+### What the survey does not reach
+
+Offset 880 is the only wavesample anchor validated against EOS's own output
+(10/10). Later wavesamples are interleaved with their audio at a non-fixed
+stride — one instrument's second struct sits at 71072, neither 880+288 nor
+block-aligned. A structural-signature scanner built to find them scored **0/10
+against the E4 dump** (it matched quantised audio and missed the known struct at
+880) and was **discarded rather than tuned**: tuning a detector against the
+answer it is meant to produce is how a validated apparatus turns into a
+confirming one. So this is wavesample 0 per instrument, and §157's end-to-end
+check was voice 0 / zone 0.
+
+Plausibility at +880 runs 69–93% on the new discs against 100% on the reference,
+so some entries are not wavesamples. The non-zero-pan records specifically score
+91%, 100% and 97% on the internal check that root lies inside its own key range,
+against that 75–93% baseline — **cleaner than average, so they are not the
+failures.**
+
+### The designed test
+
+Directory block **4213** of disc A: 19 instruments, 14 panned, spanning all five
+non-zero source values. One import predicts five distinct E4 pan readings —
+**−63, −42, −20, +20, +63** — which no wrong law satisfies. If every zone
+instead lands centre, the original defect claim was right and `+221` is not
+where EOS reads pan.
+
+Either outcome closes the row. It needs one bank imported on the E4XT; writing
+the image to the card is Jan's to authorise.

@@ -558,6 +558,12 @@ being read from the wrong representation.
 
 ### The correction: pan and boost read structurally-zero bytes
 
+> **RETRACTED 2026-09-21 by a four-disc corpus survey — see the section
+> "`+221` is not a dead byte" below. `+221` is non-zero on 322 of 853
+> wavesamples across four other Ensoniq discs. The parity argument below was
+> generalised from a single disc and is wrong; the behavioural prediction it
+> makes about EOS is withdrawn. The text is kept for the record.**
+
 The disc data is word-interleaved — values at even offsets, zeros at odd — and
 the field offsets are not all the same parity:
 
@@ -681,3 +687,84 @@ observation.
 Ensoniq disc with a genuinely panned wavesample. (Control proposed by mpc2emu,
 who also supplied the generalisation: the uniform-field trap applies to the field
 being *predicted about*, not only to the fields being read.)
+
+
+## `+221` is not a dead byte: the interleave argument refuted (2026-09-21)
+
+The section above concluded that `+221` (pan) and `+225` (boost) sit on odd
+offsets of word-interleaved data, read structurally zero, and therefore that
+**every** EOS Ensoniq import lands centre — an importer defect. mpc2emu pointed
+out that the disc Jan imported cannot test a prediction of "always zero", and
+that four more Ensoniq discs were sitting on this machine unscanned.
+
+They were scanned. **The prediction is refuted.**
+
+```
+  disc      wavesamples   non-zero +221   non-zero +225
+  ref            97             0               0
+  A             547           241              13
+  B              39             0               6
+  C             222            43              39
+  D              45            38               1
+  ---------------------------------------------------
+  total         853           322              59
+```
+
+Only the reference disc — the one Jan imported — is centred throughout. That is
+why the end-to-end run could not discriminate, exactly as predicted, and it is
+why "always 0" survived: it was a property of one disc's content, restated as a
+property of the format.
+
+### The values are a pan control, and the field is signed
+
+`0x78f10` sign-extends before scaling — `moveb %a0@(221),%d0; extbl %d0;
+mulsl #63,%d0; divsll #127,%d0` — so the source byte is a **signed** −127…+127,
+mapping to the E4's −63…+63. Read that way the corpus values stop being
+nonsense and become a seven-position control:
+
+```
+  source  -127   -85   -42    0   +42   +85  +127
+  E4 pan   -63   -42   -20    0   +20   +42   +63
+```
+
+Those six values account for essentially the whole non-zero population. Random
+bytes would be uniform over 256; a seven-point cluster is a control surface.
+
+**This corrects an error in the survey, not in the table** — the table has said
+"signed, truncating" since it was written. The first pass of the survey script
+read the byte unsigned and flagged 213 values as "out of range 0…127", which is
+what made the result look like garbage. They were negative.
+
+### A caveat on the survey's reach
+
+Offset 880 is the only wavesample anchor validated against EOS's own output
+(10/10 on the reference disc). Structs for a **second and later** wavesample are
+interleaved with their audio at a stride that is not fixed — `ACOUS-GTR`'s
+second struct sits at 71072, which is neither 880+288 nor block-aligned, and a
+structural-signature scanner written to find them scored **0/10 against the E4
+dump** and was discarded rather than tuned. So this survey is wavesample 0 of
+each instrument, and the end-to-end check earlier was voice 0 / zone 0 only.
+
+Plausibility at +880 on the four new discs runs 69–93% (100% on the reference),
+so some entries are not wavesamples. The records carrying non-zero pan are
+**cleaner than average** on the internal check that root lies inside its own key
+range — 91%, 100% and 97% against a 75–93% baseline — so they are not the
+failures.
+
+### The test this designs
+
+Directory block **4213** of disc A holds 19 instruments, 14 of them panned,
+spanning every one of the five non-zero source values. Importing that one bank
+predicts five distinct E4 pan readings:
+
+```
+  -63, -42, -20, +20, +63
+```
+
+**Five distinct values is a relation a wrong law cannot satisfy**, which is
+precisely what the reference disc could not offer. If the import instead lands
+every zone at centre, the original defect claim is correct after all and `+221`
+is not where EOS reads pan. Either way the row stops being unverifiable.
+
+This needs one hardware import and costs nothing else; it is Jan's call, since
+writing a disc image to the card is his to authorise.
