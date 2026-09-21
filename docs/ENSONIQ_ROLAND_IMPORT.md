@@ -403,6 +403,15 @@ Their `[3]`/`[4]` — the key-fade pair — are zero across all 10 142 entries, 
 
 ### Source (Ensoniq file offsets) — NONE confirmed, and the address space is wrong
 
+> **RETRACTED 2026-09-21 — this heading and the section under it are wrong in
+> both halves.** The offsets ARE disc offsets: the loader copies the block raw,
+> and root key, volume and pan have since been confirmed against EOS's own
+> output on hardware, 25/25 for pan and volume. The de-interleaving that made
+> the search fail was the wrong transform, applied to the right offsets. See
+> "The disc→RAM link: CONFIRMED against a real disc" below and
+> RESOLUTION_NOTES §161. Kept because the reasoning is the record of how a
+> right answer was argued away.
+
 **Tested and failed.** mpc2emu framed the decisive question: are the firmware's
 offsets in *disc* space or in a *packed* (de-interleaved) copy? The disc data is
 word-interleaved — parameter bytes alternate with zeros — and the firmware's name
@@ -453,8 +462,12 @@ instrument's second channel would be zeros, and this instrument may be mono.
 - **Ensoniq envelopes.** The zone builder writes no envelope fields; they must be
   written by `0x7bb90` or by the layer walker, neither of which is traced.
 - **Ensoniq filter, LFO and modulation.** Not found.
-- **Any corpus validation at all.** Every offset here comes from the instruction
-  stream and none has been checked against a real Ensoniq or Roland disk. The
+- ~~**Any corpus validation at all.** Every offset here comes from the instruction
+  stream and none has been checked against a real Ensoniq or Roland disk.~~
+  **Superseded 2026-09-21 for Ensoniq only:** the Ensoniq offsets are now checked
+  against a 853-wavesample corpus across five discs AND against EOS's own import
+  on hardware (pan 25/25, volume 25/25, layer masks 100/100). **Still true for
+  Roland, where no import has ever been run** — that remains the biggest gap. The
   AKAI document's history is the warning: three of its thirteen rescale rows
   turned out to be unverifiable, and one "not read" claim was wrong and had a
   published finding built on it.
@@ -497,6 +510,14 @@ near its top.** That is a consistency check the offsets could have failed and di
 not — a wrong reading would scatter past the stride or bunch at the bottom.
 
 ### Why the disc search could never have worked
+
+> **RETRACTED 2026-09-21 — the disc search works, and this section's own
+> example is the counter-evidence.** The struct is a raw copy of the disc block,
+> so a base offset reaches it exactly; and the `+10` name match dismissed below
+> as a coincidence of convention **was the real thing all along**, as the
+> section "The disc→RAM link: CONFIRMED against a real disc" in this same file
+> states. The searches failed because they were run against a de-interleaved
+> copy, not because the address space was unreachable.
 
 These are absolute RAM addresses populated by the loader. **No base offset into
 a disc image can reach them**, which is why §153's packed and raw searches both
