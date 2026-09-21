@@ -18171,3 +18171,59 @@ value is assumed, not read.
 **Flagged accordingly, and not built on.** That is the rule from the previous
 addendum applied on its first opportunity: the assumption is named, and nothing
 downstream of it gets computed until it is read.
+
+## §167 — The velocity fade pair is per-edge: an asymmetric stack decides what a mirrored corpus cannot (2026-09-21, live)
+
+mpc2emu asked a question their own corpus structurally cannot answer. They have
+36 non-zero fade zones, and they are **18 mirrored pairs** — one zone `0/80`,
+its partner `80/0`, same key range, same velocity span. Every pair contains both
+orderings, so which member of the fade pair is the LOW fade is undecidable from
+it. Their table's low/high labelling was inference from nesting position, and
+they have re-marked it as such.
+
+The Roland bank imported today has what mirroring destroys: **asymmetric** fades
+— 7 at internal boundaries, 0 at the outer edges of a four-zone velocity stack.
+
+### The measurement
+
+Raw NEW-format preset dump, words in dump order:
+
+```
+  bottom zone     1,   0,  78,   7
+  top zone      103,   7, 127,   0
+```
+
+read against parameter ids 49/50/51/52 — velocity low, low fade, high, high
+fade, names transcribed from E-mu's own spec:
+
+```
+  bottom of the stack   vlow=1    vlowfade=0    vhigh=78   vhighfade=7
+  top of the stack      vlow=103  vlowfade=7    vhigh=127  vhighfade=0
+```
+
+**It swaps.** The outer edge of the stack carries fade 0 and the internal edge
+carries 7, on both ends, in opposite slots. So the pair **is** a per-edge fade,
+which was the pre-registered outcome that keeps the interpretation intact; had
+it not swapped, the pair would not be per-edge at all and both projects would
+have had something larger to re-examine.
+
+### What it decides for the sibling table
+
+The low fade is the member that reads **0 on the bottom zone** of this stack and
+**7 on the top**. Any parser mapping that reads a non-zero low fade on the
+bottom zone has the pair reversed.
+
+The dump order here is **ascending** — low, low fade, high, high fade — while
+the E4B file entry is **nested**, low, fade, fade, high. Those are two
+representations and this measurement is of the first; mapping it onto entry
+bytes `[7]`/`[8]` is the sibling project's layout and theirs to apply. What this
+supplies is the asymmetric case their corpus lacks.
+
+### And the crossing is refuted independently
+
+The same bank matched Roland's `partial+9` to E4 `vhigh` **384/384 across nine
+distinct values**. Had `+9` been landing in a fade byte, `vhigh` could not have
+matched at all. So the "crossed velocity" note is refuted by measurement
+regardless of which pointer origin it meant — one of the two rows flagged as
+surprising in the Roland tables closes without needing the convention question
+settled.
