@@ -18440,3 +18440,45 @@ O2 closes on the read-length question and does not close on the layout. The
 flagged term is read; what it means is the next thing, and it is a smaller
 question than it was this morning because it is now one local variable in one
 function rather than a missing convention.
+
+### §169 addendum — a label travels further than the caveat attached to it
+
+`%fp@(12)` was flagged in §164 as *"assumed, not read"* — and called **"the
+previous struct's position"** in the same sentence. The caveat stopped at that
+paragraph. The noun propagated into four scores (§163–§166), into an external
+firmware analysis, and finally into a sibling project's objection to that
+analysis — an objection whose only wrong component was the word it had
+inherited from here.
+
+**Mechanically: when a quantity is flagged as unread, do not give it a
+descriptive name.** Name it syntactically — `fp@(12)`, "the accumulator" —
+until it is read. A caveat is re-read by whoever reaches that paragraph; **a
+name is a claim nobody re-reads, and it is the part that gets quoted.**
+
+### The pattern of the day, which is not any of the findings
+
+Three failures today share a shape and **none of them was reachable by any
+sweep either project runs, because in all three cases every sentence was true**:
+
+```
+  a retraction inheriting the premise of the claim it withdrew
+      -> "a narrower scope than intended", twice, for an operation that
+         does not exist
+
+  a vocabulary mismatch with no shared word for a level
+      -> two sessions sizing the same work in patches and in banks, and a
+         defect read into the gap
+
+  a label outrunning its own caveat
+      -> "position" propagating through four scores and two projects while
+         the caveat stayed in one paragraph
+```
+
+Stale-claim sweeps find false sentences. **These are frames, names and premises
+— the parts of a document that are not assertions and therefore never get
+checked.** A fourth, from the sibling projects' own evening: two correct counts
+reconciled by a plausible definitional explanation that was itself wrong, and
+would have been believed had nobody re-derived it. **The explanation was the
+thing nobody checked.**
+
+The common form: **the load-bearing part of a claim is often not the claim.**
