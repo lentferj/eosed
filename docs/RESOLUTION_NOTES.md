@@ -18252,7 +18252,19 @@ first performance in it.** Tested:
   the per-performance load produced          the same 10           IDENTICAL
 ```
 
-**Confirmed.** Nothing was discarded. A narrower scope was loaded than intended.
+**Confirmed.** Nothing was discarded.
+
+> **And the retraction itself needed correcting, by the same person, minutes
+> later.** This section first said *"a narrower scope was loaded than
+> intended"* — implying the operator was surprised by it. Jan's correction:
+> **the E4XT's dialogue states it will load a single bank from the folder, and
+> offers a choice of which.** The machine announces the scope and asks, at the
+> moment of the action.
+>
+> So it is not silent in any sense, not an implicit narrowing, and not a
+> surprise. **A retraction is a claim and inherits the obligations of one** —
+> this one was written from the same armchair as the finding it retracted, and
+> the person at the instrument corrected both.
 
 ### Why it looked like a defect, and the shape of the error
 
@@ -18269,14 +18281,33 @@ with everything except a hypothesis nobody had yet made.
 
 ### The larger shape, and it is the day's last
 
-**Both projects went looking in the ROM for a rule governing something that was
-a cursor position.** The firmware cannot answer a question about where the
-cursor was. The person operating the machine can, and did, in one sentence.
+**Both projects went looking in the ROM for a rule governing something the
+machine puts on screen and asks about.** Not merely a cursor position — a
+dialogue, stating the scope and offering the choice. Two sessions queued
+disassembly against a question the instrument answers out loud.
+
+The firmware has no opinion about what was displayed, and what was displayed is
+a **first-class cause of observed behaviour**, not noise around some real
+mechanism underneath.
 
 The generalisable form: **when a machine's behaviour depends on operator state,
-no amount of disassembly contains the answer.** The trace budget spent on
-"which patches does EOS select" was spent on a question the code does not have
-an opinion about.
+no amount of disassembly contains the answer. Ask the operator, or read the
+dialogue, before tracing.** The budget queued against "which patches does EOS
+select" was queued against a question the code does not have an opinion about
+and the screen answers directly.
+
+### A second thing both sessions did wrong with the same evidence
+
+mpc2emu's independent read of the disc **contradicted mine**, and they said so —
+at the end of a message, as a caveat, having already filed the scope warning
+that the contradiction undermined. I received it the same way and moved on.
+
+**Two sessions reading the same bytes to different conclusions is evidence about
+the readers**, and it outranks whatever either was in the middle of filing. The
+contradiction was in the same message as the claim it falsified, and neither of
+us stopped for it. Being right by accident of a different resolution is not a
+finding either — their note said the guitar entry was a single *patch*, which is
+a different claim from the one that turned out to matter.
 
 ### What is unaffected
 

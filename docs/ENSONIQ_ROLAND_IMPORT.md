@@ -1058,8 +1058,11 @@ operator never sees.
 > precisely what loaded — and the union of all three performances is precisely
 > the 10 that a per-performance load produced.
 >
-> **The correct statement is that a volume-level Load has a narrower scope than
-> the operator expects, not that EOS discards material.** See §168.
+> **The correct statement is that the E4XT's dialogue states it will load a
+> single bank from the folder and offers a choice of which** — the scope is
+> announced and chosen at the moment of the action, so it is not silent, not
+> implicit, and not a surprise. Jan's correction, to this project's own
+> retraction. See §168.
 
 Importing the **whole volume** gives **2 presets**, not 10. The two are the
 *second* patch of the first performance and the *first* patch of the second —
