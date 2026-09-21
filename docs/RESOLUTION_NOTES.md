@@ -17808,3 +17808,86 @@ with shifted operands (`d0 << 28`) — fixed-point arithmetic, most likely a rat
 or ratio conversion rather than a byte count. Reading it properly is the next
 step and it is more than a single pass. `0x7ad44`, `0x7ac24` and `0x7a9c4`
 remain the three builders to trace, unchanged from §162.
+
+## §165 — GLM's chain rule tested: supported where testable, and §164's evidence base was confounded (2026-09-21)
+
+**Status: the structure is supported on the 6 pairs where it can be tested. And
+§164's "best fit 3 of 18" was measured on a set in which 12 of the 18 pairs
+could not have fitted ANY adjacency rule. That is my error, not GLM's.**
+
+A third session traced the loader at instruction level and sent, via mpc2emu, a
+corrected rule with a pre-registered prediction:
+
+```
+  next_base = align2( base + 48 + extent )
+  extent    = f( struct[+12] - struct[+8], rate )      <- a DIFFERENCE
+```
+
+and the explanation that §164's family search missed because **the extent is
+not a multiple of one field**. Differences and rate compensation were both
+outside the searched family.
+
+### What the 18 pairs say
+
+Required extent per pair is `next − base − 48`. Against `2 × (g1 − g0)`, where
+`g0`/`g1` are the groups at `+240`/`+248` decoded by `0x78cc4`:
+
+```
+  6 of 18 pairs land at ratio 1.0032 … 1.0360
+  the other 12 run 1.34, 1.61, 1.63, 2.02, 2.17, 2.75, 3.63, 3.96, 5.15
+  and two are near zero
+```
+
+**Six is not a poor result — it is the number of pairs the test can reach.** The
+ratios above 1.05 are what a gap spanning *more than one entry* looks like.
+
+### The confound, which is mine
+
+My pairs are **consecutive LOCATED structs, not consecutive structs.** Each was
+found by matching the root and key range the E4XT reported for one variant. An
+instrument with five wavesamples of which two were located yields a "pair" whose
+gap spans three extents. **No adjacency rule can fit such a pair, and twelve of
+the eighteen are of that kind.**
+
+So §164's "no simple arithmetic chain describes this layout, best fit 3 of 18"
+is **overstated**. The family conclusion may still stand — a difference-based
+extent was outside the family whatever the pairs were — but the *evidence* was
+two-thirds invalid, and the score was reported as though all 18 were fair tests.
+I built a validation set out of whatever the hardware happened to identify and
+never asked whether its members satisfied the property being tested.
+
+That is a new shape for the day's list: **not a stale claim, but a metric
+computed over a population that does not meet the metric's precondition.** A
+denominator nobody checked.
+
+### The pre-registered prediction, supported in mechanism
+
+The prediction was that §163's `+224`/`+448`/`+16` residual misses would become
+hits. They are not yet numerical hits — the rate term is unidentified — but:
+
+```
+  §163 small-residual pairs:  +224, +224, +448, +16
+  all four are among the six clean pairs here, at ratios
+  1.0121, 1.0032, 1.0091, 1.0054
+```
+
+**The residual is now attributable rather than unexplained.** The old rule used
+`g1` alone with no `g0` subtraction and no rate term; the leftover was the rate
+term. That is the prediction's mechanism confirmed even though its arithmetic
+is still open.
+
+### A lead on the excess, offered as a lead only
+
+`req − 2×(g1 − g0)` for the six clean pairs: **502, 470, 478, 512**, then 948
+and 2482. Four cluster near 512. GLM's trace notes a **two-byte marker at each
+audio block's start** and an `extent, +2`. A per-block overhead accumulating
+over a fixed block size would produce exactly a near-constant excess for
+similar-length samples. Not tested, and the two outliers are unexplained.
+
+### Field mapping, as far as the data takes it
+
+`g0` is 0 on 16 of 18 structs, and `g1 − g0` behaves as the length. That is
+consistent with `+8` = start and `+12` = end, with the difference in **samples**
+and ×2 for 16-bit bytes. The rate at `+16` is not identified: `g2` varies from
+2847 to 63833 across pairs whose implied rate excess is near-constant, so `g2`
+is not the rate in any direct reading.
