@@ -1163,3 +1163,46 @@ Every Roland row in the tables above can now be addressed and corpus-checked,
 against 2880 partial records on this disc alone. The Roland path moves from
 "nothing hardware-confirmed" to "velocity mapping confirmed, the rest
 addressable."
+
+### Key ranges come from the patch key map, and EOS caps a patch at 8 voices
+
+Key range and root are **not in the partial record** — no sub-record offset and
+no fixed partial offset matches the E4's reported values on any of 96 anchored
+zones. They come from the **patch's 128-entry key map** at `patch+256`:
+
+```
+  E4 zone key range = a contiguous RUN of the same partial id in the key map
+  E4 key            = key-map index + 21          (21 = the E4's lowest key)
+  and EOS takes the FIRST 8 RUNS ONLY
+```
+
+Measured on presets whose key map holds more runs than EOS imported:
+
+```
+  preset          runs in key map   E4 voices
+    (guitar 1)          21              8      13 runs DISCARDED
+    (chord)             13              8       5 discarded
+    (velo-play)         13              8       5 discarded
+    (heaven)             5              5       none lost
+```
+
+**A Roland patch with more than eight key zones loses everything above the
+eighth, silently.** Combined with the volume-level import dropping most of a
+bank, EOS's Roland path is lossy in two independent ways, neither reported.
+
+### Where the law does NOT hold — three cases, unexplained
+
+Across 14 presets the law matches 11 and fails 3, and the failures are not
+alike:
+
+```
+  two presets   key map has 4 runs, EOS built 3 voices — one run dropped with
+                the other three matching exactly
+  one preset    key map has 11 runs, EOS built a SINGLE zone spanning 0..127
+```
+
+The single-full-range case is the more interesting: several presets in the same
+import came back as one `0..127` zone rather than a key map, and which presets
+do this is not established. **The law is recorded as holding on 11 of 14, not as
+general**, and the three exceptions are the next thing to chase — offline, from
+captures already in hand.
