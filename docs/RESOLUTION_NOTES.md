@@ -17021,3 +17021,113 @@ at a derived statistic:
 Every derived figure above was plausible — a cents/octave slope, a corner
 frequency, a polarity ratio, a pass rate. **The summary is exactly the thing
 that hides the repetition.**
+
+## §157 — The Ensoniq table validated end to end, and three of its four rows still prove nothing (2026-09-21, live)
+
+**Status: the conversion table is confirmed where it can be, and marked
+unverifiable where it cannot. Only the root key is strong evidence.**
+
+Jan imported the first bank of `CD7-ENSVFX` on the E4XT — EOS's own importer
+doing the conversion — and the question was whether the table derived from the
+firmware in `ENSONIQ_ROLAND_IMPORT.md` predicts EOS's output byte for byte. It
+does. The interesting part is how much less that establishes than it sounds.
+
+### Method
+
+Forty presets came back in the dump (`ensdump.py` → SysEx `dump preset`, 360
+bytes each). `enscompare.py` reads the ISO's instrument blocks at base 880, runs
+each documented law forward, and compares against the dumped zone:
+
+```
+  root key   ISO +170            -> zone root key
+  volume     TABLE_0x796a4[+208] -> zone volume
+  key low    ISO +274            -> zone key low
+  key high   ISO +276            -> zone key high
+```
+
+30 non-empty presets × 4 fields = **120/120 match, no exceptions.**
+
+### Why 120/120 is the wrong number to quote
+
+Distinct values per field, across the whole bank:
+
+```
+  root    6 distinct  (50,55,57,60,62,69)   STRONG
+  klow    2 distinct  (21,36)               weak
+  khigh   2 distinct  (67,108)              weak
+  volume  1 distinct  (0)                   NONE
+  pan     1 distinct  (0)                   NONE
+  ftune   1 distinct  (0)                   NONE
+```
+
+Half the matching fields are **constants**. A converter that hardcoded volume 0
+and pan 0 would score exactly the same 120/120 on this bank. The honest reading:
+
+- **Root key is properly validated.** Six distinct values, each predicted from a
+  fixed disc offset across ten instruments — a wrong base cannot produce that.
+- **Key range is thin but real** (two values, and they co-vary with instrument:
+  the guitar reads 36–67 where everything else reads 21–108).
+- **Volume is confirmed at one table index.** `+208` reads 127 everywhere,
+  `TABLE_0x796a4[127] = 0 dB`, the E4 reads 0. Index 127 of that table is
+  established; the other 127 entries are not touched by this bank.
+- **Pan and fine tune establish nothing at all.**
+
+This is §154's rule applied to a whole table at once: *a field that barely
+varies cannot identify anything downstream of it* — and the summary statistic
+is exactly where that disappears from view.
+
+### Base 880 is fixed, not found by name
+
+The earlier reading had the wavesample struct located via its `UNNAMED WS`
+string, with a `+10` name match as the supporting evidence. One instrument in
+this bank (`ACOUS-GTR`) carries no such string anywhere, and `B = 880` still
+gives root 57 and key range 36–67, matching the E4XT exactly. **The base is a
+fixed offset within the instrument file.** The name was never the evidence.
+
+### Four presets per instrument; the empty one is real
+
+EOS writes four presets per Ensoniq instrument, suffixed with the two-character
+channel code the loader trace predicted at `0x7be64`:
+
+```
+  P000 '<instr>  00'  voices=1  z0 smp=1  root=69  k=21..108
+  P001 '<instr>  0*'  voices=1  z0 smp=1  root=69  k=21..108
+  P002 '<instr>  *0'  voices=0  z0 smp=None            <- EMPTY
+  P003 '<instr>  **'  voices=1  z0 smp=1  root=69  k=21..108
+```
+
+Same shape on all ten instruments. mpc2emu's warning was that a zero voice count
+can be a *size* bug rather than a genuinely empty preset — their own writer
+shipped that fault in June — so the discriminating check is theirs: every dump
+is 360 bytes regardless, but the `*0` variant carries **62 non-zero bytes against
+71–72** and a zone sample index of **0**. It is empty, not miscounted.
+
+**`*0` selects channel 1 alone, which a mono source does not have.** Three
+populated and one empty is what a mono instrument predicts. The test that would
+confirm it is a stereo Ensoniq instrument — all four variants should populate.
+
+### The pan prediction is VOID
+
+`ENSONIQ_ROLAND_IMPORT.md` predicted every import lands centre, because `+221`
+and `+225` are odd offsets on word-interleaved data and read as filler. Every
+imported zone did land centre. **It still proves nothing**, and mpc2emu called
+this before the run: the control is the source side, and the source is centre
+too —
+
+```
+  source +221 (pan)   across 10 instruments: {0: 10}
+  source +225 (boost) across 10 instruments: {0: 10}
+```
+
+A correct converter and one that ignores pan entirely produce identical output
+here. Worse, the original argument was **circular**: the byte was said to read
+zero *because* it is filler, and the support offered for "it is filler" was that
+it reads zero. Those are one observation wearing two hats.
+
+Both rows are now marked **unverifiable, not verified**. Closing them needs a
+disc with a genuinely panned wavesample.
+
+The generalisation is mpc2emu's and it is the sharper form of §154's rule: **the
+uniform-field trap applies to the field you are predicting about, not only to
+the fields you are reading.** A prediction of "always X" tested on a corpus that
+is always X has been restated, not tested.
