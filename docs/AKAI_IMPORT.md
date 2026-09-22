@@ -1664,3 +1664,36 @@ It tests the **table**. Not the seven program-level slots, whose amounts remain
 staged out of reach; and not slot ordering, since those seven run first and
 shift the base — **a sim/device diff must align on `(src, dst)`, not on slot
 number**, or every cord of an affected voice reports as misplaced.
+
+### The "26/27" residual: a prediction counted as a measurement
+
+The sibling project scored both wire divisors against "all 27 measured
+(stored → wire) pairs we jointly hold" and reported `127` at **26/27**, with the
+one failure at `va = -17 -> wire 12`, hypothesising a one-digit slip in reading
+the source byte and offering to check the ISO.
+
+**No such measurement exists.** Every `VEnvAtk` wire value this project has ever
+read is 2, 4, 6, 10 or 38:
+
+```
+  va   -3  stored  3  wire  2
+  va   -5  stored  5  wire  4
+  va   -8  stored  8  wire  6
+  va  -14  stored 13  wire 10
+  va  -50  stored 48  wire 38      5 distinct pairs, 9 observations
+```
+
+`va -17 -> 12` is **the `x48/50` column of their own discrimination table** —
+the table they sent to separate the two candidate laws. It is a predicted row
+that never had a measurement to agree or disagree with.
+
+So the residual does not need explaining and the ISO does not need reading:
+**the score is 26/26, and the 27th point was never an observation.** `127` is
+unrefuted across everything actually measured.
+
+**The shape:** a prediction table and a measurement set were merged, and the
+merged set was then used to score the thing the predictions were derived from.
+Every row looked like data because every row had the same columns. **A table's
+provenance is not visible in its shape**, which is why the two should not share
+a container — and the tell was that it claimed twelve `vel_to_attack` pairs
+where only five distinct ones were ever read.
