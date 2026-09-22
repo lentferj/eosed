@@ -1878,15 +1878,19 @@ and the header converter takes the *same* pointer directly:
 **So the header converter writes, and the cord pass reads, one and the same
 struct.** Slot layout is `(source, amount)` at a fixed `+3` stride:
 
-| slot | src | amt | header byte | scale | amount range |
-|-----:|----:|----:|------------:|------:|-------------:|
-| 1 | `@(33)` | `@(36)` | `hdr@(89)`  | 75 | ±75 |
-| 2 | `@(34)` | `@(37)` | `hdr@(90)`  | 75 | ±75 |
-| 3 | `@(38)` | `@(41)` | `hdr@(86)`  | 48 | ±48 |
-| 4 | `@(39)` | `@(42)` | `hdr@(87)`  | 48 | ±48 |
-| 5 | `@(40)` | `@(43)` | `hdr@(88)`  | 48 | ±48 |
-| 6 | `@(50)` | `@(53)` | `hdr@(91)`  | 25 | ±25 |
-| 7 | `@(51)` | `@(54)` | `hdr@(92)`  | 48 | ±48 |
+| slot | src | amt | raw byte | scale | amount range |
+|-----:|----:|----:|---------:|------:|-------------:|
+| 1 | `@(33)` | `@(36)` | `raw[92]` | 75 | ±75 |
+| 2 | `@(34)` | `@(37)` | `raw[93]` | 75 | ±75 |
+| 3 | `@(38)` | `@(41)` | `raw[89]` | 48 | ±48 |
+| 4 | `@(39)` | `@(42)` | `raw[90]` | 48 | ±48 |
+| 5 | `@(40)` | `@(43)` | `raw[91]` | 48 | ±48 |
+| 6 | `@(50)` | `@(53)` | `raw[94]` | 25 | ±25 |
+| 7 | `@(51)` | `@(54)` | `raw[95]` | 48 | ±48 |
+
+**CORRECTED.** An earlier revision of this table gave 86–92. Those were
+subtracted from the wrong base; the correct indices are the contiguous run
+**89–95**. See the note below, which is the more useful half.
 
 Every amount has the identical shape, through the generic rescaler:
 
@@ -1894,10 +1898,20 @@ Every amount has the identical shape, through the generic rescaler:
   amount = rescale( hdr_byte, lo=-50, hi=+50, scale )     (jsr 0x2f6b4)
 ```
 
-**`hdr` names the converter's local struct based at `%fp@(-196)`** — the buffer
-handed to `0x4771c` at entry. Byte indices above are relative to *that* base.
-Whether that struct is the raw AKAI program record or a parsed form is **not
-established**, so do not read the indices as file offsets.
+**These ARE file offsets.** `0x4771c` was read in full (88 bytes) and does no
+parsing: `jsr 0x30d3c(handle, 0)` seeks to 0, `jsr 0x31684(handle, 0xC0, buf, 0)`
+reads **192 bytes verbatim** into `%fp@(-196)`, and then exactly one in-place
+fixup is applied —
+
+```
+  4774e:  movew %a5@(65),%d7      ; swap the two bytes of the 16-bit
+  47752..47766:                   ; field at offset 65, write back
+```
+
+— and returns. So **buffer index == raw record offset**, with the single
+exception of `raw[65..66]`, which the file stores in the opposite byte order
+from the one EOS reads. That byte-swap is the only transform between the disc
+and the converter.
 
 The cord pass skips a slot when *either* half is zero (`beqs` on the source at
 `0x46728`, then on the amount at `0x46730`), so a zero amount disables the cord
@@ -1922,3 +1936,34 @@ drafted at that moment.
 **Both of today's process rules failed in the same direction: filed under the
 episode that produced them, so neither fired on the next episode of the same
 shape.** That is the finding worth keeping, above either rule.
+
+
+### A mechanism that explains a wrong number
+
+The corrected table above cost a round trip, and the shape of the near-miss is
+worth more than the offsets.
+
+The first table's 86–92 straddled a boundary the sibling's corpus had already
+established (10 933 programs, 21 discs: bytes 84–88 hold selectors, ≥99.8%
+within 0–14; 89–95 hold amounts, every one spanning −50..+50). Three of seven
+slots appeared to rescale an enum through a ±50 clamp. That mismatch was a
+*question*, and it was the right question.
+
+It stopped being a question because a good explanation arrived: the AKAI program
+name sits at `raw[3:15]`, so bytes 0–2 are a block prefix, and a parsed form
+handed to `0x4771c` would drop it — predicting exactly `+3`. Independent
+mechanism, not fitted to the data, correct magnitude.
+
+It was explaining an arithmetic slip. There is no shift: `0x4771c` copies the
+record verbatim.
+
+**A mechanism that explains a wrong number is worse than no explanation**, because
+it converts "these don't line up" into "these line up once you account for the
+prefix" — and answers stop being checked in a way questions do not. The corpus
+check passed on the shifted table because what it really tested was the
+*region*, and the region was right for the wrong reason.
+
+What caught it was mechanical: re-deriving the indices from the base rather than
+re-reading the table. Which is [[the-unit-of-correction]] again — *the
+load-bearing part of a claim is often not the claim.* Nobody checked the
+subtraction, because it was not the assertion.
