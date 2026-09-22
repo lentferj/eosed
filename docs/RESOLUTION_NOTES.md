@@ -18982,3 +18982,61 @@ first wavesample and diverge only after it.** What separated them was a
 structural observation — a later struct lying *inside* the span a shared base
 implies — not a better percentage. A metric that only asks whether a value fits
 is blind to any hypothesis that agrees on the first case.
+
+## §175 — `0x50e40` is shared infrastructure; and E2 vs EA
+
+### `0x50e40` was under-specified, not misattributed
+
+Flagged unchecked in `AKAI_IMPORT.md` as possibly a Roland/EMU-native mix-up.
+Resolved: **it is neither, because it is both.** `0x50e40` is a frameless
+function with **8** callers:
+
+```
+  0x44f4c, 0x47418   the AKAI arms
+  0x171458           inside the ROLAND arm (R0S1 0x1710cc .. R0P1 0x171b58)
+  0x561c2, 0x71cee, 0x71f64, 0xc771a, 0xe0ba2
+```
+
+The Roland arm also calls `0x50d20` and `0x50d38`, so the whole `0x50xxx`
+cluster is shared infrastructure rather than any importer's private code.
+
+So "the Roland zone builder at `0x50e40`" was not false — Roland really does
+reach it — but it named a **shared helper as if it were an arm**. Same failure
+shape as `a5@(53)`: a name that denotes more than one thing, where the error is
+invisible because every individual use of it is correct.
+
+**Do not test a "Roland zone entry, stride 22" claim against a Roland corpus
+on the strength of this address.** The helper's callers include five
+non-importer sites; what it does for Roland has to be read at `0x171458`, not
+assumed from the helper.
+
+Also corrected: `0x50e30` (`lea %a0@(284),%a1`) is in the function *ending* at
+`0x50e3e`, not in `0x50e40`. The earlier note ran the two together.
+
+### E2 and EA are BOTH Ensoniq — two complete arms
+
+```
+  0x1fb6ae  E2B0/E2S1/E2P1  ->  0x072b74 / 0x072d98 / 0x072f18
+  0x1fbacc  EAB0/EAS1/EAP1  ->  0x07a654 / 0x07a0b8 / 0x07a4b8
+```
+
+Both vectors are fully populated (11 real pointers on the `B0` record), and the
+decisive evidence is that **"Scanning Ensoniq device" appears twice, once in
+each code range**:
+
+```
+  0x0772d8  'Ensoniq'                  0x07a7f3  'Scanning Ensoniq device'
+  0x0772e0  'Scanning Ensoniq device'  0x07a80c  'Ensoniq Bank'
+                                       0x07a83d  'Ensoniq sample'
+                                       0x07a84f  'Ensoniq Instrument'
+```
+
+Two independent scan paths, two independent string sets. This is not one arm
+with a helper.
+
+**What distinguishes them is NOT established.** The tag scheme parallels AKAI's,
+where `A0` and `A3` split by machine generation (S1000 / S3000), so a
+generation split is the natural reading — but *which* Ensoniq machine each
+denotes is not determined by anything read here, and the obvious guess is
+explicitly **not adopted**. Nothing in the image names EPS, ASR or Mirage;
+the only model strings are the two "Scanning Ensoniq device" copies.
