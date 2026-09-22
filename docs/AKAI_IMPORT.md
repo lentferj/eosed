@@ -1231,7 +1231,13 @@ second-site hypothesis is confirmed in existence and refuted in content.
 
 **The SysEx cord-amount parameter is a ±100 field** — `_p(131 + cord*3, ...,
 -100, 100)` in this project's own `eos/params.py` — while the stored cord byte
-is ±128. So a read-back returns `round(stored * 100/128)`:
+is ±127. So a read-back returns `round(stored * 100/127)`:
+
+> **Divisor corrected from 128 to 127 (2026-09-22).** Every point below agrees
+> under both, because they differ only where `stored * 100` crosses a boundary
+> that 128 rounds down and 127 rounds up — `stored 96` being the first such
+> value either project measured. See the enum-table confirmation below:
+> **`/127` scores 12/12 and `/128` scores 8/12.**
 
 ```
   kf   firmware stores   x100/128   measured
@@ -1605,3 +1611,56 @@ test, applied here, points at tuning and was not applied.
 **When a clamp looks like a known field's range, check it against the format
 doc before naming it.** `%a5@(34)`'s sign-preserving `±63` is Pan, and that one
 stands.
+
+## The `0x48ab0` enum table CONFIRMED on hardware (2026-09-22, live)
+
+250 AKAI programs imported by Jan across four volumes, chosen by the sibling
+project for **selector coverage rather than convenience** — all 11 selectors
+that occur in a 163-volume corpus. Predictions written to disk **before any
+read-back**, keyed by preset name, with both stored and wire values.
+
+The discriminating power is entirely in the rare rows: selectors 5 and 10
+account for **1112 of 1482 occurrences**, so a wrong table would pass on the
+bulk. Selectors 2 and 11 occur **once each in 250 presets**.
+
+```
+  preset          selector   expected      measured        verdict
+  VEL SAMP+HLD        2      PitWl  16     PitWl  16       OK
+  M.WHL FLTMOD        7      Lfo1+  97     Lfo1+  97       OK
+  WV BELLSWEEP       14      AEnv+  88     AEnv+  88       OK
+  SEQ LINE #4        11      ModWl  17     ModWl  17       OK
+  SOFTMT MWCS         4      MidiA  20     MidiA  20       OK
+  MUTE 21CS           4      MidiA  20     MidiA  20       OK
+
+  source ids: 6 of 6 presets correct, 0 wrong
+```
+
+**`src = TABLE_0x48ab0[clamp(MODSFILT, 0, 14)]` is measured, not inferred.** And
+selector 11 returning the same id as selector 1 confirms the table's
+**duplicate rows are real** rather than a transcription artifact.
+
+### The amounts corrected the wire divisor
+
+```
+  x100/127   12/12
+  x100/128    8/12
+```
+
+`stored 96` is the first value either project had measured where the two differ,
+and it appears three times here. **The divisor is 127.** Every earlier
+measurement remains correct — they agree under both.
+
+### And a value that was going to cost a card swap
+
+`SEQ LINE #4` carries `Key+ 36` — **keyfollow 24**, twice the previous maximum,
+and `24 * 1.5 = 36` exactly. Both projects spent an afternoon arranging to load
+a disc for the `+-24` pair; it arrived incidentally in material loaded for an
+unrelated purpose. **Coverage chosen for one question answered another**, which
+is an argument for picking material by spread rather than by target.
+
+### What this does not settle
+
+It tests the **table**. Not the seven program-level slots, whose amounts remain
+staged out of reach; and not slot ordering, since those seven run first and
+shift the base — **a sim/device diff must align on `(src, dst)`, not on slot
+number**, or every cord of an affected voice reports as misplaced.
