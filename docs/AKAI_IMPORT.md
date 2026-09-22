@@ -1043,3 +1043,39 @@ predicted values" left three. The same shape sank a claim of this project's on
 the same day (704 preset headers that were six distinct values), and it is why
 `0x48ab0` and the `0x3B` row are marked unusable rather than reported: **two
 points cannot distinguish two tables.**
+
+## O7 ANSWERED: keygroup `0x13` is key → amp-envelope RELEASE (2026-09-22, live)
+
+The one AKAI cord row no corpus could settle, because `0x13` is zero on the
+reference disc and the guard means EOS's output is silent about it. Jan loaded a
+disc whose 17-keygroup bass program carries `0x13 = -5` on **every** keygroup,
+with the other six env-cord bytes zero throughout — so the imported preset can
+carry only one cord from that family and there is nothing to confuse it with.
+
+**Read back from the E4XT, identical on all 8 voices:**
+
+```
+  cord 7   SRC=8 (Key+)   DST=56  (0x38 FilFreq)   AMT=8
+  cord 8   SRC=8 (Key+)   DST=75  (0x4b VEnvRls)   AMT=-4
+```
+
+**`0x4B` = `VEnvRls` = amp-envelope RELEASE.** Not `0x4A` (`VEnvDcy`, decay),
+which is what AKAI's own documentation calls that byte.
+
+**So the sibling project's writer has been right all along**, and the
+documentation reading was wrong about what *this firmware* does with the byte.
+Both outcomes were pre-registered, so neither side could adjust after the fact.
+
+### The disambiguation is clean
+
+Two `Key+`-sourced cords are present, and they are not confusable: `cord 7` goes
+to `FilFreq`, which is the **`0x08`** routing (key → filter frequency, already
+confirmed), and `cord 8` goes to `VEnvRls`, which is the `0x13` routing under
+test. The six sibling bytes being zero is what makes cord 8 unambiguous.
+
+### And a free data point: the scale
+
+`0x13 = -5` on the disc produced a cord amount of **-4**. The scale of this
+routing has never been measured — the destination was the whole question — so
+this is recorded raw and uninterpreted. One source value and one amount does not
+determine a law; a disc with three magnitudes in one volume would.
