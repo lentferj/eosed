@@ -1697,3 +1697,39 @@ Every row looked like data because every row had the same columns. **A table's
 provenance is not visible in its shape**, which is why the two should not share
 a container — and the tell was that it claimed twelve `vel_to_attack` pairs
 where only five distinct ones were ever read.
+
+### The complete measured keyfollow set, stated so it can be checked
+
+Asked directly whether any further points in the sibling project's set were not
+this project's measurements. Enumerated from the logs rather than recalled:
+
+```
+   kf  wire  /127  /128   where measured
+  -12   -18   -18   -18   4 string programs, voice 13
+   -7   -10   -10   -10   STRING PAD, STRNG PAD CH
+   -2    -3    -3    -3   MELLOW LEAD, MELLOW TWO
+    3     5     5     5   AIRVOICE ONE, GENTLE WINDS/TWO, WRM.SYNSTRGS
+    4     6     6     6   CS PIANO-L, GENTLE WINDS/TWO
+    5     8     8     8   EL-BASS REZ1, VS FANTASY
+   12    18    18    18   SOLDANO 12 B, AIRVOICE ONE, VS FANTASY
+   24    36    36    36   SEQ LINE #4
+```
+
+**Eight distinct pairs where both sides are held.** `kf 14 -> 21` is not among
+them; it was the second phantom row, from the same pre-registration table as
+`va -17`.
+
+**No keyfollow point discriminates the divisors.** All eight agree under `/127`
+and `/128` — the divisor rests entirely on the three stored-96 cord amounts.
+
+**One unpaired measurement:** `WV BELLSWEEP` carries `Key+` at wire `-13`, and
+this project does not hold its source keyfollow. It is a usable ninth point to
+whoever can read that byte, and is recorded as unpaired rather than dropped.
+
+### Why the count check works, and where it was available
+
+The tell was arithmetic: twelve `vel_to_attack` pairs claimed against five ever
+read, and eight keyfollow pairs against seven. **Ask the measurer how many
+distinct points they hold before scoring anything against a table** — it costs
+one question and catches the whole class, and neither project ran it in either
+direction.
