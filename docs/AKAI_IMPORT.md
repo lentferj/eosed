@@ -2301,3 +2301,17 @@ attributed away from AKAI, and now a shared arena flag filed as an AKAI one.
 Each needed a second arm to compare against. That is an argument for reading
 two importers before writing a law about one, not for reading one more
 carefully.
+
+### The staging struct's slot region has two gaps
+
+The header converter's writes to `%a5@(32..64)` cover **31** of the 33 offsets.
+**`@(52)` and `@(55)` are never written** — the gaps sit exactly where an eighth
+`(source, amount)` pair would fall under the `+3` stride, between slot 7's
+`@(51)`/`@(54)` and the block at `@(56)`.
+
+The cord pass does not read them either (counted: no `%a5@(52)` or `%a5@(55)`
+read in `0x4647c..0x46c7e`), so nothing consumes stale data. Recorded because
+"the converter fills 32–64 contiguously" is the kind of near-true summary that
+travels further than the thing it summarises — and because the gaps' position
+is evidence the `+3` slot layout is a real structure rather than a coincidence
+of seven offsets.
