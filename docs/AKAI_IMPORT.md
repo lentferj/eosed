@@ -1852,3 +1852,73 @@ produced a real change.
 That is a queue, not a scruple — nameable in advance, workable when idle, and it
 pays out often enough to be worth running before a claim is sent rather than
 after it is questioned.
+
+## The seven program-level cord slots: SOLVED, amounts included
+
+Closed offline by resolving the pointer chain, not by staging `%a5`. The thing
+that blocked this for a day was a register name, not a missing measurement.
+
+**The chain, five links, each verified as the only assignment in its span
+(count: 1 at every step, no clobbers):**
+
+```
+  orchestrator 0x48934   lea %fp@(-68),%a0        the program struct
+    -> 0x47f08  %a2 := %a0   (0x47f1e)
+    -> 0x475b4  %a1 := %a2   (0x47fe0) ; %d2 := %a1 (0x475c2)
+    -> 0x46da8  %a1 := %d2   (0x4763e) ; %a3 := %a1 (0x46db6)
+    -> 0x4647c  %a0 := %a3   (0x473a0) ; %a5 := %a0 (0x4648a)
+```
+
+and the header converter takes the *same* pointer directly:
+
+```
+  0x47778     %a5 := %a0   (0x47788)   <- also lea %fp@(-68)
+```
+
+**So the header converter writes, and the cord pass reads, one and the same
+struct.** Slot layout is `(source, amount)` at a fixed `+3` stride:
+
+| slot | src | amt | header byte | scale | amount range |
+|-----:|----:|----:|------------:|------:|-------------:|
+| 1 | `@(33)` | `@(36)` | `hdr@(89)`  | 75 | ±75 |
+| 2 | `@(34)` | `@(37)` | `hdr@(90)`  | 75 | ±75 |
+| 3 | `@(38)` | `@(41)` | `hdr@(86)`  | 48 | ±48 |
+| 4 | `@(39)` | `@(42)` | `hdr@(87)`  | 48 | ±48 |
+| 5 | `@(40)` | `@(43)` | `hdr@(88)`  | 48 | ±48 |
+| 6 | `@(50)` | `@(53)` | `hdr@(91)`  | 25 | ±25 |
+| 7 | `@(51)` | `@(54)` | `hdr@(92)`  | 48 | ±48 |
+
+Every amount has the identical shape, through the generic rescaler:
+
+```
+  amount = rescale( hdr_byte, lo=-50, hi=+50, scale )     (jsr 0x2f6b4)
+```
+
+**`hdr` names the converter's local struct based at `%fp@(-196)`** — the buffer
+handed to `0x4771c` at entry. Byte indices above are relative to *that* base.
+Whether that struct is the raw AKAI program record or a parsed form is **not
+established**, so do not read the indices as file offsets.
+
+The cord pass skips a slot when *either* half is zero (`beqs` on the source at
+`0x46728`, then on the amount at `0x46730`), so a zero amount disables the cord
+rather than writing a zero-strength one.
+
+Straight-line, not a loop: **42** distinct fixed-offset writes in the converter.
+
+### What this costs the previous section
+
+The withdrawal above got its own half wrong. Retracting `0x47ce6` as "not a
+third writer to the voice field" was correct. **Filing it as *unrelated* was
+not** — it is slot 6's amount, the exact quantity this project had open. The
+claim had a true half and a false half and the retraction took both.
+
+This is [[the-unit-of-correction]] firing on the correction itself: *retiring a
+claim wholesale destroys its true half.* The rule was already written down, by
+this project, from this project's own earlier mistake. It still did not fire,
+for the same reason `a register is not a structure` did not fire — it was filed
+as a rule about **other people's stale claims**, not about the retraction being
+drafted at that moment.
+
+**Both of today's process rules failed in the same direction: filed under the
+episode that produced them, so neither fired on the next episode of the same
+shape.** That is the finding worth keeping, above either rule.
