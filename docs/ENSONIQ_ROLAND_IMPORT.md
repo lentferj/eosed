@@ -1724,3 +1724,59 @@ has already paid for assuming otherwise once.
   so it is recorded as read rather than named as a rounding rule.
 - `0x102e0c86` is a RAM global, read here and also at `0x1713d6` in the
   neighbouring thunk. Its meaning is untraced.
+
+## The Roland sample path, and `arena[58]` decoded as a bitfield
+
+`R0S1` (`0x1710cc`) → `0x171048` → **`0x170d84`**. The two middle links are
+plumbing, recorded so nobody re-reads them:
+
+- `0x16ed1c` and `0x16ed48` are **4-instruction state setters** on the global
+  block at `0x10006518` — lifecycle hooks, not converters.
+- `0x171048` is a resource wrapper: acquire (`0x13e854`), lock (`0x13e8dc`),
+  call `0x170d84`, unlock (`0x13e8c8`), release (`0x13df14`).
+  **It passes `%d7 - 1`** — a 1-based→0-based conversion, the same class that
+  produced a false "EOS drops most of a Roland bank" finding earlier.
+
+### `0x170d84` writes the arena object the zone builder reads
+
+`%a5 := jsr 0x13d32c(...)` — the same arena object, reached the same way, as in
+the zone builder at `0x171434`. So this function **produces** what that one
+**consumes**:
+
+| arena field | written here | read by |
+|---|---|---|
+| `@(52)` | from a table at `0x171cb8`, index stride 2 | `@(56)` below |
+| `@(56)` w | `jsr 0x49984(arena[52])` | — |
+| `@(68)` | a longword | zone builder → `zone@(12)` (low byte) |
+| `@(58)` | bitfield, twice — see below | **both** Roland and AKAI arms |
+| `@(14)`, `@(15)` | `%d4` | — |
+
+### `arena[58]` is a packed flags byte, not a scalar
+
+```
+  170e5e:  andl #-193,%d1          clear bits 6-7
+  170e64:  andl #1,%d0
+  170e6a:  lsll #6,%d0             place one bit at bit 6
+  170e7a:  bset #4,%a5@(58)        bit 4 set unconditionally
+
+  170f38:  lsll #1,%d0
+  170f3a:  andl #6,%d0             place two bits at bits 1-2
+  170f40:  andl #-7,%d1            clear bits 1-2
+
+  170f54:  andl #192,%d0  beqs     bits 6-7 then GATE a branch here
+```
+
+| bits | meaning |
+|-----:|---------|
+| 1–2 | the 2-bit field both importers test as `(v>>1)&3`, **3 = stereo** |
+| 4 | set unconditionally during sample import |
+| 6–7 | a flag written from one bit, and gating a branch in this function |
+
+**This is why `arena[58]` could never have been an AKAI detail** — it is written
+by the Roland sample importer and read by at least two conversion arms. The
+correction recorded in `AKAI_IMPORT.md` is confirmed from the writing side.
+
+**Untraced:** the value placed into bits 1–2 comes from `%d0` at `0x170f38`;
+its provenance is not read. Likewise the bit at 6–7. Both are recorded as
+*where the field comes from in the instruction stream*, not as *what the source
+means*.
