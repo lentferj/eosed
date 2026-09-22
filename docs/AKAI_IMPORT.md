@@ -1123,3 +1123,56 @@ it is on the disc but not loaded.
 The **pivot** question — whether the E4XT's Key source pivots at note 64 as the
 AKAI does — is not addressable by read-back at all. It needs audio at both ends
 of the keyboard.
+
+### The keyfollow cord law read from the firmware — and it does NOT match the fit
+
+The cord-writing site, read rather than inferred:
+
+```
+  44644:  moveb %d0,%a5@(189)     ; cord DESTINATION
+  44648:  pea 0x60                ; scale = 96
+  4464c:  moveb %a3@(8),%d0       ; keygroup byte 0x08 -- the keyfollow
+  44650:  pea 0x32                ; hi  = +50
+  44654:  pea 0xffffffce          ; lo  = -50
+  4465a:  movel %d0,%sp@-         ; value
+  4465c:  jsr 0x2f6b4
+  44662:  moveb %d0,%a5@(190)     ; cord AMOUNT
+```
+
+```
+  amount = round(clamp(kf, -50, +50) * 96 / 50)      = kf * 1.92
+```
+
+### EOS clamps at ±50 — the knee question is answered
+
+The sibling project's converter saturates `key_track_to_filter_amount` at 1.0
+oct/oct, i.e. `kf = 12`, and asked whether EOS knees anywhere above that.
+**It does not: EOS's only saturation is the clamp at ±50**, read as literal
+`pea` operands. There is no knee at 12, 24, or anywhere below 50. Their
+saturation is their own arithmetic running out, not a model of the machine —
+which is what they suspected.
+
+**This is answerable from the firmware alone**, independent of the disagreement
+below, and it did not need the ±24 disc after all.
+
+### And the firmware law contradicts the three measured points
+
+```
+  kf reported by the sibling project    4      5     12
+  amount measured on the E4XT           6      8     18
+  amount predicted by kf * 96/50        8     10     23
+```
+
+**None of the three matches.** And solving the other way gives non-integer
+sources — 6/1.92 = 3.13, 18/1.92 = 9.38 — so no integer keyfollow produces 18
+under this law at all.
+
+`round(kf * 96/64)` fits all three measurements exactly, but **64 is not in the
+instruction stream; 50 is.** So a fit that works has a divisor the firmware does
+not contain, and the firmware's own divisor produces none of the observations.
+
+**Something between the disc byte and `%a3@(8)` is unaccounted for.** The most
+likely candidate, by the pattern this project has hit repeatedly, is that the
+sibling's `kf` values are read from the **disc** while `%a3@(8)` is a byte in
+**EOS's own buffer** — the same source-frame problem that has now appeared on the
+Ensoniq, Roland and AKAI arms. **Not resolved, and not to be fitted around.**
