@@ -2085,7 +2085,7 @@ register used to reach it:
   %a4@(192)   1      slot 1, literal  <- offset 188+4, not 188
   %a3@(188)   1
   ----------------
-             23  source-field write sites, through SIX address registers
+             23  source-field write sites, through FIVE address registers
   plus       12  calls to the emitter, which fills an entry internally
 ```
 
@@ -2142,6 +2142,13 @@ Inline, written without the emitter:
 
 The `168+%d5` base is confirmed: five sites in this arm, and the sibling reached
 the same constant independently from `0x46bca` modelling `kg[0x1c]`'s gate.
-Four further `addl #168` sites exist at `0x444xx`, which belong to the **twin
-emitter at `0x4430c`**, not to the AKAI arm — a distinction this project has
-already got wrong once.
+**Image-wide there are 11 `addl #168`: five in this arm, five in the twin
+emitter at `0x4430c`, one at `0x7b6a4`.** The twin's are `0x44458`, `0x44484`,
+`0x444b0`, `0x44502` and **`0x449b4`** — the last written to `%d6`, and outside
+the `0x444xx` range.
+
+That last point is this section's own warning landing on itself: an earlier
+revision described the twin's sites as "four sites at `0x444xx`", and the
+address prefix — a pattern — silently excluded `0x449b4`. Written in the
+sentence cautioning about arm-vs-twin scoping. The correction came from the
+sibling re-counting rather than from re-reading.
