@@ -2189,3 +2189,84 @@ separate tests.
 This is worth stating positively: an edge case was predicted from the shape of
 the code and the firmware already handles it. Reporting it as a warning would
 have sent the sibling project hunting a bug that does not exist.
+
+## UN-RETRACTED: `0x4430c` is an AKAI arm after all
+
+This project earlier struck its own attribution of `0x44632` to AKAI, on a
+sibling's report that `0x4430c` was "reached only through a pointer at
+`0x1f901e`, so it belongs to another importer". **That was wrong and the
+original attribution was right.** Verified here independently.
+
+There is a format-descriptor table at `0x1f8f52`: records of **0x30** bytes,
+each a 4-char ASCII tag followed by eleven function pointers, with
+`0x19add4`/`0x19addc`/`0x19ade0` as the do-nothing stubs that fill unused slots.
+
+```
+  0x1f8f52 'A0B0'   0x1f8fe2 'A3B0'
+  0x1f8f82 'A0S1'   0x1f9012 'A3S1'    <- +0x0C = 0x1f901e -> 0x04430c
+  0x1f8fb2 'A0P1'   0x1f9042 'A3P1'
+```
+
+So `0x4430c` is entry 3 of **`A3S1`** — a different *file-type* arm of AKAI, not
+a different sampler. `0x44632` stands as AKAI, and the extra source bytes it
+reads (`0x09`, `0x0a`, `0x0b` → FilFreq; `0x1d` → Pitch at scale 26) are AKAI
+bytes that the `0x4647c` arm does not read. **Two AKAI arms disagree about
+which source bytes become cords.**
+
+### The guard/value mismatch at `0x44958` is ours
+
+Confirmed by reading:
+
+```
+  44958:  tstb %a3@(19)        gate on source byte 0x13
+  4495c:  beqs                 ...skip
+  44968:  moveq #83,%d0        dest 83, src 8
+  44972:  moveb %a3@(27),%d0   VALUE from source byte 0x1b
+  44982:  jsr 0x2f6b4          rescale(-50,+50, scale 48)
+```
+
+The gate reads `0x13`; the amount reads `0x1b`. A program with `raw[0x13]≠0` and
+`raw[0x1b]=0` emits a zero-amount cord; one with `raw[0x13]=0` and `raw[0x1b]≠0`
+**silently drops a real cord**. Recorded as a defect in an EOS AKAI import arm.
+
+## The descriptor table is not one table, and Roland/Ensoniq ARE in it
+
+The sibling reported "the six descriptors are AKAI only; the other three are
+`E3S1`, `E4P1` and `FILE` — EMU's own. There is no Roland or Ensoniq
+descriptor." **There are at least eight descriptor regions**, and both exist:
+
+| at | tags | arm code |
+|----|------|----------|
+| `0x1f8f52` | `A0B0/S1/P1`, `A3B0/S1/P1` | `0x043xxx`–`0x044xxx` — **AKAI** |
+| `0x1f94a0` | `E4B0`,`E4Br`,`E3S1`,`E4P1`,`E4s1` | `0x04exxx`–`0x050xxx` — EMU native |
+| `0x1fb6ae` | `E2B0/S1/P1` | `0x072xxx` — **Ensoniq** |
+| `0x1fbacc` | `EAB0/S1/P1` | `0x07axxx` — **Ensoniq** |
+| `0x1fc79c` | `WAVE`, `AIFF` | `0x0f0xxx`–`0x0f3xxx` |
+| `0x1fcc78` | `E3B0`,`ExB0`,`EiB0`,`E3S1`,`E3P1` | `0x103xxx`–`0x105xxx` |
+| `0x1fe878` | `R0B0/S1/P1` | `0x170788`, `0x1710cc`, `0x171b58` — **ROLAND** |
+| `0x1ff3b8` | `Midi` | `0x18axxx` |
+
+**This locates the Roland and Ensoniq import arms**, which both projects have
+been reverse engineering by other means.
+
+### Neither scan here is an inventory
+
+Said plainly because this section is the fourth in this file to make the point.
+The first scan run here anchored on the stub `0x19add4` in pointer slot 2, found
+**15** tags, and missed every family whose slot 2 holds a real function —
+`0x1f94a0`, `WAVE`/`AIFF`, the `E3`/`Ex`/`Ei` family and `Midi`. A wider anchor
+(printable tag + code pointer + the same 0x30 stride) returns **43 candidates**,
+of which several (`NuHy`, `lLHy`, `N^Nu`, `a8Hy`, `WlHy`) are m68k opcode bytes
+that happen to be printable.
+
+So: the narrow scan under-counts, the wide scan over-counts, and **the table
+above is what survived reading both**. It is a floor, not a census.
+
+### One consequence for this project's own Roland work
+
+The Roland arm is at `0x170xxx`–`0x171xxx`. This project's earlier Roland
+finding — zone entry stride 22 at `0x50e40` — is in the **EMU-native** range
+(`0x04exxx`–`0x050xxx`), not the Roland one. That may be a shared helper or it
+may be a misattribution of exactly the kind just un-retracted above. **Not
+checked.** Flagged rather than corrected, because guessing the direction is how
+the `0x4430c` error happened in the first place.
