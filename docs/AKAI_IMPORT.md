@@ -1212,3 +1212,50 @@ likely candidate, by the pattern this project has hit repeatedly, is that the
 sibling's `kf` values are read from the **disc** while `%a3@(8)` is a byte in
 **EOS's own buffer** — the same source-frame problem that has now appeared on the
 Ensoniq, Roland and AKAI arms. **Not resolved, and not to be fitted around.**
+
+### RESOLVED: the law was right, the measurement went through a rescaling instrument
+
+The "impossibility" was an artifact of how this project measured, not of the
+firmware or of the sibling project's parser. Both were correct throughout.
+
+**There are two keyfollow cord sites** — `0x44632` and `0x46956`, the S1000 and
+S3000 arms — and they are **identical instruction for instruction**: same guard
+on `kg[0x08]`, same `SRC=8`, `DST=56`, same `scale 96, hi 50, lo -50`. So the
+second-site hypothesis is confirmed in existence and refuted in content.
+
+**The firmware stores** `round(clamp(kf, -50, +50) * 96/50)`.
+
+**The SysEx cord-amount parameter is a ±100 field** — `_p(131 + cord*3, ...,
+-100, 100)` in this project's own `eos/params.py` — while the stored cord byte
+is ±128. So a read-back returns `round(stored * 100/128)`:
+
+```
+  kf   firmware stores   x100/128   measured
+   4         8              6           6
+   5        10              8           8
+  12        23             18          18
+```
+
+**All three exact.** And the composition is the punchline:
+
+```
+  96/50  *  100/128  =  1.5000  =  96/64
+```
+
+**That is why `96/64` fitted.** It was not a divisor hiding in the instruction
+stream; it was the product of the firmware's law and the wire scaling, and it
+fitted because it is the true end-to-end relation. Both "irreconcilable"
+readings were the same relation seen from either side of an instrument.
+
+### The shape
+
+**Measured through an instrument that rescales, then compared against the
+pre-instrument quantity.** The `-100, 100` range was in this project's own
+parameter table the whole time — as visible as the front-panel `B123` was when a
+0-based index was being read as 1-based.
+
+The rule this adds to *audit the instrument*: **an instrument that converts units
+is not neutral, and its conversion belongs in the comparison.** Declaring an
+observation impossible should first ask what the observation passed through —
+three points that cannot exist are better evidence of a transform than of a
+firmware that cannot produce its own output.
