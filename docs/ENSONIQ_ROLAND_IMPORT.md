@@ -1407,10 +1407,30 @@ fades — the source has no key crossfades, rather than the path being untaken.
 **`pan = clamp(sign_extend(partial[4]) * 2, -64, +63)` is confirmed**, and its
 destination is now named: `a5@(14)`, i.e. **entry[16]**.
 
-**And it is written unconditionally.** There is no pan force-to-zero in this
+~~**And it is written unconditionally.** There is no pan force-to-zero in this
 routine — the three `clrb`s that follow clear `a5@(15)`, `(16)` and `(17)`, not
 the pan byte. **The `[S]` row's "forced to 0 when `(sample[58] >> 1) & 3 == 3`"
-does not appear here at all.**
+does not appear here at all.**~~
+
+> **RETRACTED within the hour. The force-to-zero exists and the `[S]` row is
+> exactly right.** It sits at `0x1714cc`–`0x1714e2`, **0x18 bytes before** where
+> the read above began:
+>
+> ```
+>   1714be:  moveq #3,%d1
+>   1714cc:  moveb %a2@(58),%d0      ; the SAMPLE's byte 58
+>   1714d0:  lsrl  #1,%d0
+>   1714d2:  andl  #3,%d0
+>   1714d8:  andl  %d0,%d1
+>   1714da:  subql #3,%d1            ; (sample[58] >> 1) & 3 == 3 ?
+>   1714dc:  bnes  0x1714e4          ; no  -> compute the pan
+>   1714de:  clrb  %a5@(14)          ; YES -> PAN = 0
+>   1714e2:  bras  0x171504          ; and skip the computation
+> ```
+>
+> `d1` is the constant 3, so the test is `(sample[58] >> 1) & 3 == 3` verbatim.
+> **`a2` is the sample structure and `sample[58]` is read.** The "third
+> structure" posited for it does not need to exist.
 
 ### The stereo test is a function call, not a sample byte
 
@@ -1447,3 +1467,35 @@ Writing into the **previous** zone at negative offsets:
 effect**, so a converter replaying this must either copy its source structures
 first or reproduce the mutation — and anything reading `patch[52]`/`[53]` *after*
 a stereo zone has been built reads zeros.
+
+### Every source offset in the Roland builders, swept
+
+Prompted by mpc2emu: *"it is not that one field is in the memory frame, it is
+that EVERY `patch+n` in that routine is."* Swept, and the sweep immediately
+found a read this project had reported as absent.
+
+```
+  header builder 0x1713b0-0x171434
+      a4@(24)  a4@(25)  a4@(26)
+
+  zone builder   0x171434-0x1715a0
+      a2  (the SAMPLE)    58, 68
+      a3  (the PARTIAL)   4, 6, 7, 8, 9, 10
+      a4  (the PATCH)     12,13,14,15, 16,17,18,19, 34, 52, 53
+      a4 via 0x50d38      2, 24
+```
+
+**All of these are offsets into what EOS holds, not into disc records.** A
+disc-side check of any of them tests nothing — which is what the `+29` probe
+returning a binary-valued byte and `patch[2]==2` returning zero were both
+reporting, the same fact arriving twice as a symptom.
+
+And `fine tune` is confirmed with its destination:
+
+```
+  1714a4:  moveb %a3@(6),%d7 ; extw ; extl
+  1714ae:  lsll  #6,%d7            ; * 64
+  1714b0:  addl  #32,%d7           ; + 32
+  1714b6:  divsll #100,%d7         ; / 100
+  1714ba:  movew %d7,%a5@(10)      ; -> entry[12], as a WORD
+```
