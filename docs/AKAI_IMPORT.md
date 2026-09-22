@@ -1079,3 +1079,47 @@ test. The six sibling bytes being zero is what makes cord 8 unambiguous.
 routing has never been measured — the destination was the whole question — so
 this is recorded raw and uninterpreted. One source value and one amount does not
 determine a law; a disc with three magnitudes in one volume would.
+
+### The cord-amount scale, three positive points — and the asymmetry NOT measured
+
+Read back from the same loaded bank, read-only, no import. **Only 6 of the
+disc's 13 programs are in RAM**, and the program carrying keyfollow −24 *and*
++24 is not among them.
+
+```
+  Key+ -> FilFreq       from AKAI filter_keyfollow
+     kf   4   ->   6
+     kf   5   ->   8
+     kf  12   ->  18
+
+  Vel+ -> VEnvAtk       from AKAI vel_to_attack
+     va  -5   ->   4      SIGN INVERTED
+     va  -8   ->   6      SIGN INVERTED
+```
+
+`round(kf * 96/64)` reproduces all three keyfollow points exactly, and
+`round(-va * 48/64)` reproduces both attack points. **96 and 48 are the scale
+constants this document already records** for those two rows, so the fit uses no
+free parameter beyond the divisor — but it is a fit to **three points and two
+points**, from one bank, and it is recorded as that rather than as a law.
+
+**The sign inversion on `vel_to_attack` is the substantive finding**: a negative
+AKAI value produces a positive E4 cord amount, on both observations. A converter
+copying the sign through would route the modulation the wrong way.
+
+### What this does NOT answer, which is what was actually asked
+
+The sibling project's conversion comment states that the negative keyfollow side
+is corrected by a measured ~0.6× while **the positive side is "a real,
+unresolved nonlinearity"**. Measuring that asymmetry needs values on both sides
+of zero.
+
+**All three keyfollow points here are positive.** The bank contains no negative
+keyfollow at all, so this says nothing about the asymmetry — and a ratio of
+exactly 1.5 on the positive side does not imply the negative side is 1.5. The
+program with ±24 in one program remains the material that would settle it, and
+it is on the disc but not loaded.
+
+The **pivot** question — whether the E4XT's Key source pivots at note 64 as the
+AKAI does — is not addressable by read-back at all. It needs audio at both ends
+of the keyboard.
