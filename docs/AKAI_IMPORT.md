@@ -1967,3 +1967,54 @@ What caught it was mechanical: re-deriving the indices from the base rather than
 re-reading the table. Which is [[the-unit-of-correction]] again — *the
 load-bearing part of a claim is often not the claim.* Nobody checked the
 subtraction, because it was not the assertion.
+
+### The one 16-bit field, and why its endianness does not generalise
+
+`raw[65..66]` is the **only** multi-byte field EOS takes from the AKAI program
+record. Counted across the whole converter (`0x47778..0x47e44`):
+
+```
+  byte reads from the record buffer   : 42
+  word/long reads from the buffer     :  0
+  word/long reads via pointer         :  0
+```
+
+It is assembled explicitly, big-endian, from two byte loads:
+
+```
+  47854:  moveb %fp@(-131),%d0     ; raw[65]
+  47858:  moveb %fp@(-130),%d1     ; raw[66]
+  47860:  lsll #8,%d0
+  47862:  orl %d1,%d0              ; (raw[65] << 8) | raw[66]
+  47864:  movew %d0,%a5@(4)
+```
+
+**But the loader already swapped those two bytes in place** (`0x4774e..0x47766`).
+The two transforms compose rather than cancel:
+
+```
+  after the swap :  buf[65] = file[66],  buf[66] = file[65]
+  converter      :  (buf[65] << 8) | buf[66]
+                 =  (file[66] << 8) | file[65]
+                 =  a LITTLE-ENDIAN read of file[65..66]
+```
+
+So the field **is** little-endian on disc — confirmed from the firmware side,
+and confirmed twice, by two steps that each look like the whole story and are
+each wrong alone. Seeing only the converter's `(b65<<8)|b66` gives big-endian.
+Seeing only the swap gives "stored LE, normalised on load, then read natively".
+Only the composition is right.
+
+**The scope, stated because it is the part that travels badly:** this confirms
+LE for `raw[65..66]` and for nothing else. Every other field EOS reads from this
+record is a **single byte**, and a byte-at-a-time read carries no endianness
+information at all. The firmware is not evidence that other `u16`/`s16` fields
+in the AKAI record are little-endian — it never reads one.
+
+If anything it points the other way, weakly: if the record held further LE
+16-bit fields that EOS needed, more swaps would be expected in the loader, and
+there are none. That is an argument from absence and is worth exactly what such
+arguments are worth.
+
+This is [[say-what-was-checked]] in its original shape — *confirmed-for-one*
+read downstream as *confirmed-for-all*. The check is real; it covers one field.
