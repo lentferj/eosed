@@ -1372,3 +1372,71 @@ T_dec  0x30434  100 bytes
 `T_atk` is flat at 0 for its first 21 entries — so AKAI attack values 0–20 all
 import as rate 0, and the first 21 source values are not distinguishable in the
 result.
+
+## Three corrections to the cord table (2026-09-22)
+
+### 1. The sign rule is PER-SOURCE, and the table needs a sign column
+
+`negl %d0` appears in exactly four blocks — `0x46998`, `0x469dc`, `0x46aa4`,
+`0x46ae8` — and those are the four **`Vel+` (source 10)** cords. It is in none
+of the `Key+` or `RlsVel` blocks.
+
+**So the inversion belongs to the source, not the destination.** This matters
+because this project's measurements looked like the opposite: twelve
+`vel_to_attack` points all inverted, while O7's `Key+ -> VEnvRls` did not, and
+the obvious theory — *"E4B envelope destinations are rates where AKAI's are
+times, so envelope cords invert"* — fits all twelve and predicts that O7 inverts
+too. **It doesn't.** The refuting measurement was in this document for hours.
+
+*A theory that explains every point you have is not thereby right; it is
+untested against the points you did not look at.*
+
+The nine-cord table above is correct on source, destination and scale, and
+**has no sign column. It needs one:** source 10 inverts, sources 8 and 13 do
+not.
+
+### 2. There is a TWIN emitter at `0x4430c` and it is NOT the AKAI arm
+
+Same shape, same rescaler, same slot cursor, same destination constants,
+reached only through a pointer at `0x1f901e`. **The AKAI arm is `0x4647c`**,
+settled by call graph rather than by reading either block:
+
+```
+  0x4647c <- 0x473a6 in 0x46da8 <- 0x47650 in 0x475b4
+          <- 0x47fea in 0x47f08 <- 0x489c0 in 0x48934
+```
+
+**This project read `0x44632` earlier and reported it as the AKAI keyfollow
+cord.** It is the twin's. The constants happen to be identical, so nothing
+derived from it was wrong — but the attribution was, and a block being
+byte-identical to the one you wanted is not evidence that it is the one you
+wanted.
+
+### 3. `0x46942` is a CALL, and its cord IS a keygroup-byte row
+
+Recorded as "a cord whose source is a runtime value in `%d6`, not a keygroup
+byte". Read:
+
+```
+  468f4:  moveb %a5@(61),%d6      ; a SOURCE id
+  468fc:  moveb %a3@(153),%d5     ; keygroup byte 0x99  <- the value
+  46904:  moveq #80,%d0
+  46906:  cmpl  %d6,%d0
+  46910:  movel %d7,%d4           ; if source == 80 (FEnv+), capture this slot
+  46912:  pea 0x60 / 0x32 / 0xffffffce    ; scale 96, hi 50, lo -50
+  46920:  jsr 0x2f6b4
+  4692a:  movel %d0,%d6           ; d6 is now the AMOUNT
+  46940:  moveq #56,%d0           ; destination FilFreq
+  46942:  bsrw 0x46370            ; a SHARED emitter, not an inline write
+```
+
+**`%d6` is the amount, not the source.** The source is `%a5@(61)`, and the
+converted value is `%a3@(153)` — **keygroup byte `0x99`**. So this is a
+keygroup-byte row after all: `kg[0x99] -> FilFreq, scale 96`, with a
+runtime-determined source id.
+
+The gate capture is conditional on that source id being **80 (`FEnv+`)**, which
+is what later feeds the computed-destination cord at `0x46bb0`.
+
+**Not read:** what structure `%a5` is here, so `%a5@(61)` is "a source id" and
+nothing more. Stated as a limit rather than guessed.
