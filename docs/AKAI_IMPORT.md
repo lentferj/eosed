@@ -1322,3 +1322,53 @@ ones, five times running" — and it did, because the `-7` programs carry their
 cord on an early voice and the `-12` programs carry it on voice 13. **A pattern
 that looks too selective for an apparatus fault is not evidence against one.**
 The scan settled it; the argument about the scan did not.
+
+### The two envelope rate tables, dumped — with width, count and direction READ
+
+Requested for a firmware-simulation build. All three properties are read from
+the indexing sites at `0x2f7c8` (attack) and `0x2f7ec` (decay/release), not
+inferred from the address gap:
+
+```
+  2f7d0:  moveq #99,%d0          ; clamp 0..99, both tables identically
+  2f7d8:  moveal #0x303d0,%a0    ; base
+  2f7de:  andl #255,%d1
+  2f7e4:  addal %d1,%a0          ; base + index        <- NO scaling: ENTRY = 1 BYTE
+  2f7e6:  moveb %a0@,%d0         ; byte read           <- FORWARD: AKAI 0 -> table[0]
+```
+
+- **entry width 1 byte** — `addal` with no `:l:2` or `:l:4` scaling
+- **100 entries each** — clamp `0..99`, and `0x303d0 + 100 == 0x30434` exactly,
+  so the two tables are contiguous
+- **index direction forward** — not reversed
+
+```
+T_atk  0x303d0  100 bytes
+    0: 00 00 00 00 00 00 00 00 00 00
+   10: 00 00 00 00 00 00 00 00 00 00
+   20: 00 01 01 01 01 01 01 01 01 01
+   30: 01 01 01 01 01 01 01 01 02 02
+   40: 02 02 02 03 03 03 04 04 04 05
+   50: 06 06 07 09 0a 0b 0c 0d 0e 0f
+   60: 11 12 13 15 17 19 1a 1c 1d 1f
+   70: 21 23 25 27 28 2a 2c 2e 30 32
+   80: 34 36 38 3a 3c 3e 3f 41 43 45
+   90: 47 4a 4b 4d 4f 51 53 55 57 59
+
+T_dec  0x30434  100 bytes
+    0: 00 00 00 00 00 00 00 00 00 01
+   10: 01 01 01 01 01 02 02 02 02 02
+   20: 02 03 03 03 03 03 03 04 04 04
+   30: 04 05 06 07 08 09 0a 0b 0c 0e
+   40: 0f 10 11 12 13 14 16 17 19 1a
+   50: 1c 1d 1f 20 22 24 25 27 28 2a
+   60: 2c 2e 30 32 34 36 37 39 3b 3d
+   70: 3f 40 42 44 46 48 49 4b 4c 4e
+   80: 50 52 54 55 57 59 5a 5c 5d 5e
+   90: 60 61 63 64 66 67 68 6a 6c 6e
+```
+
+**Both are monotonic non-decreasing**, `T_atk` spanning 0…89 and `T_dec` 0…110.
+`T_atk` is flat at 0 for its first 21 entries — so AKAI attack values 0–20 all
+import as rate 0, and the first 21 source values are not distinguishable in the
+result.
