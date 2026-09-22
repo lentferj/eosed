@@ -1501,3 +1501,55 @@ noise, because it is a permutation of unrelated ids rather than a curve.
 other tables nearby are rate and level curves, so "not a curve" read as "not a
 table" — a classification inherited from its neighbours rather than tested
 against what it could be.
+
+### The staging struct `%a5`, partially mapped — what the seven unmodelled blocks read
+
+The sibling project's remaining blocker is that seven blocks at `0x46582`…
+`0x4675c` take both source id and amount from the staging struct rather than
+from keygroup bytes. **`%a5` is the caller's 68-byte scratch context** — already
+resolved in this document — and every offset in play (33, 34, 50, 53, 59, 60,
+61) fits inside it.
+
+Three of those fields are now read:
+
+```
+  46efc:  clamp d7 to [-72, +24]
+  46f0e:  moveb %d7,%a5@(33)          ; a dB-shaped field, range -72..+24
+
+  46f14:  sign-preserving mask to 63
+  46f2a:  moveb %d0,%a5@(34)          ; +-63, pan-shaped
+```
+
+**`%a5@(53)` has two paths, selected by the stereo test:**
+
+```
+  46f34:  moveb %a0@(58),%d0          ; the SAMPLE's byte 58
+  46f38:  lsrl #1 ; andl #3
+  46f42:  subql #3                    ; (sample[58] >> 1) & 3 == 3 ?
+
+  STEREO:
+  46f46:  moveb %a3@(44),%d0          ; kg[0x2C]
+  46f4c:  sign-preserving >> 1        ; halved
+  46f5a:  moveb %d0,%a5@(53)
+
+  MONO:
+  46f60:  moveb %a2@(18),%d0          ; the SAMPLE's byte 18
+  46f68:  jsr 0x2f784                 ; a helper
+  46f70:  moveb %a3@(44),%d1          ; kg[0x2C]
+  46f7a:  addl %d1,%d0                ; SUM of the two
+  46f74:  pea 0x20 / 0x40 / 0xffffffc0   ; scale 32, hi +64, lo -64
+  46f88:  jsr 0x2f6b4
+  46f8e:  moveb %d0,%a5@(53)
+```
+
+So the mono path **sums a sample-derived value with a keygroup byte** and
+rescales at `hi = 64` — the only `hi = 64` in the AKAI arm, and the first field
+found here that mixes sample and keygroup data.
+
+**And `(sample[58] >> 1) & 3 == 3` appears here too**, the same test as the
+Roland arm's pan force-to-zero. It is a shared stereo idiom across importers,
+not a Roland-specific one.
+
+**`%a5@(50)` is NOT read.** No byte-width write to it was found in the AKAI
+region; it may be written at another width or through a different register.
+Stated as a gap rather than guessed, since the seven blocks need it.
