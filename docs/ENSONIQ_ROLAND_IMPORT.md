@@ -1780,3 +1780,70 @@ correction recorded in `AKAI_IMPORT.md` is confirmed from the writing side.
 its provenance is not read. Likewise the bit at 6–7. Both are recorded as
 *where the field comes from in the instruction stream*, not as *what the source
 means*.
+
+## Does only AKAI convert parameters? No — and the narrower claim survives
+
+Two claims were put to this bench. **They have different answers**, and they had
+been stated as one.
+
+### Claim A — "Roland and Ensoniq write no mod cords" — SURVIVES
+
+Tested by asking what a range-bounded scan cannot see: **callees outside the
+range.** Transitive closure, two levels, from each arm:
+
+```
+  ROLAND  154 external callees (579 with L2)
+  E2       75 external callees (344 with L2)
+  EA      197 external callees (626 with L2)
+```
+
+In-range cord-field references: ROLAND **0**, E2 **0**, EA **3**.
+
+**All three EA hits are false positives**, checked individually:
+
+```
+  7b9e0  moveb %a5@(188),%d6    READ, clamped against #150
+  7b9ee  moveb %a5@(190),%d0    READ, clamped against #150
+         ...and %a5@(186) is read two lines later, which no cord
+            entry has — stride 4 over 188/189/190 cannot produce 186
+  7bb6a  lea %a5@(188),%a5 / pea 0x60 / jsr 0x21c60
+         a 96-byte bulk CLEAR, not a cord write
+```
+
+So that struct is not the cord table, and **no arm but AKAI emits mod cords.**
+Claim A stands — tested against its own blind spot and not broken.
+
+### Claim B — "AKAI is the only arm that converts parameters" — FALSE
+
+Refuted without a scan, by the two rows the sibling supplied in the same
+message:
+
+```
+  roland_pan(sub[4])       = clamp(sub[4]*2, -64, +63)      C: 6884 records
+  roland_fine_tune(sub[6]) = (sub[6]*64 + 32)/100           C: 6884 records
+```
+
+Those **are** parameter conversions, in the Roland arm, and this bench read both
+straight out of `0x171434`. The reason the scan missed them:
+
+```
+  1714ae:  lsll #6,%d7 / addl #32,%d7 / divsll %d1,%d7,%d7   inline
+  1714e4:  cmpl / bles / cmpl / bges                          inline clamp
+```
+
+**Roland does its arithmetic inline and never calls `0x2f6b4`.** The scan
+searched for *calls to the rescaler*; inline arithmetic is precisely what that
+pattern cannot see.
+
+### Why the distinction is load-bearing
+
+A simulation built on Claim B would **drop pan and fine tune** on the Roland
+path — two conversions the sibling's own corpus confirms EOS applies, across
+6884 partial records. The false half of a claim whose true half was carefully
+tested is the dangerous configuration: Claim A was stress-tested, and Claim B
+rode in on its back.
+
+This is the night's rule on its most load-bearing negative: *a pattern fits
+everything it is shown.* `jsr 0x2f6b4` is a fine proxy for "converts a
+parameter" in the AKAI arm, where every conversion goes through the helper —
+and it is not a proxy at all in an arm that inlines.
