@@ -1022,8 +1022,12 @@ contiguous and wrong where the compiler interleaved.
 
 **Low — do not build on:**
 
-- **`0x48ab0` is probably not a conversion table.** Its values are not monotonic
-  and do not look like a mapping. It may be a mis-pairing.
+- ~~**`0x48ab0` is probably not a conversion table.** Its values are not monotonic
+  and do not look like a mapping. It may be a mis-pairing.~~
+  **RETRACTED 2026-09-22 — it is the `MODSFILT` enum map**, read at `0x47d54`.
+  It is not monotonic **because an enum map is not monotonic**: it maps AKAI
+  modulation-source selectors onto E4B source ids. The property used to dismiss
+  it was the property that identifies it. See below.
 - ~~The `%a5` struct's identity.~~ **Resolved**: it is the caller's 68-byte
   scratch context, not an output structure. See the orchestrator section. The
   offsets are into that scratch struct and do not correspond to file offsets.
@@ -1440,3 +1444,60 @@ is what later feeds the computed-destination cord at `0x46bb0`.
 
 **Not read:** what structure `%a5` is here, so `%a5@(61)` is "a source id" and
 nothing more. Stated as a limit rather than guessed.
+
+## The MODSFILT enum map, found: `0x48ab0` is a conversion table after all
+
+The blocker on the assignable mod-matrix cords was never an address — it was the
+map from an AKAI modulation-source selector to an E4B source id. **It is in the
+firmware and it was already in this document, dismissed.**
+
+```
+  47d42:  tstl %d1 ; bpl           ; negative -> 0
+  47d4a:  moveq #14,%d0            ; clamp to 14
+  47d54:  moveal %a4,%a0           ; a4 = 0x48ab0, loaded at 0x47a08
+  47d5c:  addal %d0,%a0            ; base + index, 1-byte entries
+  47d5e:  moveb %a0@,%d7
+  47d60:  moveb %d7,%a5@(59)       ; -> the staged source id
+```
+
+```
+  src_id = TABLE_0x48ab0[ clamp(MODSFILT, 0, 14) ]
+```
+
+and the table decodes **entirely** into known E4B sources:
+
+```
+  sel   id   name          sel   id   name
+    0    0   Off             8  105   Lfo2+
+    1   17   ModWl           9   72   VEnv+
+    2   16   PitWl          10   80   FEnv+     <- the gate id
+    3   18   Press          11   17   ModWl
+    4   20   MidiA          12   16   PitWl
+    5   10   Vel+           13   20   MidiA
+    6    9   Key~           14   88   AEnv+
+    7   97   Lfo1+
+```
+
+**Not one entry falls outside `CORD_SOURCES`.** Selector 10 mapping to 80 is
+exactly the gate condition at `0x46910`, which is independent confirmation that
+the table and the emitter are the same mechanism.
+
+### It confirms the sibling project's enum reading
+
+Their parser carries `5 = velocity, 8 = LFO2, 10 = env2`, observed on two
+programs and flagged as *possibly one library's common template rather than a
+fixed convention*. The firmware agrees at all three: `5 -> Vel+`, `8 -> Lfo2+`,
+`10 -> FEnv+`. **Their convention is EOS's convention**, and the remaining
+twelve entries are now available rather than needing a corpus hunt or rig time.
+
+### The dismissal was the identification
+
+This document had `0x48ab0` under *"Low — do not build on: its values are not
+monotonic and do not look like a mapping."* Both observations were correct. **An
+enum map is not monotonic and does not look like a mapping** — it looks like
+noise, because it is a permutation of unrelated ids rather than a curve.
+
+**The property used to rule it out was the property that identifies it.** The
+other tables nearby are rate and level curves, so "not a curve" read as "not a
+table" — a classification inherited from its neighbours rather than tested
+against what it could be.
