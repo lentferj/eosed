@@ -1566,6 +1566,14 @@ different structure (`%a4`, after an index adjustment), writing four bytes into
 
 ### The complete destination list, which bounds the whole conversion
 
+> **RETRACTED — the list below is not usable as a field map.** It was wrong in
+> two directions at once: the extraction missed three instruction forms (the
+> bare `%a5@` with no displacement, `movel`, and `clr`), and it swept the whole
+> module, where `%a5` is a *different structure in different functions*. A base
+> was never stated because the list did not have one. Corrected immediately
+> below. Caught by mpc2emu type-checking it against their field map — it omitted
+> a field the importer demonstrably writes, under either reading of the base.
+
 Every E4-side offset the Roland module writes:
 
 ```
@@ -1583,3 +1591,54 @@ For a converter: write the defaults deliberately for everything outside this
 list. The importer is not preserving those fields and matching it means not
 preserving them either — see the ceiling note in the consolidated document,
 which says to keep a source field where our model has one and EOS drops it.
+
+### The destination list, corrected and scoped
+
+**Base: `%a5`-relative, where `%a5` is the zone pointer returned by
+`0x50E40(patch, index)`** — `object + 284 + index*22`. Under §167's endpoint
+match (empirical, not read) that is `entry + 2`.
+
+**The zone builder `0x171434`–`0x1715a4` writes EVERY byte of the 22-byte zone:**
+
+```
+   +0   patch[12]          +12  a2@(68)           (byte)
+   +1   patch[13]          +13  0                 (clr)
+   +2   patch[14]          +14  pan, or 0 when (sample[58]>>1)&3 == 3
+   +3   patch[15]          +15  0                 (clr)
+   +4   partial[7]         +16  0                 (clr)
+   +5   partial[8]         +17  0                 (clr)
+   +6   partial[10]        +18  0                 (clrw, covers 18-19)
+   +7   partial[9]         +20  0                 (clrw, covers 20-21)
+   +8   d7                 (word, covers 8-9)
+   +10  fine tune          (word, covers 10-11)
+```
+
+**All 22 bytes are accounted for** — 0…7 singly, 8–9 and 10–11 and 18–19 and
+20–21 as words, 12…17 singly. Nothing in a zone is left at the initialiser.
+
+**The stereo back-patch writes into the PREVIOUS zone:**
+
+```
+  -22 -21 -20 -19   patch[12..15]
+  -18 -17 -16 -15   patch[16..19]
+  -12               a word
+   -9  -8           patch[52], patch[53]
+```
+
+`-22` is exactly one zone back, confirming the stride of 22 from the write side.
+
+**The header builder `0x1713b0`–`0x171434` writes a different `%a5`** — the
+preset/voice header, not a zone:
+
+```
+  +16 (word)   +20 (clrw)   +22 (clrw)   +24   +25 (clr)
+```
+
+### Why the first list was wrong, recorded because the shape recurs
+
+It looked like a field map, so it would have been copied as one. It was produced
+by a regex over a whole module, and **a register is not a structure** — `%a5`
+means the zone in one function and a file context in another, so the union of
+its offsets describes nothing. **An offset list is only meaningful inside the
+scope where its base register has one meaning**, and the scope belongs in the
+list as much as the numbers do.
