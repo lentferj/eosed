@@ -1514,7 +1514,7 @@ Three of those fields are now read:
 
 ```
   46efc:  clamp d7 to [-72, +24]
-  46f0e:  moveb %d7,%a5@(33)          ; a dB-shaped field, range -72..+24
+  46f0e:  moveb %d7,%a5@(33)          ; COARSE TUNE, not volume -- see below
 
   46f14:  sign-preserving mask to 63
   46f2a:  moveb %d0,%a5@(34)          ; +-63, pan-shaped
@@ -1550,6 +1550,58 @@ found here that mixes sample and keygroup data.
 Roland arm's pan force-to-zero. It is a shared stereo idiom across importers,
 not a Roland-specific one.
 
-**`%a5@(50)` is NOT read.** No byte-width write to it was found in the AKAI
+~~**`%a5@(50)` is NOT read.** No byte-width write to it was found in the AKAI
 region; it may be written at another width or through a different register.
-Stated as a gap rather than guessed, since the seven blocks need it.
+Stated as a gap rather than guessed, since the seven blocks need it.~~
+
+> **RETRACTED — it was found, by `head`.** `0x47cc8: moveb %d1,%a5@(50)`, in the
+> program-header converter, fed by **the same `0x48ab0` enum map**:
+>
+> ```
+>   47cba:  clamp(selector, 0, 14)
+>   47cbc:  moveal %a4,%a0        ; 0x48ab0
+>   47cc4:  addal %d0,%a0
+>   47cc6:  moveb %a0@,%d1
+>   47cc8:  moveb %d1,%a5@(50)
+> ```
+>
+> **So the seven unmodelled blocks are the program's own mod-matrix slots and
+> their sources come off the map already in hand.** Only the amount side
+> remains.
+>
+> The search was correct and **the output was truncated**: 17 lines matched and
+> `head -12` printed twelve. `0x47cc8` was line fifteen. The same truncation hid
+> the header converter's own writes to `(33)`, `(34)` and `(53)` at `0x47a1a`,
+> `0x47a66` and `0x47ce6` — the writes that matter most, since the keygroup-pass
+> copies this project did read are the later ones.
+
+### Every truncation applied for readability became a claim about the data
+
+Fourth instance today, and the first in a **search** rather than a read:
+
+```
+  tail -20 on 0x2f6b4        cut the head that set the divisor
+  a window starting 0x1714e4 began 0x18 bytes after the pan force-to-zero
+  a voice loop breaking early missed cords on voice 13
+  head -12 on a 17-line result reported a byte as absent
+```
+
+**`head`, `tail` and an early `break` are not display choices when their output
+becomes a finding.** Each was applied to keep a message readable and each turned
+into "this is not there". The rule that covers all four: **a negative from a
+search is a claim about the search** — so state the match count, not the matches.
+
+### `%a5@(33)` is Coarse Tune, not volume — and the range IS the identification
+
+This document read `-72..+24` as "dB-shaped". **`-72..+24` is exactly the E4B
+Coarse Tune range**; preset volume is `-96..+10`, which differs at both ends.
+
+That matters beyond one field, because **the range match is how `header[27]` was
+pinned as the volume field in the first place** — *"−96…+10 is exactly
+`E4_PRESET_VOLUME`'s range, which is the corroboration that the destination is
+the volume field rather than something that merely fits in a byte."* The same
+test, applied here, points at tuning and was not applied.
+
+**When a clamp looks like a known field's range, check it against the format
+doc before naming it.** `%a5@(34)`'s sign-preserving `±63` is Pan, and that one
+stands.
