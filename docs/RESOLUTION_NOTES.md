@@ -18861,3 +18861,69 @@ The identification is untouched: `%fp@(12)` is an **object id** in the 92-byte
 arena, a small integer, not a file position — which is why the composite reads
 as unremarkable. **Only the lifecycle verb was wrong**, and it is the part a
 converter author would copy.
+
+## §173 — `0x78CC4` read directly: one 27-bit quantity, not a pointer and a rate (2026-09-22)
+
+mpc2emu, building an EPS reader, reported that the packed groups at struct
+`+240/+248/+256/+264` decode to "small repeated values" that cannot be audio
+pointers, and suggested the **decode** rather than the address was wrong. They
+are right, and reading `0x78CC4` instruction by instruction gives three
+corrections — two to formulas this project has been quoting all along.
+
+### 1. The shift is NOT signed
+
+The relayed formula, which this project adopted and used, was
+`hi = (b0 << 15) + (b2 << 7) + ((int8)b4 >> 1)`, with the warning that *"the
+signed shift is load-bearing"*. The bytes:
+
+```
+  78cda:  moveq #0,%d4          ; d4 ZEROED
+  78cea:  moveb %d7,%d4         ; only the LOW BYTE written
+  78cec:  asrl  #1,%d4          ; arithmetic, but bit 31 is 0
+```
+
+`asr` on a register whose upper 24 bits are zero **is** a logical shift. The
+correct term is `(b4 >> 1)`, unsigned. It differs for every `b4 >= 128`.
+
+### 2. The group is a single 27-bit value
+
+```
+  hi = (b0 << 15) | (b2 << 7) | (b4 >> 1)      top 23 bits
+  lo = ((b4 & 1) << 3) | ((b6 >> 5) & 7)       bottom 4 bits
+```
+
+Laid end to end that is `b0 : b2 : b4 : b6[7:5]` — **one 27-bit quantity**, `hi`
+the integer part and `lo` a 4-bit fraction. `0x78CC4` does not return two
+fields; it returns one number in two registers.
+
+### 3. Which is why `struct[+16]` is not a sample rate
+
+The external analysis labelled `struct[+16]` *"rate, as 4.28 fixed point"* and
+this project repeated it. Measured over 232 located wavesample structs:
+
+```
+  lo of +240:  {0: 134, 10: 98}      near-constant
+  lo of +248:  {0: 134,  9: 98}      near-constant
+  lo of +256:  {0: 232}              constant
+  lo of +264:  all 16 values, mode 3 at 44%
+```
+
+**All sixteen values with no clustering is a fraction, not a rate index.** A
+sample rate would take a handful of discrete values. `struct[+16]` is the
+low 4 bits of whatever `+264` holds — so **the sample rate is not there, and
+this project does not know where it is.**
+
+### And the two decoders differ by exactly 8
+
+```
+  EOS      0x78CC4   hi = (b0<<15) + (b2<<7) + (b4>>1)
+  K2000    0x162FF2  pos = ((b0<<8) + b2) << 4
+
+  hi = 8 * pos + (b4 >> 1)        verified on three real groups
+```
+
+Same bytes, same layout, **EOS reading at 8× the resolution**. So a group that
+decodes to `1040384` under EOS's decoder is `130048` as a byte offset. mpc2emu's
+"0, 2256, 1040384" are `0, 282, 130048` — plausible offsets after all, under the
+other decoder. **The address was right, the decoder was the wrong one for the
+question.**
