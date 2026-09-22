@@ -2152,3 +2152,40 @@ revision described the twin's sites as "four sites at `0x444xx`", and the
 address prefix — a pattern — silently excluded `0x449b4`. Written in the
 sentence cautioning about arm-vs-twin scoping. The correction came from the
 sibling re-counting rather than from re-reading.
+
+### The two least-constrained cords, resolved
+
+**`0x4652a` — destination is 48.** It is written at `0x4657a` through `%a1`,
+*after* the branch join, while the source and amount go through `%a0`. A
+backward scan from the site cannot find it because it is not in the block:
+`0x4652a` (src 96, `@(7)==0` path) and `0x4655c`/`0x46568` (src 96 or 97,
+`@(7)≠0` path) are two branches of **one** cord, and the destination is written
+once at the merge.
+
+**`0x46c06` — destination is `168 + %d4`, shared with the `0x46bc6` cord.**
+
+```
+  46496:  moveq #-1,%d4                  latch initialised to "unset"
+  46848 / 468ac / 46910:  movel %d7,%d4  set by blocks 10/11/12,
+                                         each behind a cmpl %d4,#-1 guard
+  46bb0:  tstb %a3@(28)   beqw skip      gate 1: kg[0x1c] ≠ 0
+  46bba:  cmpl %d4,#-1    beqw skip      gate 2: the latch IS set
+  46bca:  addl #168,%d4                  executes at most once (no back edge)
+```
+
+So `%d4` is a **latch-once** cord index — the slot taken by the *first* of
+emitter blocks 10/11/12 that fires — and both cords here target its *Cord n
+Amount*. Amounts are `kg[0x1c]` (`%a3@(28)`) through the generic rescaler over
+±50, at scale **50** for `0x46bc6` (src 11) and scale **11** for `0x46c06`
+(src 160).
+
+**A hazard that is not one, recorded so nobody chases it.** `%d4` starting at
+−1 with `addl #168` would give destination **167** if the block ran unset — and
+it cannot: `0x46bb8..0x46bbc` tests exactly that and skips. Likewise the
+`addl` is an accumulate rather than an assignment, but no back edge reaches it
+(checked). The three `cmpl %d4` sites are the latch discipline, not three
+separate tests.
+
+This is worth stating positively: an edge case was predicted from the shape of
+the code and the firmware already handles it. Reporting it as a warning would
+have sent the sibling project hunting a bug that does not exist.
