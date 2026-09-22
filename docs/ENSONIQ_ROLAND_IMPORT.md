@@ -1499,3 +1499,47 @@ And `fine tune` is confirmed with its destination:
   1714b6:  divsll #100,%d7         ; / 100
   1714ba:  movew %d7,%a5@(10)      ; -> entry[12], as a WORD
 ```
+
+### The zone builder read END TO END, and what the two accessors are
+
+Having twice today reported a firmware conclusion from a window, the whole
+function was read this time: `0x171434` to its epilogue at ~`0x1715a4`. Two
+accessors appear in the part never previously read (`0x17144a`–`0x1714a4`).
+
+**`a2` comes from `0x13d32c(index)` — the imported-object id table.**
+
+```
+  13d330:  cmpl #1000,%d0           ; ids below 1000
+  13d344:  moveal #0x102d01d0,%a0
+  13d34a:  movel %a0@(0,%d0:l:4),%d0
+```
+
+That is **the same table `0x102d01d0` and the same 1..999 id space** as the
+Ensoniq arena (§170). So `sample[58]` is an offset into an **arena object**, not
+into a disc sample record — which is why a disc-side probe of it read past the
+end of a 48-byte record. The whole Roland builder works on arena objects.
+
+**`a5` comes from `0x50e40(patch, index)`, and zone entries are 22 bytes.**
+
+```
+  50e54:  moveb %a5@(2),%d7        ; a zone count/index
+  50e66:  moveq #22,%d1
+  50e6e:  mulsl %d1,%d0            ; index * 22
+  50e74:  lea   %a0@(284),%a4      ; base + 284 + index*22
+```
+
+**Zone entry stride 22, first entry at object+284.**
+
+### What is NOT read, stated as a limit rather than a conclusion
+
+`0x50e40` does **not** end there — it continues past `0x50ece` with further
+logic and this project has **not** read it to its return. So:
+
+- the stride of 22 and the base of 284 are **read**;
+- **whether it returns `entry` or `entry + 2` is NOT read.** The `+2` convention
+  still rests only on the endpoint match of §167 — `partial+7` landing where the
+  sibling project's layout has `lo_vel`, and `partial+9` where it has `hi_vel`.
+
+That is empirical and it is two independent matches, but it is **not** the
+instruction that would settle it. Recorded as a limit this time instead of being
+allowed into a conclusion.
