@@ -1171,6 +1171,42 @@ under this law at all.
 instruction stream; 50 is.** So a fit that works has a divisor the firmware does
 not contain, and the firmware's own divisor produces none of the observations.
 
+**A `>> 6` hypothesis was proposed and is refuted.** The head of `0x2f6b4`, which
+an earlier read of this function truncated away, sets the divisor explicitly:
+
+```
+  2f6b8:  movel %sp@(12),%d6->d1   value
+  2f6bc:  movel %sp@(16),%d0       lo
+  2f6c0:  movel %sp@(20),%d6       hi      <- the divisor
+  2f6e4:  divsll %d1,%d7,%d7               <- divide by 2*hi
+```
+
+There is no shift by six. The divisor is the `hi` argument, so `96/50` stands.
+
+**And the contradiction is harder than "the numbers differ".** Tabulating the
+law over every integer keyfollow:
+
+```
+  kf   0  1  2  3  4  5  6  7  8  9 10 11 12
+  amt  0  2  4  6  8 10 12 13 15 17 19 21 23
+```
+
+**6 and 8 are reachable — from `kf` 3 and 4, not 4 and 5. `18` is not reachable
+from any integer keyfollow at all.** So at least one measured amount cannot have
+come from this code path with any source byte whatsoever.
+
+### The most likely cause is the image, not the law
+
+The sibling project's `kf` values were read from a local 62.9 MB file. **The
+image actually on the card is 36.7 MB.** They verified the two carry the same
+*program count* — not the same *bytes*. Two of the three measurements being
+off-by-one in `kf` (3 vs 4, 4 vs 5) is exactly what a different build of the same
+library would produce.
+
+This project cannot check it: the card is in the E4XT and not mounted here.
+**Nobody should fit a scale until the source bytes come from the image that was
+actually imported.**
+
 **Something between the disc byte and `%a3@(8)` is unaccounted for.** The most
 likely candidate, by the pattern this project has hit repeatedly, is that the
 sibling's `kf` values are read from the **disc** while `%a3@(8)` is a byte in
