@@ -2069,3 +2069,79 @@ the index is never consumed by slot 1 and the next emitted cord takes it — so
 slot 7 then points at a *different* cord than it does in the common case. Not
 tested against hardware; falls out of reading the emitter's by-reference
 counter.
+
+## The cord inventory is not closed, and it is not closable by pattern
+
+Cord table entry *n* is at `%a4 + 4n`, fields `+188` source, `+189` dest,
+`+190` amount. The emitter `0x46370` is **one** of several ways an entry gets
+filled. Counting writes to the source field in `0x4647c..0x46c7e`, by the
+register used to reach it:
+
+```
+  %a5@(188)  11      (%a5 is re-pointed at cord entries later in the function)
+  %a1@(188)   7
+  %a0@(188)   2
+  %a4@(188)   1      slot 0, literal
+  %a4@(192)   1      slot 1, literal  <- offset 188+4, not 188
+  %a3@(188)   1
+  ----------------
+             23  source-field write sites, through SIX address registers
+  plus       12  calls to the emitter, which fills an entry internally
+```
+
+### Counting sites is not counting cords
+
+**Do not turn the number above into a cord count.** Alternate branches write the
+same entry more than once. Cord 4 is the worked example — its source is written
+at `0x4655c` (`96`) *or* `0x46568` (`97`), one cord, two sites, on a
+`cmpl #255,%d5` branch; and its dest is written through `%a1` at `0x4657a`
+while its source and amount go through `%a0`, the two registers having been
+pointed at the same entry by identical `lea %a4@(0,%d7:l:4)`.
+
+A cord count needs path analysis. A grep gives sites. This section deliberately
+reports sites.
+
+### The blind spot was in this project's scan too
+
+The sibling's scan is anchored on `bsrw 0x46370` and therefore cannot see an
+inline-written cord at all. On being told that, **this project grepped
+`%a1@(188)`, got 7, and reported 7** — missing the entries reached through
+`%a4`, `%a0`, `%a3` and the re-pointed `%a5`, and missing slot 1 entirely
+because it is written at the literal offset `192`, not `188`.
+
+Same failure, one level down, within minutes of naming it. The pattern fit
+everything it was shown, which is the property that makes a pattern feel
+finished.
+
+### Cords mapped so far
+
+Emitter calls, dest in `%d0` immediately before the `bsrw`:
+
+| # | at | src | amt | dest |
+|--:|----|-----|-----|-----:|
+| 1–5 | `0x465a2`…`0x46668` | `@(33)`,`@(34)`,`@(38)`,`@(39)`,`@(40)` | `@(36)`,`@(37)`,`@(41)`,`@(42)`,`@(43)` | 64,64,65,65,65 |
+| 6 | `0x46744` | `@(50)` | `@(53)` | 96 |
+| 7 | `0x4677a` | `@(51)` | `@(54)` | `168+%d5` |
+| 8 | `0x467ca` | `@(35)` | rescaled | 64 |
+| 9 | `0x4681c` | `@(45)` | rescaled | 48 |
+| 10–12 | `0x4687a`,`0x468de`,`0x46942` | `@(59)`,`@(60)`,`@(61)` | rescaled | 56,56,56 |
+
+Inline, written without the emitter:
+
+| at | src | dest | amt | gate |
+|----|-----|-----:|-----|------|
+| `0x464ae` | `%d0` | 64 | `@(32)` | — (slot 0) |
+| `0x464d0` | 160 | 64 | `@(32)/5` | `@(32)/5 ≠ 0` |
+| `0x464ee` | 16 | 48 | `@(46)` | — |
+| `0x46504` | 22 | 8 | **127** const | — |
+| `0x4655c` | 96 / 97 | 48 | `@(48)` | `@(7)`, `%d5==255` |
+| `0x46680` | 18 | 48 | `@(47)` | `@(47) ≠ 0` |
+| `0x466a6` | 17 | `168+%d5` | `@(56)` | `@(56) ≠ 0` |
+| `0x466d2` | 18 | `168+%d5` | `@(57)` | `@(57) ≠ 0` |
+| `0x466fe` | 12 | `168+%d5` | `@(58)` | `@(58) ≠ 0` |
+
+The `168+%d5` base is confirmed: five sites in this arm, and the sibling reached
+the same constant independently from `0x46bca` modelling `kg[0x1c]`'s gate.
+Four further `addl #168` sites exist at `0x444xx`, which belong to the **twin
+emitter at `0x4430c`**, not to the AKAI arm — a distinction this project has
+already got wrong once.
