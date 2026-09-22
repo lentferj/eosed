@@ -2018,3 +2018,54 @@ arguments are worth.
 
 This is [[say-what-was-checked]] in its original shape — *confirmed-for-one*
 read downstream as *confirmed-for-all*. The check is real; it covers one field.
+
+## The seven slots' destinations
+
+Read from each block's own `%d0` load immediately before `bsrw 0x46370`, the
+cord emitter. Call shape is `emit(d0=dest, d1=source, stack=amount,
+a0=cord table, a1=&slot_index)` — `a1` is passed **by reference** so the
+emitter advances the caller's cord index.
+
+| slot | src | amt | dest | at |
+|-----:|----:|----:|-----:|----|
+| 1 | `@(33)` | `@(36)` | **64** | `0x465a0` |
+| 2 | `@(34)` | `@(37)` | **64** | `0x465d2` |
+| 3 | `@(38)` | `@(41)` | **65** | `0x46604` |
+| 4 | `@(39)` | `@(42)` | **65** | `0x46634` |
+| 5 | `@(40)` | `@(43)` | **65** | `0x46666` |
+| 6 | `@(50)` | `@(53)` | **96** | `0x46742` |
+| 7 | `@(51)` | `@(54)` | *computed* | `0x46774` |
+
+Slot 6's `96` matches the value the sibling project had already read, which is
+the only cross-check available on this table.
+
+### Slot 7's destination is not a constant
+
+```
+  4676a:  movel %d5,%d0
+  46774:  addl #168,%d0
+  4677a:  bsrw 0x46370
+```
+
+`%d5` is assigned last at `0x4657e` (`movel %d7,%d5`) — verified as the final
+write in `0x4647c..0x4677a`, count 8 assignments, none after it. `%d7` there is
+the **cord slot index**: it indexes the cord table as `lea %a4@(0,%d7:l:4),%a1`,
+is bounded by `cmpl #24` at `0x4671e`, and is what `0x46370` increments through
+`%a1`.
+
+`0x4657e` sits immediately before slot 1's block, so **`%d5` snapshots the cord
+index that slot 1 is about to occupy**, and slot 7's destination is
+`168 + that index`.
+
+**Suggested, not confirmed:** a destination of `base + cord index` is the shape
+of EOS's *Cord n Amount* destination range, which would make slot 7 a
+cord-modulating-a-cord — consistent with the sibling's independent description
+of a "cord-amount gate" in the AKAI path. The **base 168** and the 0/1-based
+convention are *not* pinned here; only the arithmetic is.
+
+**Edge case worth carrying into any implementation:** the snapshot is taken
+before slot 1's zero-gate is evaluated. If slot 1 is skipped (either half zero),
+the index is never consumed by slot 1 and the next emitted cord takes it — so
+slot 7 then points at a *different* cord than it does in the common case. Not
+tested against hardware; falls out of reading the emitter's by-reference
+counter.
