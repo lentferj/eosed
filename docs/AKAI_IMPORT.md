@@ -1733,3 +1733,57 @@ read, and eight keyfollow pairs against seven. **Ask the measurer how many
 distinct points they hold before scoring anything against a table** — it costs
 one question and catches the whole class, and neither project ran it in either
 direction.
+
+### `%a5@(53)` re-read in full, because the sibling project cannot check it
+
+They flagged this as a claim they have no way to verify and will take on faith.
+Re-read completely rather than left as first stated. **Two corrections to this
+project's own account.**
+
+**1. The "helper" is not a black box.** `0x2f784` was named and not read:
+
+```
+  2f788:  pea 0x40 / 0x32 / 0xffffffce    rescale(v, -50, +50, scale 64)
+  2f798:  bsrw 0x2f6b4
+  2f7a4:  then clamp the RESULT to [-64, +63]
+```
+
+```
+  helper(v) = clamp( round(clamp(v, -50, 50) * 64/50), -64, +63 )
+```
+
+So the mono path is fully expanded, with no unread step:
+
+```
+  a5@(53) = rescale( helper(sample[18]) + kg[0x2C], -64, +64, scale 32 )
+```
+
+**2. There are THREE writers, not two.** Counted rather than listed:
+
+```
+  matches: 3
+    46f5a   the STEREO branch
+    46f8e   the MONO branch
+    47ce6   the PROGRAM-HEADER converter
+```
+
+`0x47ce6` is the write that `head -12` hid earlier, and this project had not
+noticed it applies to the same field. **The ordering between the header
+converter's write and the keygroup pass's two is NOT established** — whichever
+runs later wins, and which that is has not been read.
+
+**So the two-branch law is the keygroup pass's behaviour, not necessarily the
+final value of the field.** Stated as a limit, because the project relying on it
+cannot discover the limit themselves.
+
+### Where checking-your-own-side stops working
+
+The habit that caught the unscoped offset list and the phantom measurement was
+the same one: **check your own side before acting on the other side's framing.**
+It worked both times because the receiving side held the primary source — logs
+on one side, ISOs on the other.
+
+**Where the receiver does not hold the primary source, it cannot fire.** Only
+this project has the EOS image; only they have the AKAI corpus. Claims crossing
+in those directions get no second reading, and are the ones worth re-reading
+before sending rather than after being asked.
