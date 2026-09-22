@@ -1259,3 +1259,66 @@ is not neutral, and its conversion belongs in the comparison.** Declaring an
 observation impossible should first ask what the observation passed through —
 three points that cannot exist are better evidence of a transform than of a
 firmware that cannot produce its own output.
+
+## The keyfollow mirror and the vel_to_attack law, measured (2026-09-22, live)
+
+Three volumes loaded by Jan, giving both keyfollow signs and the `vel_to_attack`
+rail. Predictions were registered **in wire units** beforehand — through the
+`x100/128` correction rather than against it — so the comparison sits on one
+side of the instrument.
+
+### Keyfollow: 17 of 17 exact, and PERFECTLY SYMMETRIC
+
+```
+  kf   -12   -7   -2    3    4    5   12
+  wire -18  -10   -3    5    6    8   18      predicted
+  wire -18  -10   -3    5    6    8   18      measured
+```
+
+**`kf +12 -> +18` and `kf -12 -> -18`**, in different volumes, on material the
+correction was never fitted to. **EOS's keyfollow is symmetric: there is no
+asymmetry to model.**
+
+What that does *not* mean, stated because the sibling project asked for it in
+advance: their `AKAI_KEYFOLLOW_NEG_SCALE = 0.622` measures **the S3000XL's own
+tracking**, not EOS's conversion. A symmetric EOS does not refute it — it means
+EOS does not model the sampler's asymmetry. Two different quantities, named as
+different *before* the result arrived.
+
+### vel_to_attack: scale 48, settled at four discriminating points
+
+```
+  va -50  ->  38      1:1 predicts 39,  x48/50 predicts 38      twice
+  va -14  ->  10      1:1 predicts 11,  x48/50 predicts 10      twice
+  va  -8  ->   6      both predict 6                            twice
+```
+
+```
+  stored = round(clamp(va, -50, +50) * 48/50)
+  wire   = round(stored * 100/128)          sign inverted
+```
+
+`48` is the constant already recorded for that row, so this confirms the
+documented value and refutes the `1:1` alternative where the two differ most.
+The `-8 -> 6` points independently reproduce a measurement taken yesterday from
+a different disc.
+
+### An absence that was an apparatus artifact
+
+Five programs appeared to lack the predicted `kf -12` cord. The scanner broke
+out of its voice loop at the first voice with no matching cord:
+
+```python
+  if not got and v > 0: break
+```
+
+**The cords were on voice 13**, past several empty voices, in every case. A
+re-scan without the break found `-18` exactly where predicted.
+
+**And the reasoning that nearly excused it was wrong.** Noting that the `-7`
+programs were interleaved among the `-12` ones, this project argued a
+truncation "would have to hit exactly the `-12` programs and spare both `-7`
+ones, five times running" — and it did, because the `-7` programs carry their
+cord on an early voice and the `-12` programs carry it on voice 13. **A pattern
+that looks too selective for an apparatus fault is not evidence against one.**
+The scan settled it; the argument about the scan did not.
