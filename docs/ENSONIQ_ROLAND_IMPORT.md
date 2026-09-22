@@ -1543,3 +1543,43 @@ logic and this project has **not** read it to its return. So:
 That is empirical and it is two independent matches, but it is **not** the
 instruction that would settle it. Recorded as a limit this time instead of being
 allowed into a conclusion.
+
+### Does EOS read the Roland partial's parameter region? No.
+
+mpc2emu asked whether the importer reads the 128-byte partial record's region
+after `+80` — filter, envelope, LFO — so they can write defaults knowingly
+rather than by omission. Swept across the **whole Roland module**
+(`0x16d000`–`0x173800`), not the two builders.
+
+**From the partial (`%a3`) the importer reads six bytes and nothing else:**
+
+```
+  a3@(4)  a3@(6)  a3@(7)  a3@(8)  a3@(9)  a3@(10)
+```
+
+pan, fine tune, and the velocity quartet. **Nothing at or above `+11`.**
+
+The only byte reads above `+64` anywhere in the module are one block at
+`0x16ff62` reading `+96`, `+128`, `+160`, `+192` — a **32-byte stride** into a
+different structure (`%a4`, after an index adjustment), writing four bytes into
+`a5@(12..15)`. Not the partial.
+
+### The complete destination list, which bounds the whole conversion
+
+Every E4-side offset the Roland module writes:
+
+```
+  -22 -21 -20 -19 -18 -17 -16 -15 -12 -9 -8      the stereo back-patch
+    1   2   3   4   5   6   7   8  10  12  13
+   14  15  16  17  18  19                        the zone (stride 22)
+   24  28  33  34  36  52  53  56  58            voice level
+```
+
+**That is the entire Roland→E4 conversion surface.** Anything not in this list is
+left at whatever the default voice/zone initialiser set — so **filter, envelope
+and LFO are dropped**, the same answer the Ensoniq importer gives.
+
+For a converter: write the defaults deliberately for everything outside this
+list. The importer is not preserving those fields and matching it means not
+preserving them either — see the ceiling note in the consolidated document,
+which says to keep a source field where our model has one and EOS drops it.
