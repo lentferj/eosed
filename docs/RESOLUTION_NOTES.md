@@ -18927,3 +18927,58 @@ decodes to `1040384` under EOS's decoder is `130048` as a byte offset. mpc2emu's
 "0, 2256, 1040384" are `0, 282, 130048` — plausible offsets after all, under the
 other decoder. **The address was right, the decoder was the wrong one for the
 question.**
+
+## §174 — Two discs, two different causes of the same symptom (2026-09-22)
+
+**Status: DISAGREEMENT, stated before reconciling.** Both explanations of the
+same symptom are strongly supported, on different discs, and each nearly fails
+on the other's material.
+
+The symptom: a wavesample's `+248` end pointer, doubled, exceeds the room
+between the end of its own 288-byte struct and the next struct named in the
+position table.
+
+```
+                              this disc (232 ws)     mpc2emu's (3359 ws)
+  over-runs                        99                     662
+  (end - start)*2 fixes            98    99.0%             11     1.7%
+  an alias shares its `end`         1     1.0%            558    84.3%
+  non-zero start among them        98    99.0%            102    15.4%
+  disc-wide alias rate            44%                    76.7%
+```
+
+**On this disc the span subtraction explains 98 of 99 and aliasing explains 1.
+On theirs, aliasing explains 558 of 662 and the subtraction explains 11.**
+Neither result is weak: this project's 98 are *exactly* the 98 structs with a
+non-zero `+240`, which is a set identity rather than a rate.
+
+### What is not in dispute
+
+mpc2emu's ratio argument rules out arithmetic as a *general* fix: a median
+overshoot of 26× and a maximum of 1020× is not a missing subtraction. And their
+alias resolution produced a whole disc with **zero truncated samples and zero
+orphan zones**, which no arithmetic fix here has matched.
+
+Equally, a 1-of-99 alias rate on this disc is not a missing measurement.
+
+### The reading, offered as a reading
+
+**Both mechanisms are real and the mix is disc-dependent.** A non-zero `+240`
+means the pointer pair is a span; a shared `+248` with a fitting sibling means
+the struct aliases that sibling's audio. A struct can have neither, either, or
+both, and the two discs differ by an order of magnitude in which dominates.
+
+**For an implementation that is the safe conclusion rather than an awkward one:**
+subtract `start` when it is non-zero, resolve aliases by pointer signature, and
+keep the struct-to-struct gap as a ceiling. All three, in that order. Applying
+only the mechanism that dominates one's own disc produces a reader that is
+correct on that disc and silently truncates on the other.
+
+### And the score that could not separate them
+
+Recorded because it is general: *"does the length fit"* cannot distinguish a
+shared base from a per-struct span, **because they agree on an instrument's
+first wavesample and diverge only after it.** What separated them was a
+structural observation — a later struct lying *inside* the span a shared base
+implies — not a better percentage. A metric that only asks whether a value fits
+is blind to any hypothesis that agrees on the first case.
