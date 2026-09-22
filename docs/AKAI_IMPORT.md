@@ -1787,3 +1787,68 @@ on one side, ISOs on the other.
 this project has the EOS image; only they have the AKAI corpus. Claims crossing
 in those directions get no second reading, and are the ones worth re-reading
 before sending rather than after being asked.
+
+### The third writer was not a third writer — `%a5` denotes two structures
+
+**The caveat in the previous section is withdrawn.** It was raised in good faith
+an hour after the law it qualified, and it was wrong. Recorded rather than
+quietly deleted, because it was sent to a sibling project.
+
+The three writes are to **two different fields in two different structures**
+that share a register name and an offset:
+
+```
+  0x47ce6   %a5 := %a0        set at 0x47788
+            and %a0 at the call site (0x48994) is  lea %fp@(-68),%a0
+            -> a STACK scratch struct in the orchestrator's frame
+
+  0x46f5a   %a5 := %d0        set at 0x46de2
+  0x46f8e      "   (no other write to %a5 in 0x46da8..0x473e2 -- count: 1)
+            and %d0 there is the return value of  jsr 0x51a18
+            -> a HEAP object
+```
+
+**The clincher is the null check.** At `0x46de6` the result is `tstl %a5`,
+`bnes`, with the failure path loading `#-67108863` and bailing out. *A pointer
+that gets null-checked is not a stack address.* `fp@(-68)` cannot be NULL and
+would never be tested. So these are not the same field, and no ordering
+question arises between them.
+
+The sibling reached the same two structures independently and labelled their
+identity an inference — "they very likely *are* one field" — correctly declining
+to rest anything on it. It is not an inference: it is refutable, and the null
+check refutes it.
+
+**So the keygroup law stands unqualified, at exactly two writers.** Which is
+where it started, before this project spent an hour qualifying it.
+
+### Why the offset survived the correction that was supposed to catch it
+
+This project already adopted **"a register is not a structure"** after publishing
+an offset list with no base. It did not fire here, and the reason is worth more
+than the instance: that rule was filed as being about *publishing*, so it got
+applied to output and never to reading. `a5@(53)` was read, compared and
+counted across two structures without the rule ever being consulted, because
+nothing in the act of grepping looked like publishing an offset list.
+
+**A rule filed under where it was learned only fires where it was learned.**
+
+The operational form, agreed with the sibling after the same register denoted
+two things three times in one day across both projects:
+
+> At every `%aN@(k)` worth quoting, state where `%aN` was last assigned.
+
+That is a checklist item at the point of *reading*, costs one line, and would
+have caught all three instances. The wording rule about publishing would have
+caught none of them.
+
+### The queue that is actually worth keeping
+
+Both of today's productive re-reads had the same shape: **something named but
+not opened.** `0x2f784` was called "the helper" for hours; the sibling's `%d6`
+was carried through a passage as one quantity while being two. Opening each
+produced a real change.
+
+That is a queue, not a scruple — nameable in advance, workable when idle, and it
+pays out often enough to be worth running before a claim is sent rather than
+after it is questioned.
