@@ -2270,3 +2270,34 @@ finding — zone entry stride 22 at `0x50e40` — is in the **EMU-native** range
 may be a misattribution of exactly the kind just un-retracted above. **Not
 checked.** Flagged rather than corrected, because guessing the direction is how
 the `0x4430c` error happened in the first place.
+
+### `arena[58]` is not an AKAI detail — corrected from the Roland side
+
+This file recorded the stereo gate as a property of the AKAI arm:
+
+> `a5@(53)` STEREO path (`0x46f46`), gated by `(sample[58]>>1)&3 == 3`
+
+The **Roland** zone builder at `0x171434` applies the identical test to the
+identical byte of the identical structure:
+
+```
+  1714cc:  moveb %a2@(58),%d0      %a2 = arena object from 0x13d32c
+  1714d0:  lsrl #1,%d0
+  1714d2:  andl #3,%d0
+           == 3 ?  no -> clear the field   yes -> the stereo arithmetic
+```
+
+Both arms reach the arena object through `0x13d32c`. So **`arena[58]` bits 1–2
+is a sampler-independent stereo / channel-pair field**, read by at least two
+importers, and describing it as part of the AKAI import law was scope this file
+never had.
+
+The law itself is unchanged — the AKAI arm does gate on it, exactly as written.
+What was wrong was the **ownership**, which is the third time in two days that a
+correct reading carried a wrong scope: `0x50e40` named as an arm, `0x4430c`
+attributed away from AKAI, and now a shared arena flag filed as an AKAI one.
+
+**None of the three was detectable from inside the reading that produced it.**
+Each needed a second arm to compare against. That is an argument for reading
+two importers before writing a law about one, not for reading one more
+carefully.
