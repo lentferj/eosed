@@ -1390,3 +1390,60 @@ rebase at all.**
 one**, while `vlowfade`/`vhighfade` on the *same zones* carry 0 and 7. So the
 importer demonstrably writes fades on this material and writes **zero** key
 fades — the source has no key crossfades, rather than the path being untaken.
+
+### The pan arm and the stereo back-patch, read — and two [S] rows are wrong
+
+`0x1714e4` onward, continuing the zone builder:
+
+```
+  1714e4:  moveb %a3@(4),%d7        ; the PARTIAL's byte 4  -- sub[4], as documented
+  1714ea:  extw  %d7                ; SIGN-extend
+  1714ec:  addl  %d7,%d7            ; x2
+  1714f0:  clamp to -64
+  1714fa:  clamp to +63
+  171500:  moveb %d7,%a5@(14)       ; -> entry[16] under the +2 convention
+```
+
+**`pan = clamp(sign_extend(partial[4]) * 2, -64, +63)` is confirmed**, and its
+destination is now named: `a5@(14)`, i.e. **entry[16]**.
+
+**And it is written unconditionally.** There is no pan force-to-zero in this
+routine — the three `clrb`s that follow clear `a5@(15)`, `(16)` and `(17)`, not
+the pan byte. **The `[S]` row's "forced to 0 when `(sample[58] >> 1) & 3 == 3`"
+does not appear here at all.**
+
+### The stereo test is a function call, not a sample byte
+
+```
+  17151a:  jsr 0x50d38              ; (a4 = the PATCH)
+  171526:  subql #2,%d1             ; stereo iff the result == 2
+```
+
+```
+  50d48:  tstb %a0@(24)
+  50d4c:  bnes -> return 0
+  50d4e:  moveb %a0@(2),%d0         ; else return patch[2]
+```
+
+**Stereo iff `patch[24] == 0` and `patch[2] == 2`.** Not `sample[58]`, and not a
+shift-and-mask — which is why `sample[58]` read past the end of a 48-byte sample
+record: it was never that record.
+
+### The back-patch, in full — and it mutates its inputs
+
+Writing into the **previous** zone at negative offsets:
+
+```
+  a4@(16..19)  -> a5@(-18..-15)
+  a3@(2)  = 0                       ; MUTATES the partial
+  a4@(12..15)  -> a5@(-22..-19)
+  a4@(52) -> a5@(-9)  ; a4@(52) = 0 ; MUTATES the patch
+  a4@(53) -> a5@(-8)  ; a4@(53) = 0 ; MUTATES the patch
+  a4@(34) -= [0x102e0c86] , stored back
+  [0x102e0c86] -> a5@(-12) as a word
+```
+
+**Three of the importer's own inputs are zeroed or decremented as a side
+effect**, so a converter replaying this must either copy its source structures
+first or reproduce the mutation — and anything reading `patch[52]`/`[53]` *after*
+a stereo zone has been built reads zeros.
