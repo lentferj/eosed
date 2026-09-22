@@ -1642,3 +1642,85 @@ means the zone in one function and a file context in another, so the union of
 its offsets describes nothing. **An offset list is only meaningful inside the
 scope where its base register has one meaning**, and the scope belongs in the
 list as much as the numbers do.
+
+## Roland arm: the zone builder at `0x171434`
+
+`0x171458` is a call site inside a **frameless** function starting at
+`0x171434` and ending at the `rts` at `0x1715a2`. (The nearest `linkw` above it,
+`0x171390`, is a different two-instruction thunk ending at `0x1713ae` — the
+frame-pointer scan misleads here.) **It is a converter, not plumbing.**
+
+### Register bindings, stated before any offset is quoted
+
+```
+  %a4 := %a1   incoming   working/source struct A
+  %a3 := %a0   incoming   source record B
+  %d7 := %d0   incoming   index (word)
+  %d5 := %d1   incoming   (word)
+  %a2 := jsr 0x13d32c(%d7)      the arena object
+  %a5 := jsr 0x50e40(%a4, %d5)  THE DESTINATION ZONE, null-checked,
+                                bails with #-67108863
+```
+
+So `0x50e40`'s role here is to **return the zone entry** that this function then
+fills. The provenance of `%a3` and `%a4` is **not** established by this function
+— they are its incoming arguments. Do not read their offsets as Roland file
+offsets without tracing the caller.
+
+### The write list
+
+| dest | source | arithmetic |
+|------|--------|------------|
+| `%a5@(8)` w | `%d7` | the index, direct |
+| `%a5@(0..3)` | `%a4@(12..15)` | direct, in order |
+| `%a5@(4)` | `%a3@(7)` | direct |
+| `%a5@(5)` | `%a3@(8)` | direct |
+| `%a5@(7)` | `%a3@(9)` | direct — **note the crossover** |
+| `%a5@(6)` | `%a3@(10)` | direct — **9→7 and 10→6, not in order** |
+| `%a5@(10)` w | `%a3@(6)` | `((v << 6) + 32) / 100` signed |
+| `%a5@(12)` | `%a2@(68)` | low byte of a **longword** read |
+| `%a5@(13)` | — | cleared |
+| `%a5@(14)` | `%a3@(4)` | `clamp(v*2, -64, +63)`, **gated** — see below |
+| `%a5@(15..18)`, `@(20)` | — | cleared |
+
+Then, only when `jsr 0x50d38(%a4)` returns **2**:
+
+| dest | source |
+|------|--------|
+| `%a5@(-22..-19)` | `%a4@(12..15)` |
+| `%a5@(-18..-15)` | `%a4@(16..19)` |
+| `%a5@(-9)` | `%a4@(52)`, **which is then cleared** |
+| `%a5@(-8)` | `%a4@(53)`, **which is then cleared** |
+| `%a5@(-12)` w | the global byte at `0x102e0c86`, sign-extended |
+| — | `%a4@(34) -= [0x102e0c86]` (source modified in place) |
+
+The negative offsets mean **`%a5` points into the middle of the zone record**,
+with at least 22 bytes of header before it.
+
+### The stereo gate is the AKAI gate
+
+```
+  1714cc:  moveb %a2@(58),%d0
+  1714d0:  lsrl #1,%d0
+  1714d2:  andl #3,%d0
+  ...      == 3 ?  no -> clrb %a5@(14)
+                   yes -> clamp(%a3@(4) * 2, -64, +63) -> %a5@(14)
+```
+
+This is **the same test on the same byte** as the AKAI arm's stereo path, which
+reads `(sample[58] >> 1) & 3 == 3` off the arena object before writing
+`a5@(53)`. Two importers consulting one arena flag, so `%a2@(58)` bits 1–2 is a
+sampler-independent **stereo/channel-pair field**, not an AKAI detail — which is
+how it was recorded in `AKAI_IMPORT.md`.
+
+**Not claimed:** that `%a5@(14)` here and `a5@(53)` there are the same
+destination field. They are reached through different structures, and this file
+has already paid for assuming otherwise once.
+
+### Unverified
+
+- `((v << 6) + 32) / 100` is transcribed literally. It is **not** the round-half-up
+  form used elsewhere in this image (which adds half the *divisor*, 50, not 32),
+  so it is recorded as read rather than named as a rounding rule.
+- `0x102e0c86` is a RAM global, read here and also at `0x1713d6` in the
+  neighbouring thunk. Its meaning is untraced.
