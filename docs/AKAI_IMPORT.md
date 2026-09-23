@@ -2540,3 +2540,60 @@ sound, and the conclusion joining them was still wrong. **Two verified halves
 do not verify the bridge between them** — the same failure this file recorded
 for "identified endpoints do not verify the arithmetic between them", one level
 up.
+
+## The S3000 question was already answered by tonight's import
+
+The sibling project located the 51 drop keygroups and split them by generation:
+
+```
+  S3000 (.P3, block 0xC0)   18 keygroups, 10 programs, ALL on one disc
+  S1000 (.P1, block 0x96)   33 keygroups, 11 programs, four other discs
+```
+
+so the population relevant to `A3S1` — the arm carrying the `0x44958`
+mismatch — is **18, not 51**.
+
+**And four of those S3000 drop programs are in the volume imported tonight.**
+Re-derived here from the disc rather than taken:
+
+```
+  volume index  40   2 kg   all -50      \
+  volume index  53   1 kg       -50       |  all S3000, all in the
+  volume index  65   1 kg       -50       |  128-program volume that
+  volume index 122   1 kg       -50      /   was imported and read back
+```
+
+Those are exactly the four programs this file already listed as CASE A. **Index
+53 is the preset measured at `P053`, and it came back with the cord present at
+AMT −38** — the value `0x1b = −50` predicts through the importer's `×48/50` and
+the wire's `×100/127`.
+
+### So the S3000 route reaches the clean arm, and that is settled
+
+The experiment ran before anyone identified it as the experiment. An S3000
+program with `0x13 = 0` and `0x1b = −50`, imported from CD-ROM, **received its
+cord**. The `0x44958` mismatch was not exercised because that route does not
+reach `A3S1`.
+
+**A further probe on the same route would add sample size, not information.**
+`SWM3014/34` and the remaining three CASE A presets here are all the same
+transfer path; reading them takes the observation from 1 keygroup to 5 and
+changes no conclusion. Worth doing only if the rig is idle.
+
+**The open question moves and narrows: no *disc* route reaches `A3S1`.** CD-ROM
+S3000 import is now measured and goes to the orchestrator arm. Whatever reaches
+the descriptor-driven arm is a different kind of transfer, not a different kind
+of disc.
+
+### What this cost, and the cheaper path that existed
+
+The answer sat in tonight's readback for four hours. It was not found sooner
+because nobody had crossed two things both projects already held: *which
+programs carry the pattern* (theirs) and *which presets were read back*
+(mine). The generation split that made it findable was produced only when a
+probe ranking forced the question.
+
+**A ranking argument is a good reason to compute a property nobody asked for.**
+Both of us ranked probes by the quantity we had already measured — they by
+keygroup count, this project by amount magnitude — and the deciding property,
+generation, was measured by neither until the ranking made it matter.
