@@ -72,6 +72,15 @@ master/config menu and are a separate thread; they are not the converter.
 is AKAI program byte `196 - N`.** That mapping is what makes the listing
 readable; every "akai byte" below is derived from it.
 
+**With a bound the original note omitted.** `0x4771c` reads exactly `0xC0` =
+**192** bytes, so the program occupies `%fp@(-196)..%fp@(-5)` and covers AKAI
+bytes **0..191 only**. The frame is 200 bytes; `%fp@(-4)..%fp@(-1)` are *past
+the end of the program* and are ordinary locals.
+
+So the mapping has a validity range, and any row claiming an AKAI byte above
+191 is reading a local as if it were file data. All 14 rows below were swept
+against this; **one violated it** — see the correction under the table.
+
 Each field conversion is one of a small set of idioms:
 
 ```
@@ -173,11 +182,12 @@ Mechanically extracted; see the confidence note below before relying on a row.
 The proportional-rescale rows are given exactly in the next section; the
 table below is the raw extraction and its "call" attribution was wrong in
 at least two places (`0x50c04`/`0x50c24` are struct initialisers, not
-converters), so the columns to trust here are the source and destination.
+converters), so the columns to trust here are the source and destination —
+**and now with one source column entry corrected too**, see below.
 
 | dest off | akai byte | table | clamp |
 |---:|---:|---|---|
-| 0 | 0xc2 | — | — |
+| 0 | *not AKAI* — see correction | — | — |
 | 2 | 0x2a | — | — |
 | 3 | 0x29 | — | — |
 | 4 | 0x42 | — | — |
@@ -2315,3 +2325,72 @@ read in `0x4647c..0x46c7e`), so nothing consumes stale data. Recorded because
 travels further than the thing it summarises — and because the gaps' position
 is evidence the `+3` slot layout is a real structure rather than a coincidence
 of seven offsets.
+
+
+### Correction: `dest 0` never came from an AKAI byte
+
+The row read `dest 0 <- akai 0xc2`. **`0xC2` is 194, two bytes past the end of
+the 192-byte program.** It is `%fp@(-2)`, and that is an **out-parameter**:
+
+```
+  4779a:  pea %fp@(-2)            ; &out
+  4779e:  movel %d7,%sp@-         ; the file handle
+  477a0:  jsr 0x30e24             ; 0x30e24(handle, &out)
+  ...
+  47844:  movew %fp@(-2),%a5@     ; a WORD, into dest 0
+```
+
+So `dest 0` receives a 16-bit value that `0x30e24` computes from the *handle*,
+not from the program data. **What `0x30e24` returns is not read here** and is
+not guessed at.
+
+**Two tells were present and both were missed.** The offset was outside the
+buffer whose length this project had already read; and the store is `movew`,
+while every genuine byte row in the table is `moveb`. The extraction recorded
+the addressing mode's *operand* and discarded its *size*.
+
+**The sweep:** all 14 rows re-checked against the 0..191 bound. Exactly one
+violated it — this one. Caught by the s3ked-95 project reading the table, not
+here.
+
+### Why "39 of 40 correct" is not the reassuring part
+
+s3ked-95 diffed 39 further offsets against its own AKAI field table and found
+them right, on a base independently confirmed via `%fp@(-193)` = byte 3 =
+`PRNAME`. They explicitly declined to bank that as corroboration of *their*
+table, on the grounds that whoever wrote EOS's importer most likely learned
+the layout from the same Akai document s3ked transcribed — so the two are not
+independent witnesses.
+
+That is the correct call, and the same reasoning applies in this direction:
+**this file must not cite s3ked's agreement as confirmation of the firmware
+read either.** What the agreement does establish is narrower and still useful:
+where the two disagree, one of them has an error worth finding. It found this
+one.
+
+### `0x48b24` is not Hz-faithful — question closed, in the negative
+
+This file asked whether EOS's `0x48b24` rate table could adjudicate a Hz law,
+noting it was "directly comparable to such a curve as data". Settled offline by
+s3ked-95: **no.**
+
+Pushed through the E4XT's measured rate law, the implied AKAI curve has local
+slopes of 0.152, 0.188 and 0.137 Hz/unit across its range — **not linear**,
+while the AKAI itself measures linear at r² 0.9995. A linear fit to the implied
+curve returns r² **0.99629** while hiding a **+78% worst residual**.
+
+So the table is a *musical* mapping, not a physical one, and cannot settle
+anyone's Hz law. The caution recorded here was right; it is now quantified.
+
+**And a second r²-hides-spread specimen for the file**: 0.99629 is the kind of
+number that reads as "confirmed" in a table and is concealing a 78% error at
+its worst point. Same shape as the fitted LFO curve this project shipped for
+months — three exact anchors, 27% error between them.
+
+**What the table *can* do, which mattered more:** it serves **both** AKAI rate
+bytes `0x21` and `0x1D`. One table cannot serve two scales differing by a
+factor of two — a structural fact needing no hardware. That was the fourth of
+four independent routes showing s3ked's shipped `PANRAT` constant was wrong
+(`0.23708`, should be `0.11880`). The `0x1D` row here is the one reached
+**via `%a3`**, which a literal-reference scan for the table address would not
+have found.
