@@ -2402,7 +2402,26 @@ all 2690 keygroups of this project's reference disc, and the sibling's parser
 carries `(0x1b, 'key', 'filter_env_release', 0)` with the comment *"never"*.
 
 **Refuted at corpus scale.** Scanned 24 disc images — **11 032 programs,
-70 872 keygroups**:
+70 872 keygroups**.
+
+**The population, stated because a bare "24 images" made two correct sweeps
+look contradictory.** Those 24 are **21 commercial discs plus 3 authored test
+discs** (the sibling's own `inputs`/`options`/`limits` ISOs). The 3 authored
+discs contribute **99 programs, 1 810 keygroups, and zero of both classes**, so:
+
+```
+  this project   24 discs   11 032 programs   70 872 keygroups
+  minus authored  3 discs       99 programs    1 810 keygroups
+  = commercial   21 discs   10 933 programs   69 062 keygroups
+```
+
+which is the sibling's population exactly. Same numerators, different
+denominators, **both correct** — the prevalence is 0.072% over everything
+scanned and 0.074% over commercial material alone. Neither figure is a
+transcription slip, and a claim that one sweep "matches the other exactly"
+is true of the counts and false of the populations.
+
+The counts:
 
 | case | keygroups | what EOS does |
 |---|---:|---|
