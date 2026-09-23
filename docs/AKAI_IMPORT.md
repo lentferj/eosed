@@ -2235,9 +2235,19 @@ Confirmed by reading:
   44982:  jsr 0x2f6b4          rescale(-50,+50, scale 48)
 ```
 
-The gate reads `0x13`; the amount reads `0x1b`. A program with `raw[0x13]≠0` and
-`raw[0x1b]=0` emits a zero-amount cord; one with `raw[0x13]=0` and `raw[0x1b]≠0`
-**silently drops a real cord**. Recorded as a defect in an EOS AKAI import arm.
+The gate reads `0x13`; the amount reads `0x1b`. ~~A program with `raw[0x13]≠0`
+and `raw[0x1b]=0` emits a zero-amount cord; one with `raw[0x13]=0` and
+`raw[0x1b]≠0` **silently drops a real cord**.~~
+
+**STRUCK, both halves, on hardware.** A zero amount emits **no cord at all**,
+not a zero-amount one. And the drop is a property of *this arm*, which no disc
+import reaches — see "The S3000 route is settled" below. The mismatch at
+`0x44958` is real as read; its *consequence* was asserted from the instruction
+stream and is not what the machine does on any measured route.
+
+Struck in place rather than rewritten, because these sentences were quoted to
+two sibling projects and silently fixing them would make those quotations look
+invented.
 
 ## The descriptor table is not one table, and Roland/Ensoniq ARE in it
 
@@ -2426,7 +2436,7 @@ The counts:
 | case | keygroups | what EOS does |
 |---|---:|---|
 | `0x13 == 0` and `0x1b != 0` | **51** | the cord is **silently dropped** |
-| `0x13 != 0` and `0x1b == 0` | **892** | a zero-amount cord is written |
+| `0x13 != 0` and `0x1b == 0` | **892** | ~~a zero-amount cord is written~~ — **no cord at all**; measured |
 
 The dropped amounts are not marginal: `-50, -30, -26, -20, -5, -3, -1, 20, 24,
 50` — several at full scale. The affected keygroups fall on **5 of 21**
