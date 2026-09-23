@@ -34,6 +34,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `ubuntu-latest` migrates to Ubuntu 26 from 2026-10-19. Left
+        # unpinned ON PURPOSE: this matrix exists to be told about
+        # install-path changes the author's own machine cannot show, and
+        # on 3.13 python-rtmidi builds from source, so a toolchain or
+        # libasound change surfaces here and nowhere else. Pinning would
+        # silence the warning and defeat the reason the job exists. The
+        # date is recorded so a red build in October has its cause
+        # written beside it rather than needing rediscovery.
         os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
         include:
@@ -47,9 +55,9 @@ jobs:
             python-version: "3.13"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
