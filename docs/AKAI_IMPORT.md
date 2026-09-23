@@ -2453,3 +2453,71 @@ selects between the two arms is unread.
 Import one of the 51 through EOS and read the voice's cords over SysEx. Absence
 of a `Key+ → FEnvRls` cord confirms the drop and simultaneously settles which
 arm that import path used — one import answers both questions.
+
+## HARDWARE: the cord is NOT dropped — the prediction was wrong, and why
+
+Measured on the E4XT, 2026-09-23, importing a 128-program S3000 volume from
+CD-ROM. Predictions were pre-registered before the import.
+
+| case | akai `0x13` | akai `0x1b` | predicted | **measured** |
+|---|---:|---:|---|---|
+| A | 0 | −50 | **no cord** | **cord present, AMT −38** ✗ |
+| B | −37 | −50 | cord, AMT −38 | cord, AMT −38 ✓ |
+| B | −24 | −15 | cord, AMT −11 | cord, AMT −11 ✓ |
+| C | −24 | 0 | **cord, AMT 0** | **no cord** ✗ |
+| null | 0 | 0 | no cord | no cord ✓ |
+
+**Two of five predictions failed, both from the same wrong premise:** that this
+import path uses the `0x44958` arm. It does not. Every result is consistent
+with the *other* emitter — `0x4647c`/`0x46b7e` — which gates `0x1b` on `0x1b`
+and has no mismatch.
+
+### What the measurement did establish
+
+**The two bytes drive two independent cords, each gated on itself:**
+
+```
+  akai kg 0x13  ->  Key+ -> VEnvRls      emitted iff 0x13 != 0
+  akai kg 0x1b  ->  Key+ -> FEnvRls      emitted iff 0x1b != 0
+```
+
+and the arithmetic is exact, **8 of 8** including both bytes on three programs:
+
+```
+  amount = round( clamp(v, -50, +50) * 48/50 )        the importer
+  SysEx  = round( stored * 100/127 )                  the wire
+
+  -50 -> -48 -> -38      -37 -> -36 -> -28
+  -24 -> -23 -> -18      -15 -> -14 -> -11
+```
+
+A zero amount produces **no cord at all**, not a zero-amount cord — which
+retires the "benign zero-amount case" framing used earlier in this file.
+
+### What this costs the corpus finding
+
+The 51 keygroups are real and the `0x44958` mismatch is real. **But nothing on
+this import path reaches that arm**, so the practical claim — that EOS silently
+loses these routings — is **not demonstrated** and is withdrawn pending a route
+that actually reaches `0x4430c`.
+
+The dispatch question is now sharper, not answered: importing a `.P3` program
+from a CD-ROM volume uses the orchestrator arm. What reaches the
+descriptor-driven `A3S1` arm is unknown — a different transfer route is the
+obvious candidate, and the image's "Foreign sampler SCSI ID" preference is a
+lead, not a finding.
+
+### The generalisation that failed
+
+This file said the 18/33 split was "by file generation, not by arm" and must
+not be read as the latter. Correct, and insufficient: **the arm is not selected
+by the file at all on this path** — a single arm handled S3000 material that a
+descriptor entry also claims. Having two claimants for a file type is not the
+same as both being used, and the descriptor table's existence was read as
+evidence of its use.
+
+Worth stating plainly because the corpus scan was sound, the firmware read was
+sound, and the conclusion joining them was still wrong. **Two verified halves
+do not verify the bridge between them** — the same failure this file recorded
+for "identified endpoints do not verify the arithmetic between them", one level
+up.
