@@ -2394,3 +2394,62 @@ four independent routes showing s3ked's shipped `PANRAT` constant was wrong
 (`0.23708`, should be `0.11880`). The `0x1D` row here is the one reached
 **via `%a3`**, which a literal-reference scan for the table address would not
 have found.
+
+## The `0x44958` gate/amount defect: the damaging case EXISTS in real material
+
+Both projects had recorded keygroup byte `0x1b` as **never non-zero** — zero on
+all 2690 keygroups of this project's reference disc, and the sibling's parser
+carries `(0x1b, 'key', 'filter_env_release', 0)` with the comment *"never"*.
+
+**Refuted at corpus scale.** Scanned 24 disc images — **11 032 programs,
+70 872 keygroups**:
+
+| case | keygroups | what EOS does |
+|---|---:|---|
+| `0x13 == 0` and `0x1b != 0` | **51** | the cord is **silently dropped** |
+| `0x13 != 0` and `0x1b == 0` | **892** | a zero-amount cord is written |
+
+The dropped amounts are not marginal: `-50, -30, -26, -20, -5, -3, -1, 20, 24,
+50` — several at full scale. The affected keygroups fall on **5 of 21**
+commercial discs; the other 16 and all three authored test discs are clean.
+
+**Why both projects saw zero.** This project's reference disc is one of the
+clean 16 (2690 keygroups, 0 damaging). The sibling's own ISO is 13 programs.
+Prevalence is 51 in 70 872 = **0.072%** — a rate at which two independent
+samples of a few thousand keygroups will both read zero and agree. Two
+corpora agreeing on a negative measured nothing; they were both too small.
+
+### The count is qualified, and the qualifier is unread
+
+By generation:
+
+```
+  s1000-form   42 073 keygroups   33 damaging
+  s3000-form   26 989 keygroups   18 damaging
+```
+
+The defect at `0x44958` is in the **descriptor-driven** `A3S1` arm
+(`0x1f9012` entry index 2 → `0x4430c`). There are exactly **six** sites in the
+image writing dest 83 (`FEnvRls`) to a cord, in two clusters:
+
+```
+  0x448e2, 0x44926, 0x44968   the 0x443xx family -- descriptor-driven, HAS the mismatch
+  0x46af8, 0x46b3c, 0x46b7e   the 0x4647c family -- orchestrator-driven, does NOT
+```
+
+and **no third cluster**, so there is no separate S1000 cord emitter. `A0S1`'s
+entry (`0x43a54`) emits no cords at all; `0x4430c`/`0x43eb0`/`0x435f8` have
+**zero** code callers and are reached only through the descriptor table, while
+`0x4647c`'s chain roots at `0x48934` ← `0x48a8e` and appears in no descriptor.
+
+**So which programs reach the buggy emitter is NOT established here.** The
+18/33 split is by *file generation*, not by *arm*, and it must not be quoted as
+if it were the latter. The honest statement is: 51 keygroups carry the pattern
+that triggers the defect **on the arm that has it**, and the dispatch that
+selects between the two arms is unread.
+
+### The cheap test
+
+Import one of the 51 through EOS and read the voice's cords over SysEx. Absence
+of a `Key+ → FEnvRls` cord confirms the drop and simultaneously settles which
+arm that import path used — one import answers both questions.
