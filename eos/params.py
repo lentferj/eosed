@@ -7,9 +7,9 @@
 #   "Remote Preset Editing via MIDI SysEx", Draft #30, EOS 4.00
 #   Brian Clark, E-mu Systems, 17 February 1999
 # No source code from that document is copied. See docs/RESOLUTION_NOTES.md
-# §2 for transcription notes, including one table (LFO rate display) that was
-# deliberately left unimplemented due to an unresolved transcription ambiguity
-# — see the module-level note near cnv_lfo_rate below.
+# §2 for transcription notes. The LFO rate display tables could not be
+# transcribed from that document (page-break reflow) and are instead taken as
+# data from the EOS 4.70 firmware image — see the note near cnv_lfo_rate.
 #
 # eosed is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by
@@ -247,7 +247,7 @@ _PARAMS: List[Parameter] = [
     _p(104, "E4_VOICE_FENV_SEG5_TGTLVL", "voice.filter.env", -100, 100, unit="%", notes="Rls2 Level"),
 
     # -- VOICE: LFOs (ids 105-116) ----------------------------------------------
-    _p(105, "E4_VOICE_LFO_RATE", "voice.lfo", 0, 127, notes="see LFO_SHAPES; Hz via cnv_lfo_rate() -- fitted, not from the spec"),
+    _p(105, "E4_VOICE_LFO_RATE", "voice.lfo", 0, 127, notes="see LFO_SHAPES; Hz via cnv_lfo_rate()"),
     _p(106, "E4_VOICE_LFO_SHAPE", "voice.lfo", 0, 7, notes="see LFO_SHAPES"),
     _p(107, "E4_VOICE_LFO_DELAY", "voice.lfo", 0, 127),
     _p(108, "E4_VOICE_LFO_VAR", "voice.lfo", 0, 100, unit="%"),
@@ -627,11 +627,17 @@ CORD_DESTINATIONS: Dict[int, str] = {
     # §98/§95). The source PDF names only C00Amt..C03Amt, so the rest of this
     # family is absent from the spec we transcribed.
     #
-    # The obvious reading is C{n}Amt = 168 + n for the 18 cords, i.e. 168..185.
-    # ONLY 176 HAS BEEN OBSERVED. The others are not listed here because an
-    # inferred id in a lookup table is indistinguishable from a measured one at
-    # the point of use -- add them as they are seen on the machine.
-    176: "C08Amt",
+    # C{n}Amt = 168 + n is now READ, not inferred. EOS's AKAI import arm
+    # computes a cord destination as `168 + <cord slot index>` at five sites
+    # (0x466b4, 0x466e0, 0x4670c, 0x46774, 0x46bca in the EOS 4.70 image), and
+    # the sibling mpc2emu reached the same constant independently from 0x46bca.
+    # That is the rule itself, from the machine's own arithmetic, which is a
+    # stronger warrant than the single hardware observation at 176 -- so the
+    # family is listed in full rather than one entry at a time.
+    #
+    # 176 remains the only one OBSERVED on hardware (ModWheel -> 176 driving
+    # cord 8's amount, confirmed audibly; RESOLUTION_NOTES §98/§95).
+    **{168 + n: f"C{n:02d}Amt" for n in range(18)},
 }
 
 
@@ -1099,40 +1105,81 @@ def cnv_glide_rate(value: int) -> str:
     return f"{msec // 1000}.{msec % 1000:03d}sec/oct"
 
 
-# --- LFO rate display conversion: DELIBERATELY NOT IMPLEMENTED --------------
-# The source PDF's lfounits1[]/lfounits2[] tables wrap across a page boundary
-# in a way that could not be transcribed unambiguously (a recount produced
-# 129 entries against an expected 128 = one extra/misplaced value from the
-# page-break reflow). Rather than guess which entry to drop, this is left
-# unimplemented — see docs/RESOLUTION_NOTES.md §2. The raw parameter value
-# (E4_VOICE_LFO_RATE / LFO2_RATE, 0-127) is unaffected and fully usable for
-# control; only the cosmetic "x.xx Hz"-style display string is missing.
+# --- LFO rate display conversion: EOS's OWN lfounits1[]/lfounits2[] ---------
+# RESOLVED. The source PDF's lfounits1[]/lfounits2[] tables wrap across a page
+# boundary and extract as 129 entries for 128 slots, so which value is
+# duplicated could not be determined from the text (RESOLUTION_NOTES §2/§6a).
+# An earlier revision shipped a log-quadratic fit to three hardware-measured
+# anchors instead, rendered with a leading "~".
+#
+# Both tables are now transcribed as data from the EOS 4.70 firmware image
+# (md5 92a7ecced0f855f0b711f0bfe5cc89c7, load base 0x20000):
+#     lfounits1[128]  @ 0x6e970    integer part of the Hz reading
+#     lfounits2[128]  @ 0x6e9f0    fractional part, hundredths
+# The two are referenced 20 bytes apart (0x6a884, 0x6a898) by one display
+# routine, which is what identifies them as a pair. Located by structure, not
+# by a code read: the only 128-byte non-decreasing table in the image with
+# t[0]=0, t[64]=4, t[127]=18, whose successor table gives 8, 12, 1.
+#
+# All three anchors mpc2emu measured off the E4XT's own rate menu are
+# reproduced exactly -- byte 0 -> 0.08, 64 -> 4.12, 127 -> 18.01 Hz -- which is
+# an independent confirmation, since the tables were found without using them.
+#
+# The fit they replace was accurate only near its anchors: it drifts to 2.97 Hz
+# of error at byte 105 (true value 11.14 Hz), a 27% overstatement. Its own note
+# claimed it "should land within rounding of what the front panel shows"; that
+# was optimistic and is the reason the display now comes from the table.
 
-# LFO rate byte -> Hz. NOT from the specification: its lfounits1[]/lfounits2[]
-# display tables wrap across a PDF page boundary and extract as 129 entries for
-# 128 slots, so which value is duplicated cannot be determined from the text
-# (RESOLUTION_NOTES §6a). Rather than guess-correct that table, this uses the
-# sibling mpc2emu project's empirical calibration, read off the E4XT's OWN rate
-# menu and fitted log-quadratically:
-#     mpc2emu models/common.py, lfo_rate_byte_to_hz()
-#     Copyright (C) 2025-2026  mpc2emu contributors -- GPL-2.0-or-later
-# Anchors: byte 0 = 0.08 Hz, 64 = 4.12 Hz, 127 = 18.01 Hz (all three reproduced
-# exactly by the fit, which is monotonic over 0..127 -- its vertex is at ~134).
-_LFO_RATE_FIT = (-0.000300578, 0.0808242, -2.52573)
+_LFO_UNITS1 = (
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    1, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 3, 3, 3,
+    3, 3, 3, 3, 3, 3, 3, 4,
+    4, 4, 4, 4, 4, 4, 4, 4,
+    5, 5, 5, 5, 5, 5, 5, 6,
+    6, 6, 6, 6, 6, 7, 7, 7,
+    7, 7, 7, 8, 8, 8, 8, 8,
+    9, 9, 9, 9, 10, 10, 10, 10,
+    10, 11, 11, 11, 12, 12, 12, 12,
+    13, 13, 13, 14, 14, 14, 14, 15,
+    15, 15, 16, 16, 17, 17, 17, 18,
+)
+
+_LFO_UNITS2 = (
+    8, 11, 15, 17, 21, 25, 28, 32,
+    36, 38, 42, 48, 50, 53, 56, 65,
+    69, 72, 76, 80, 84, 92, 95, 99,
+    3, 11, 13, 22, 26, 30, 37, 41,
+    49, 56, 60, 68, 72, 79, 87, 95,
+    98, 6, 14, 21, 29, 37, 44, 52,
+    59, 67, 75, 82, 98, 5, 13, 20,
+    28, 43, 51, 59, 74, 81, 89, 4,
+    12, 26, 34, 50, 58, 73, 88, 96,
+    11, 26, 34, 49, 65, 80, 95, 10,
+    26, 41, 56, 71, 87, 2, 17, 32,
+    63, 78, 93, 9, 39, 53, 69, 85,
+    16, 31, 61, 77, 7, 22, 53, 68,
+    99, 14, 44, 75, 5, 21, 51, 82,
+    12, 43, 73, 4, 34, 65, 95, 26,
+    56, 87, 17, 78, 9, 39, 70, 1,
+)
+
+assert len(_LFO_UNITS1) == 128
+assert len(_LFO_UNITS2) == 128
 
 
 def cnv_lfo_rate(value: int) -> str:
     """``E4_VOICE_LFO_RATE``/``LFO2_RATE`` (ids 105/110), 0..127 -> Hz.
 
-    Rendered with a leading "~" because this is a *fit* to measured hardware
-    readings, not the specification's exact display table — it should land
-    within rounding of what the front panel shows, but the two are not
-    guaranteed to agree digit for digit. See RESOLUTION_NOTES §6a.
+    Exact: this is the machine's own display table, so the string matches what
+    the E4XT's front panel shows for the same byte, digit for digit.
     """
-    import math
-    a, b, c = _LFO_RATE_FIT
-    hz = math.exp(a * value * value + b * value + c)
-    return f"~{hz:.2f}Hz"
+    v = max(0, min(127, value))
+    return f"{_LFO_UNITS1[v]}.{_LFO_UNITS2[v]:02d}Hz"
 
 
 # --- master tuning offset display conversion --------------------------------

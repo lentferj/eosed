@@ -106,14 +106,17 @@ def test_chorus_itd_sign_and_symmetry():
     assert p.cnv_chorus_itd(-32) == "-1.451ms"
 
 
-def test_lfo_rate_is_a_fit_and_says_so():
-    """It used to raise NotImplementedError: the spec's display table wraps
-    across a PDF page and could not be transcribed unambiguously (§6a). It is
-    now mpc2emu's hardware-measured fit instead, and the leading "~" is part
-    of the contract -- it marks a value that approximates the front panel
-    rather than reproducing the spec's table exactly."""
+def test_lfo_rate_is_exact_and_says_so():
+    """Three lives. It raised NotImplementedError (the spec's table wraps
+    across a PDF page, §6a), then became mpc2emu's hardware-measured fit,
+    rendered with a leading "~" to mark it as an approximation.
+
+    It is now EOS's own lfounits1[]/lfounits2[] tables, so the "~" is gone and
+    its ABSENCE is the contract: the string matches the front panel digit for
+    digit. A "~" reappearing means someone reverted to a fit."""
     text = p.cnv_lfo_rate(10)
-    assert text.startswith("~") and text.endswith("Hz"), text
+    assert not text.startswith("~"), text
+    assert text.endswith("Hz"), text
 
 
 def test_midi_control_display_labels():
@@ -182,17 +185,30 @@ def test_fx_b_algorithm_name_spot_checks(value, expected):
 
 
 def test_lfo_rate_matches_the_measured_anchors():
-    """The fit is mpc2emu's, read off the E4XT's own rate menu. Its three
-    published anchors must be reproduced exactly, and it must be monotonic --
-    a quadratic that turned over inside 0..127 would map two bytes to one Hz
-    (its vertex sits at ~134, safely outside)."""
-    assert p.cnv_lfo_rate(0) == "~0.08Hz"
-    assert p.cnv_lfo_rate(64) == "~4.12Hz"
-    assert p.cnv_lfo_rate(127) == "~18.01Hz"
+    """The three anchors mpc2emu read off the E4XT's own rate menu. They were
+    the fit's inputs; they are now an INDEPENDENT check, because the firmware
+    tables were located by structure (the only 128-byte non-decreasing table
+    with t[0]=0, t[64]=4, t[127]=18) without using the measurements.
 
-    hz = [float(p.cnv_lfo_rate(v).strip("~").rstrip("Hz")) for v in range(128)]
+    Monotonicity still matters: two bytes mapping to one Hz reading would make
+    the display ambiguous."""
+    assert p.cnv_lfo_rate(0) == "0.08Hz"
+    assert p.cnv_lfo_rate(64) == "4.12Hz"
+    assert p.cnv_lfo_rate(127) == "18.01Hz"
+
+    hz = [float(p.cnv_lfo_rate(v).rstrip("Hz")) for v in range(128)]
     assert hz == sorted(hz), "LFO rate must increase monotonically with the byte"
     assert all(0.07 < v < 18.1 for v in hz)
+
+
+def test_lfo_rate_is_the_table_not_a_curve():
+    """Guards the reason for the change. The fit this replaced was accurate
+    near its anchors and drifted badly between them -- 2.97 Hz of error at
+    byte 105, where the true reading is 11.14 Hz. Any future curve fitted to
+    the same three anchors would fail here."""
+    assert p.cnv_lfo_rate(105) == "11.14Hz"
+    assert len(p._LFO_UNITS1) == 128 and len(p._LFO_UNITS2) == 128
+    assert all(0 <= v <= 99 for v in p._LFO_UNITS2), "fraction is hundredths"
 
 
 def test_lfo_rate_reaches_describe_value_for_both_lfos():
@@ -200,7 +216,7 @@ def test_lfo_rate_reaches_describe_value_for_both_lfos():
     describe_value still returned the bare number."""
     for name in ("E4_VOICE_LFO_RATE", "E4_VOICE_LFO2_RATE"):
         text = p.describe_value(p.PARAMETERS_BY_NAME[name], 64)
-        assert text == "64 (~4.12Hz)", (name, text)
+        assert text == "64 (4.12Hz)", (name, text)
 
 
 def test_describe_value_aligned_puts_the_sign_outside_the_digits():

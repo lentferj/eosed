@@ -173,7 +173,7 @@ SysEx**, on the current E4XT route. Any live probe or session must either
 route around this script or have it changed first — otherwise a "no reply"
 result is a false negative about the protocol, not a real one.
 
-## §6a — LFO rate display table: transcription gap (RESOLVED via mpc2emu's hardware calibration)
+## §6a — LFO rate display table: transcription gap (CLOSED — EOS's own tables, read from the firmware)
 
 `eos/params.py`'s glide-rate, master-tuning-offset, and chorus-ITD display
 tables were transcribed from the spec PDF and cross-validated: they reproduce
@@ -19040,3 +19040,59 @@ generation split is the natural reading — but *which* Ensoniq machine each
 denotes is not determined by anything read here, and the obvious guess is
 explicitly **not adopted**. Nothing in the image names EPS, ASR or Mirage;
 the only model strings are the two "Scanning Ensoniq device" copies.
+
+
+## §176 — §6a closed properly: the LFO rate tables are in the firmware
+
+§6a was marked resolved when a hardware-fitted curve replaced the
+untranscribable PDF table. That was a **fit**, rendered with a leading `~`,
+and its own note claimed it "should land within rounding of what the front
+panel shows". **It was not.** Measured against the real table:
+
+```
+  bytes   0- 15  max err 0.399 Hz      bytes  64- 79  max err 1.168 Hz
+  bytes  16- 31  max err 0.680 Hz      bytes  80- 95  max err 2.621 Hz
+  bytes  32- 47  max err 0.766 Hz      bytes  96-111  max err 2.971 Hz
+  bytes  48- 63  max err 0.653 Hz      bytes 112-127  max err 2.619 Hz
+```
+
+Worst case **2.97 Hz at byte 105**, where the true reading is 11.14 Hz — a 27%
+overstatement. A three-anchor fit is exact at its anchors and says nothing
+about the interior; the `~` marked the right uncertainty and understated it.
+
+**EOS carries both tables.** In the 4.70 image (load base `0x20000`):
+
+```
+  lfounits1[128]  @ 0x6e970   integer part      referenced from 0x6a898
+  lfounits2[128]  @ 0x6e9f0   hundredths        referenced from 0x6a884
+```
+
+The two references are 20 bytes apart in one display routine, which is what
+identifies them as a pair rather than two unrelated tables.
+
+**How they were found, and why that matters for the confidence label.** Not by
+reading the display routine — by structure: the *only* 128-byte non-decreasing
+table in the whole image with `t[0]=0`, `t[64]=4`, `t[127]=18`, whose successor
+table then gives `8`, `12`, `1`. The three constraints came from mpc2emu's
+hardware anchors.
+
+So the anchors were the search key, and **reproducing them is not independent
+confirmation of the table** — it is guaranteed by construction. What *is*
+independent: the uniqueness of the hit (one table in ~1.9 MB), the fact that
+the successor table matched a fraction pattern nobody searched for, and the
+adjacent code references. Recorded this way because the tempting sentence —
+"all three hardware anchors are reproduced exactly" — is true and proves
+nothing on its own.
+
+`cnv_lfo_rate` now returns `f"{units1[v]}.{units2[v]:02d}Hz"` with no `~`, and
+a test asserts the tilde's **absence**, so a future revert to a fit fails.
+
+### What this says about the other transcribed tables
+
+The glide-rate, master-tuning and chorus-ITD tables are still PDF
+transcriptions. They are cross-validated against the spec's own worked
+boundary values, which is a real check — but it is the same *kind* of check
+that passed the LFO fit at its anchors. **The firmware holds the originals of
+all of them**, and finding each by the same structural method would upgrade
+them from "transcribed and boundary-checked" to "read from the machine". Not
+done; noted as available.

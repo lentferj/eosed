@@ -118,13 +118,22 @@ eos/bridge.py
   config.toml read/write helpers) is original work.
 
 eos/params.py (LFO rate display)
-  cnv_lfo_rate()'s byte->Hz coefficients are NOT from the E-mu specification --
-  its LFO rate display table could not be transcribed unambiguously (the source
-  wraps across a PDF page boundary). They are the sibling mpc2emu project's
-  empirical calibration, measured from the E4XT's own rate menu:
-    mpc2emu models/common.py, lfo_rate_byte_to_hz()
-    Copyright (C) 2025-2026  mpc2emu contributors
-    License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+  _LFO_UNITS1[] / _LFO_UNITS2[] are the EOS firmware's own lfounits1[] and
+  lfounits2[] display tables, transcribed as DATA (256 bytes total) from the
+  EOS 4.70 image at 0x6e970 and 0x6e9f0. They are the numbers the device puts
+  on its own screen for each of the 128 rate settings -- the same category of
+  factual interface data as the SysEx parameter ids and ranges above, recorded
+  so this editor can display what the machine displays. No firmware code is
+  copied, disassembled output is not redistributed, and no executable material
+  from the image is included in or derived into this program.
+
+  They replace a curve fit that was previously used here, because the E-mu
+  specification's own copy of these tables wraps across a PDF page boundary and
+  could not be transcribed unambiguously. That fit was the sibling mpc2emu
+  project's empirical calibration, measured from the E4XT's own rate menu
+  (mpc2emu models/common.py, lfo_rate_byte_to_hz(), Copyright (C) 2025-2026
+  mpc2emu contributors, GPL-2.0-or-later). Its three measured anchors are what
+  located the firmware tables and are retained as a test.
 
 eosed/app.py
   Mostly original work, except: the key-hint legend's fold-to-terminal-width
