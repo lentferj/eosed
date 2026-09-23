@@ -1054,9 +1054,22 @@ def filter_table_3(value: int) -> str:
     return f"{fil_freq(value, 10000, 1006)}Hz"
 
 
-# --- glide rate display conversion (transcribed lookup tables) -------------
+# --- glide rate display conversion (firmware-verified lookup tables) -------
 # Both tables have a clean, unambiguous 16-rows-of-8 layout in the source PDF
 # (no page-wrap ambiguity), unlike the LFO rate tables below.
+#
+# VERIFIED against the EOS 4.70 image: these are BYTE-IDENTICAL to the
+# firmware's own glide_units1[]/glide_units2[] at 0x6e770 / 0x6e7f0, which sit
+# immediately before the LFO pair at 0x6e970 / 0x6e9f0 and are loaded by the
+# same display routine (0x6a84e..0x6a9a6, glide refs at 0x6a84e / 0x6a85a).
+# So the PDF transcription was correct and is now confirmed from the machine,
+# not merely boundary-checked against the spec's worked values.
+#
+# Method note, because the first search for these FAILED and the failure was
+# instructive: it looked for a re-ENCODING (tenths, thousandths, u16) the way
+# the LFO tables were found by a structural key. But a transcription that is
+# already the raw table is found by searching for ITS OWN BYTES. A structural
+# key only finds the table you already know the shape of.
 
 _GLIDE_UNITS1 = (
     0, 0, 0, 0, 0, 0, 0, 0,

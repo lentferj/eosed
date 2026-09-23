@@ -19096,3 +19096,93 @@ that passed the LFO fit at its anchors. **The firmware holds the originals of
 all of them**, and finding each by the same structural method would upgrade
 them from "transcribed and boundary-checked" to "read from the machine". Not
 done; noted as available.
+
+## §177 — Glide confirmed from firmware; envelope time located but NOT shippable
+
+Follow-on to §176, from a read-only review of the 4.70 image. Two of its three
+table items check out here; the third is real but its **scale** is not.
+
+### Glide: byte-identical, ship it
+
+```
+  glide_units1[128] @ 0x6e770   ==  _GLIDE_UNITS1   (verified byte-for-byte)
+  glide_units2[128] @ 0x6e7f0   ==  _GLIDE_UNITS2   (verified byte-for-byte)
+```
+
+Immediately before the LFO pair, loaded by the same routine. The PDF
+transcription was right; it is now confirmed *from the machine*.
+
+**Why §176's search missed them, which is the reusable part.** That search
+looked for a re-*encoding* — tenths, thousandths, u16 — because that is how the
+LFO tables were found (by a structural key on values the PDF could not supply).
+But the glide tables were already transcribed correctly, so the way to find
+them is to **search for the transcription's own bytes**. §176 reported "searched
+for them, found nothing" and concluded "encoded differently or computed". The
+conclusion was wrong for glide and the search was the reason.
+
+*A structural key only finds a table whose shape you already know.* For an
+existing transcription the cheap test is exact-byte search, and it also answers
+a different question — not "what is the table" but "was the transcription
+right".
+
+### Master tuning and chorus ITD: computed, not tabled — negative confirmed
+
+Independently confirmed as absent in u16/u32/float, BE and LE. Their display
+routines **compute**:
+
+```
+  chorus ITD   @ 0x6a9c0..0x6aa22   value * scale / 441 / 1000 -> "%s%01d.%03dms"
+                                    (441 = 44100/100, so the input is a SAMPLE count)
+  another      @ 0x6aa24..0x6aa5a   value * 100 + 12800, >> 7
+```
+
+So the follow-on is **one caller read each**, not a table hunt. §176's framing
+("same method, three more tables") was wrong in both directions: glide was
+already findable, and these two have no table to find.
+
+### Envelope rate: the table is real, the SECONDS are not ready
+
+`0x61690`, 128 entries, u16 BE, monotone non-increasing, `t[0]=0xFFFF`,
+`t[127]=0x0004`, no zeros. Referenced exactly twice, both in the envelope
+stepper at `0x5fd38..0x5fdb8` — it is the **per-tick level increment**, and the
+index is `(rate_field + modulation) >> 5` clamped 0..127. There is no display
+table because the panel shows raw bytes (§105).
+
+The time law is its reciprocal, `t = C / table[byte]`, and the proposed
+`C = 621.9` fits this project's ladder to 6.6% worst.
+
+**It is not shippable, and the reason is in our own data file.**
+`docs/data/e4xt_attack_rate_ladder.json` carries four caveats the proposal did
+not carry forward:
+
+| the file says | consequence for `C` |
+|---|---|
+| every `t_peak` in `rows` is **argmax**, not the threshold convention settled 2026-09-11 | the two families differ by **1.89×** on the same material — byte 72 is 3.849 s argmax vs 2.035 s threshold |
+| "**NOT to be read below ~2 s** without a re-take" | **3 of the 8 fit points** (bytes 20, 36, 48 at 0.18/0.48/1.02 s) are below that floor |
+| SEG0 (Atk1) only | understates a two-segment attack by up to 5× |
+| fixed 5 ms detector on transposed material | any note-dependence from it is suspect |
+
+So a display reading `621.9 / T[byte]` would print an **argmax-convention**
+time, roughly **1.9× larger** than the convention this project settled on, with
+a third of its calibration drawn from below the data's own validity floor. The
+6.6% figure is a tight fit to numbers that are themselves 1.89× from another
+defensible reading — precision inside one convention, not accuracy.
+
+**The shape is firmware and is worth having. The scale is a measurement, and
+that measurement is not currently good enough to put seconds on a screen.**
+Recorded rather than shipped. To close it: re-take the ladder under the
+threshold convention, at one note, above the 2 s floor, and re-derive `C`.
+
+This is the same configuration as §176's LFO fit and as `0x48b24`'s r² of
+0.99629 hiding a 78% residual — **a correct finding carrying a scale factor
+whose warrant is weaker than the finding, and which inherits its credibility.**
+Third instance this week; the tell each time was a goodness-of-fit number
+quoted without the convention it was fitted under.
+
+### Not a disagreement: `0x4430c` is entry 2 or entry 3 of `A3S1`
+
+The review says entry 2; this project's `AKAI_IMPORT.md` says entry 3. Both are
+right — `A3S1`'s pointer vector is `0x43eb0, 0x19add4, 0x4430c, ...`, so it is
+index **2** zero-based and the **3rd** one-based. Noted because a 0-/1-based
+mismatch has already produced one false finding on this project (the Roland
+patch-id off-by-one) and is cheaper to name than to re-litigate.
