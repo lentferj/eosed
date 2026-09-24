@@ -2876,3 +2876,35 @@ file's own history is a warning against a single confirmation.
 **Nearly reported the reverse**, which is the point worth keeping: a
 disagreement between two methods says one of them is wrong, and the untrusted
 one is not automatically the culprit.
+
+### Is the widening caused by the drop, or does any single-zone voice get 0–127?
+
+Scanned all **116 voices / 326 zones** of the real-library volume for the case
+that separates the two readings. Velocity-range shapes, by frequency:
+
+```
+  x47   (0,99) (0,99) (100,127) (100,127)      4-zone voices
+  x46   (0,99) (100,127)                       2-zone voices
+  x23   (0,127) (0,127)                        2-zone voices, BOTH full range
+  ---
+  single-zone voices found: 0
+```
+
+**No single-zone voice exists in this material**, so the two readings cannot be
+separated directly here. But the general hypothesis is refuted anyway:
+
+**EOS preserves velocity ranges verbatim in 116 of 116 voices.** 93 of them
+carry a non-trivial split at 99/100 — a boundary EOS could only have got from
+the source — and the remaining 23 are genuinely full-range on both zones. There
+is no normalisation pass.
+
+So the `0–127` on P002's survivor is **not** something applied to zones in
+general, and must be tied to the drop itself. **Stated with n = 1 for the
+widening**: the negative (no general normalisation) is measured across 116
+voices; the positive (drop causes widening) rests on the single case that has a
+drop.
+
+**And the 23 both-at-full-range voices are a second no-merge datum.** Two zones
+at identical full velocity range carrying different samples is exactly the
+shape of a stereo pair, preserved as two zones — which is what the whole
+mechanism would have collapsed if it fired.
