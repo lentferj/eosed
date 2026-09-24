@@ -1714,15 +1714,15 @@ Asked directly whether any further points in the sibling project's set were not
 this project's measurements. Enumerated from the logs rather than recalled:
 
 ```
-   kf  wire  /127  /128   where measured
+   kf  wire  /127  /128   where measured (count of distinct presets)
   -12   -18   -18   -18   4 string programs, voice 13
-   -7   -10   -10   -10   STRING PAD, STRNG PAD CH
-   -2    -3    -3    -3   MELLOW LEAD, MELLOW TWO
-    3     5     5     5   AIRVOICE ONE, GENTLE WINDS/TWO, WRM.SYNSTRGS
-    4     6     6     6   CS PIANO-L, GENTLE WINDS/TWO
-    5     8     8     8   EL-BASS REZ1, VS FANTASY
-   12    18    18    18   SOLDANO 12 B, AIRVOICE ONE, VS FANTASY
-   24    36    36    36   SEQ LINE #4
+   -7   -10   -10   -10   2 presets
+   -2    -3    -3    -3   2 presets
+    3     5     5     5   3 presets
+    4     6     6     6   2 presets
+    5     8     8     8   2 presets
+   12    18    18    18   3 presets
+   24    36    36    36   1 preset
 ```
 
 **Eight distinct pairs where both sides are held.** `kf 14 -> 21` is not among
@@ -2586,7 +2586,7 @@ cord**. The `0x44958` mismatch was not exercised because that route does not
 reach `A3S1`.
 
 **A further probe on the same route would add sample size, not information.**
-`SWM3014/34` and the remaining three CASE A presets here are all the same
+The other S3000 probe and the remaining three CASE A presets are all the same
 transfer path; reading them takes the observation from 1 keygroup to 5 and
 changes no conclusion. Worth doing only if the rig is idle.
 
