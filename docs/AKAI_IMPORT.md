@@ -2607,3 +2607,85 @@ probe ranking forced the question.
 Both of us ranked probes by the quantity we had already measured — they by
 keygroup count, this project by amount magnitude — and the deciding property,
 generation, was measured by neither until the ranking made it matter.
+
+## The zone loop at `0x475b4` is stereo `-L`/`-R` pairing
+
+A sibling located a zone-merge loop, read its comparison at `0x2f8a0` as the
+merge criterion, and refuted the resulting predicate against a device import —
+42% agreement against 56% for assuming no merge at all. **The reading was
+correct and the criterion was not.**
+
+### It is on the disc-import path
+
+`0x475b4` has exactly **one** caller:
+
+```
+  0x475b4  <- 0x47fea in 0x47f08  <- 0x489c0 in 0x48934  <- 0x48a8e
+```
+
+`0x48934` is the AKAI orchestrator — the same function that calls the program
+header converter at `0x4899e` and whose chain reaches the cord pass measured
+8/8 on hardware. So the loop runs on the path the reference conversion came
+from; the refutation cannot be escaped by arguing the routine is unreached.
+
+### Two gates sit above the comparison
+
+```
+  475e0  jsr 0x3060c      copy 13 bytes -- the zone's SAMPLE NAME
+  475f4  jsr 0x2faf0(&name)             -> class in %d5
+  47606  jsr 0x2fd54(&name, %d5)        -> if zero, %d5 := 2
+  47614  tstb %a5@(0,%d7:l)             consumed flag
+  4762a  jsr 0x2fdf8(&name, %d5, ...)   -> FALSE skips the zone entirely
+  4765e  moveq #4 / cmpl / blew         inner loop bounded at 4 zones
+  47680  jsr 0x2f8a0(%a2, %a4)          the tune+filter comparison
+```
+
+### `0x2faf0` classifies the sample name by suffix
+
+```
+  2fb06  moveb %a5@(11),%d7      name byte 11
+  2fb0c  moveq #76,%d0           'L'
+  2fb12  moveb %a5@(10),%d0      name byte 10
+  2fb18  moveq #45,%d1           '-'
+  2fb1e  moveq #0,%d0            "-L"    -> 0
+  2fb22  moveq #82,%d0           'R'
+  2fb34  moveq #1,%d0            "-R"    -> 1
+  2fb38  moveq #2,%d0            neither -> 2
+```
+
+and both `0x2fd54` and `0x2fdf8` branch on that class to compare **10**
+characters when it is 0 or 1 and **12** otherwise — strip the suffix, match the
+stem — then call `0x13d32c`, the arena object getter, to find the partner.
+
+So the loop pairs zones whose sample names share a stem and differ only by
+`-L`/`-R`. **`0x2f8a0`'s tune-and-filter comparison is a consistency check on a
+candidate pair, not the criterion that selects it.**
+
+This joins `arena[58]` bits 1–2 == 3, the stereo flag that both the AKAI arm
+and the Roland zone builder read — the same subject reached from two
+directions.
+
+**Read here:** the call chain, both gates, the ASCII constants, the 10-vs-12
+split. **Not read:** what `0x2fd54`/`0x2fdf8` return in each case, and whether
+the merge emits one zone or two. The stereo interpretation is strongly
+suggested by `'L'`/`'R'`/`'-'` plus the stem-length split; it is not yet a
+confirmed mechanism.
+
+### The shape of the original error
+
+Fourteen instructions were read correctly and were the wrong fourteen for the
+question. A predicate built from them scored **worse than assuming no merge**,
+which is the useful signal — a criterion that is merely incomplete degrades
+toward the null model, while one that is *about something else* can score below
+it, because it fires confidently on the wrong cases.
+
+**Scoring against the null model is what exposed it**, and 42% alone would not
+have. Worth doing whenever a predicate is read from code rather than fitted.
+
+### objdump displacement trap
+
+`objdump` prints brief-extension displacements in **hex** and `(d16,An)` in
+**decimal**, so `%a3@(22,%d0:l)` is `0x22` = 34 while `%a0@(14)` is 14.
+Swept this file's published listings: 8 brief-extension forms, 7 with
+displacement 0 and one with `2`, which is identical either way. Nothing
+published here is affected — the trap bites only at displacements ≥ `0xA`.
