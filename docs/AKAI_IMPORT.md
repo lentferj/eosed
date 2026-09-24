@@ -2686,6 +2686,59 @@ have. Worth doing whenever a predicate is read from code rather than fitted.
 
 `objdump` prints brief-extension displacements in **hex** and `(d16,An)` in
 **decimal**, so `%a3@(22,%d0:l)` is `0x22` = 34 while `%a0@(14)` is 14.
-Swept this file's published listings: 8 brief-extension forms, 7 with
-displacement 0 and one with `2`, which is identical either way. Nothing
-published here is affected — the trap bites only at displacements ≥ `0xA`.
+Swept this file's published listings: **10** indexed forms, 8 at displacement
+0, one at `2` (identical either way), and one at `22` — which is the worked
+example in this very paragraph. Nothing published here is affected; the trap
+bites only at displacements ≥ `0xA`.
+
+**The count was 8 when the sweep ran and 10 a minute later, because writing
+this paragraph added two.** A count of a document's own contents is stale the
+moment it is written. Stated with the current figures and this note rather than
+re-swept, since re-sweeping has the same property.
+
+### `0x2fdf8` read: the gate is "does the named sample exist?"
+
+```
+  2fe22  movel %d7,%sp@- / jsr 0x13d32c      arena object for sample d7
+  2fe30  beqs                                null -> next sample
+  2fe32  push %d5 (compare length 10 or 12)
+  2fe36  push %a4 (the name buffer)
+  2fe38  jsr 0x19d610                        NAME COMPARE(name, sample, len)
+  2fe44  beqs                                no match -> next sample
+  2fe46  movel %d7,%a3@                      *out := sample index   <- OUTPUT
+  2fe4a  cmpl %d6,#1        class 1 ("-R") -> return 1 iff sample@(32) != 0
+  2fe58  tstl %a5@(28)      class 0 ("-L") -> return 1 iff sample@(28) != 0
+  2fe56  bnes               class 2         -> return 1 unconditionally
+  2fe6c  moveq #0,%d0       scanned all (d4 = 1000) with no match -> return 0
+```
+
+So the routine **searches the loaded sample arena for a sample whose name
+matches**, and returns its index through `%a3`. For class 2 — full 12-character
+equality, the branch a corpus with no `-L`/`-R` names takes — it returns 1
+**iff such a sample exists**, and 0 otherwise. A false return at `0x47636`
+skips the zone entirely.
+
+**The gate is sample existence, not a zone property at all.**
+
+### A testable prediction for the over-merge residual
+
+The sibling's best model (name equality + the `0x2f8a0` check) scores 139/193,
+with **42 voices where the model merges and the device did not**. This gate
+predicts exactly that shape: two zones can carry the same sample name while the
+device skipped one because **its sample was never loaded**.
+
+That population is already known to exist — the sibling's own parser notes
+record a disc leaving *1 292 of 1 369 zones naming samples that do not exist*.
+
+**Prediction: restrict the model to zones whose sample name resolves to a
+sample present in the same volume, and the 42 should fall.** If it doesn't, the
+gate is not the cause and `0x2fd54` is the next candidate.
+
+Stated as a prediction rather than a finding: the routine is read, its effect
+on this corpus is not measured here, and only the sibling holds the material
+that can test it.
+
+**And `sample@(28)` / `sample@(32)` for classes 0 and 1** are consistent with
+left/right channel pointers — a `-L` name must find a sample with `@(28)` set,
+a `-R` name one with `@(32)` set. Suggested by position in the branch, not
+read.
