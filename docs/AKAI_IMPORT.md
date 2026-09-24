@@ -2816,3 +2816,63 @@ subtract merges.
 **A balanced residual is evidence about the shape of the remaining error, not
 just its size**, and it is the reason to stop adding gates: another one can
 only improve the 15 and must worsen the 26.
+
+## HARDWARE: the `-L`/`-R` merge does not fire; the arena gate does
+
+Measured 2026-09-24 on the E4XT, against an authored test volume plus real
+library material, predictions filed by the sibling before the import.
+
+| preset | AKAI side | predict if merge | **measured** | samples |
+|---|---|---:|---:|---|
+| P000 | `-L`/`-R`, identical | **1** | **2** | 1, 2 |
+| P001 | `-L`/`-R`, tune +1 | 2 | 2 | 3, 4 |
+| P002 | `-R` sample **absent** | **1** | **1** | 5 |
+| P003 | stems differ | 2 | 2 | 6, 7 |
+| P004 | plain, same sample twice | 2 | 2 | 8, **8** |
+| P005 | plain, different | 2 | 2 | 9, 10 |
+
+**P000 is the direct test and it does not merge.** An identical `-L`/`-R` pair
+produces two zones carrying two distinct samples. So the classifier at
+`0x2faf0`, the flag check at `0x2fd54` and the partner matcher at `0x2fe78` are
+all correctly read and **none of them changes the zone count on this path**.
+
+**P002 confirms the arena gate on hardware.** The zone whose sample is absent
+is dropped — and the survivor's velocity range reads **0–127**, not the 0–63 it
+carries on the AKAI side. So the gate does not merely delete: **the remaining
+zone is widened to full range.** (Source range stated by the sibling; the
+widening is measured here and is worth their confirmation against the image.)
+
+**P004 rules out de-duplication of any kind** — the *same* sample number in
+both zones still yields two zones.
+
+### At scale: 326 in, 326 out
+
+The second volume is real library material. Zone totals by the voice walk:
+
+```
+  P006  92    P007  46    P008  46
+  P009  46    P010  92    P011   4      TOTAL 326
+```
+
+which is exactly the sibling's AKAI-side count of **326 `-L`/`-R` zones over
+116 multi-zone keygroups**. **Zero merging at scale**, on material that is
+entirely `-L`/`-R` — the branch the mechanism exists for.
+
+### Correction: `preset_num_szones` is not the unreliable one here
+
+`eos/bridge.py` warns that this query is untested and that its siblings
+disagree with each other, so it was read alongside an independent walk. A first
+pass showed them disagreeing wildly — walk 32/16/16/16/32/4 against raw
+92/46/46/46/92/4 — and that was **my walk, not the query**: the voice loop was
+capped at `range(8)` and these presets have **23 voices**.
+
+With the loop corrected, **the raw query agrees with the walk on all twelve
+presets, with no offset.** So `preset_num_szones` now has its first live check
+and passed it. The caveat in `bridge.py` should be updated from "not
+independently tested at all" to "twelve presets, plain count, no correction" —
+recorded here rather than edited there, since one bank is one bank and that
+file's own history is a warning against a single confirmation.
+
+**Nearly reported the reverse**, which is the point worth keeping: a
+disagreement between two methods says one of them is wrong, and the untrusted
+one is not automatically the culprit.
