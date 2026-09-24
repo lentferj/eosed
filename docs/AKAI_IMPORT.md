@@ -481,15 +481,34 @@ reached through the orchestrator's per-keygroup loop:
   0x48934  orchestrator      -> loops keygroups
   0x47f08  keygroup handler  -> reads a 192-byte keygroup, finds the four
                                 velocity zones at keygroup+0x22 on a 24-byte
-                                stride, flags empty ones, DE-DUPLICATES
-                                identical zones, then per surviving zone:
+                                stride, flags empty ones, ~~DE-DUPLICATES
+                                identical zones~~ (struck, see below), then
+                                per zone:
   0x475b4  zone converter    -> dispatches to
   0x46fbc  envelope conversion
 ```
 
-**EOS merges identical velocity zones.** `0x2fe78` compares two zones and the
+~~**EOS merges identical velocity zones.** `0x2fe78` compares two zones and the
 duplicate is flagged out, so an AKAI keygroup with four identical zones becomes
-one E4 zone rather than four.
+one E4 zone rather than four.~~
+
+**STRUCK — wrong on the behaviour and wrong on the address.**
+
+*Behaviour:* measured against a device import, **2 438 of 2 438 voices** match a
+model that applies **no merge at all**. EOS writes one E4 zone per enabled AKAI
+velocity zone whose sample is loaded. The apparent merging was an artefact of
+counting zones at velocity `hi = 0`, which are not selectable and which EOS
+does not write.
+
+*Address:* `0x2fe78` is not a zone comparator. It takes **two names**,
+classifies the first with `0x2faf0`, and on class 0 compares **10** characters
+(`pea 0xa`) then requires the second to carry `'-'`,`'R'` at the matching
+offsets — it is the **stereo `-L`/`-R` partner matcher**. Its two callers,
+`0x45744` and `0x47fa0`, are not in the zone loop, which uses `0x2f8a0`.
+
+The de-duplication line in the map above it is struck on the same grounds.
+
+Struck rather than rewritten: this claim was published and quoted.
 
 ### The amp envelope, written literally
 
