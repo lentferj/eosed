@@ -2742,3 +2742,58 @@ that can test it.
 left/right channel pointers — a `-L` name must find a sample with `@(28)` set,
 a `-R` name one with `@(32)` set. Suggested by position in the branch, not
 read.
+
+### `0x2fd54` read: it validates the name suffix against `arena[58]`
+
+```
+  2fd7a  loop d7 = 0..999
+  2fd7c    jsr 0x13d32c(d7) -> %a5          arena object
+  2fd92    jsr 0x19d610(name, sample, len)  NAME COMPARE
+  2fd9e    no match -> next
+
+           class 0/1 ("-L"/"-R"):
+  2fdaa      moveb %a5@(58),%d0 / lsrl #1 / andl #3
+  2fdbc      == 3 (STEREO)      -> next sample, keep scanning
+  2fdbe      NOT stereo         -> return 0
+
+           class 2 (plain name):
+  2fdc8      same (arena[58]>>1)&3 test
+  2fdda      NOT stereo         -> next sample
+  2fddc      IS stereo          -> return 0
+
+  2fdec  scanned all 1000 with no disqualifying match -> return 1
+```
+
+and at the call site, a **zero** result forces `%d5 := 2`.
+
+**So it is a suffix-versus-flag consistency check.** A name ending `-L`/`-R`
+whose matching sample is *not* flagged stereo gets demoted to class 2 — treated
+as a plain full-name match. It is the third independent site keying on
+**`arena[58]` bits 1–2 == 3**, after the AKAI cord arm's stereo path and the
+Roland zone builder at `0x171434`.
+
+### It cannot explain the remaining residual
+
+For **class 2 input the routine is a no-op**: both its outcomes leave `%d5` at
+2, because 2 is what a zero result sets it to and 2 is what it already was.
+
+A corpus with no `-L`/`-R` sample names is class 2 throughout. **So `0x2fd54`
+is inert there and cannot account for the sibling's remaining 41 mismatches** —
+it is eliminated as a candidate rather than left open.
+
+That also means the `-L`/`-R` half of this mechanism has **two** unexercised
+gates on such material, not one, and testing it needs a disc carrying stereo
+pairs — a different corpus, not a different query.
+
+### Where the residual must come from
+
+With `0x2fd54` inert and the arena gate measured, what remains above the
+comparison is the **4-zone loop bound** at `0x4765e` and the contents of
+`0x2f8a0` itself. The sibling reports the residual as **balanced** — 26 where
+the device merged and the model did not, 15 the other way — which argues
+against a single missing gate in either direction, since a gate can only
+subtract merges.
+
+**A balanced residual is evidence about the shape of the remaining error, not
+just its size**, and it is the reason to stop adding gates: another one can
+only improve the 15 and must worsen the 26.
