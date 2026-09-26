@@ -75,7 +75,10 @@ cannot be compared across the boundary without correcting for it.
 **THE BOUNDARY IS E4XT-ONLY.** What changed is the E4XT's own output level, in
 its analogue path. The AKAI and the K2000 are recorded through different
 capture ports (`system:capture_13/14` and `17/18` against the E4XT's `15/16`)
-and were not touched. An `akai_*` or `k2000_*` file captured tomorrow is at the
+and were not touched. (Those are the **jackd-era** port names. Since
+2026-09-26 this box runs PipeWire and the same physical inputs are
+`…:capture_AUX12/13`, `AUX16/17` and `AUX14/15` — the wiring is unchanged, only
+the names. See RESOLUTION_NOTES §178.) An `akai_*` or `k2000_*` file captured tomorrow is at the
 same gain as one captured last week — those two machines have ONE generation,
 not two, and no correction applies to them ever.
 

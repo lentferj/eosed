@@ -19186,3 +19186,84 @@ right — `A3S1`'s pointer vector is `0x43eb0, 0x19add4, 0x4430c, ...`, so it is
 index **2** zero-based and the **3rd** one-based. Noted because a 0-/1-based
 mismatch has already produced one false finding on this project (the Roland
 patch-id off-by-one) and is cheaper to name than to re-litigate.
+
+---
+
+## §178 — The bench moved to PipeWire: `system:*` is gone, the capture rig now resolves its ports (2026-09-26)
+
+**Status: adapted and verified live. The product is unaffected; only the
+measurement rig was.**
+
+The machine switched from jackd to PipeWire 0.3.65 + WirePlumber (reported by
+the sibling transition session). The `pipewire-jack` shim is installed
+system-wide, so the JACK *API* is intact — `jack_lsp`, `jack.Client`,
+`jack_connect` all still work and the sample rate and period are unchanged at
+48000/512. What disappeared is the server-provided **`system:` client**. The
+Scarlett 18i8's physical inputs are now ports on a client named after the ALSA
+card:
+
+```
+system:capture_N   ->   "Scarlett 18i8 3rd Gen Mehrkanal:capture_AUX{N-1}"
+```
+
+Note the **off-by-one**: `capture_15` is `capture_AUX14`. Verified against
+`jack_lsp` on this box today, and against the transition session's own map at
+`~/Dokumente/jack2pipewire_transition/state/system-port-map.txt`.
+
+### What in this project was affected
+
+Exactly one line, and it is not in the product.
+
+| where | what | tracked? |
+|---|---|---|
+| `bench/rig.py` | `CAPTURE = ["system:capture_15", "system:capture_16"]` | no — `bench/` is gitignored |
+| `tools/rig.py` | teardown wrapper only; names come from the caller | yes, no change needed |
+| `eos/`, `eosed/`, `tests/`, `probes/` | **zero JACK references** | — |
+
+§147's claim that "eosed itself has no JACK reference anywhere" still holds and
+is what kept the blast radius to one constant. The editor talks ALSA sequencer
+via python-rtmidi; the ALSA side of the machine was not touched by the
+transition at all, so `config.toml`'s `ESI M4U eX …` ports are unchanged.
+
+The deeper device table — MIDI port, channel and capture pair for all four
+instruments — lives in **mpc2emu's** `tests/re_banks/hw_measure.py`, which
+hard-codes `system:capture_5/6`, `13/14`, `15/16` and `17/18`. That is their
+tree, so it was handed to them rather than edited here.
+
+### How it was fixed, and why not by substituting the new name
+
+`bench/rig.py` now resolves the pair at call time (`capture_ports()`), trying
+the legacy name first and falling back to a **suffix match on `capture_AUX{N-1}`**.
+
+Substituting the literal new string would have been one character of work and
+wrong twice over. The client half of the name is the ALSA card description *as
+the current locale renders it* — "Mehrkanal" is German — so a locale change
+renames the port while the hardware stays put; and keeping the legacy name as
+the first try means a rollback to jackd (RUNBOOK.md in the transition
+directory) needs no edit here. The port half is the stable half.
+
+**Resolution raises rather than falling back.** If the suffix matches zero
+ports, or more than one, `capture_ports()` refuses. A recorder pointed at a
+plausible-but-wrong input yields clean, analysable audio of the wrong machine
+— mpc2emu's 2026-09-02 incident, quoted in `_recorder()`'s own comment, and
+worse than a capture that will not start. `jack_lsp`'s output is cached per
+process, because listing ports registers a client and that churn is the §147
+hazard.
+
+Verified: `capture_ports()` returns
+`['…Mehrkanal:capture_AUX14', '…Mehrkanal:capture_AUX15']`. No client was
+created and no capture was run — the resolver was exercised on its own.
+
+### What is NOT re-established
+
+§147 and §20 are about **jackd**: the ~8-capture create/destroy ceiling, the
+server-wide wedge, and "only a server restart clears an orphan client". Those
+were measured against a server that no longer runs. Whether PipeWire tolerates
+client churn better, or reaps an orphan whose owner died, is **untested here**
+— so the guards in `tools/rig.py` and the one-client-per-session discipline
+stay exactly as they are. A hazard whose cause was removed is not a hazard
+proven absent, and the guards cost nothing.
+
+`docs/CAPTURES.md` records which physical input each machine is on using the
+old names. That mapping is still physically true — capture_13/14 is still the
+S3000XL — so the names there are left as historical record with a pointer here.
