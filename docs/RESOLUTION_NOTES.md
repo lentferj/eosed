@@ -19407,3 +19407,45 @@ that script and a hazard, and it was guarding nothing. A note depends on
 being read by whoever runs the thing next; a mechanism does not. `tools/rig.py`
 exists because a guard rewritten from memory each time is not a guard — the
 same sentence, arrived at from the other direction.
+
+### §178d — The sweep run on the other tree: one real cost, two coincidences (2026-09-26)
+
+mpc2emu ran §178c's sweep on their side, and the result is the useful half of
+the evidence because theirs was not clean.
+
+Three designs were shaped by the JACK client budget:
+
+- **one genuine cost** — the positive control dropped from the LF2TONE
+  power-cycle test (§178c);
+- **two that were independently right anyway** — `play_sequence`'s 4-tuple
+  per-note velocities (81 notes in one capture rather than nine captures), and
+  a 13-voice single-preset disc built because "13 presets would have been 13
+  captures against a JACK client ceiling".
+
+**Both of the two also remove between-capture gain drift** — which is exactly
+§72's shape here: the constraint pointed the same way as good practice, and
+nothing in either method was weighing the two against each other. Had they
+pulled apart, those designs would have been chosen for the wrong reason and
+looked identical from outside.
+
+So across both trees: **four designs touched by the budget, three of them
+coincidences and one a real loss.** That ratio is the reason a clean sweep is
+weak evidence. Ours came back clean; theirs came back one-in-three; and the
+difference between the two is mostly which experiments happened to need
+single-process capture for a second reason. Neither result says the discipline
+was weighing the constraint, because neither method ever had to.
+
+**Their addition, which generalises §178c one level up.** They noted that
+"every guard stays" — the over-cautious answer they started from — was only
+wrong *because the split was offered*; absent it they would have carried the
+over-keeping version indefinitely. That is the same failure mode as the stale
+budget, one level up: **an over-cautious rule is also a stale constraint, and
+it is the harder one to notice, because nothing it costs ever looks like a
+loss.** A budget that is too tight shows up as a dropped control. A guard that
+is kept too long shows up as nothing at all.
+
+Direction of error still favours over-keeping on a bench, so this is not an
+argument for relaxing guards. It is an argument that *retired* and
+*over-general* want the same treatment: when a constraint changes, split it
+finely enough that each part can be retired on its own evidence, rather than
+keeping or dropping the bundle.
