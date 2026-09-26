@@ -19449,3 +19449,49 @@ argument for relaxing guards. It is an argument that *retired* and
 *over-general* want the same treatment: when a constraint changes, split it
 finely enough that each part can be retired on its own evidence, rather than
 keeping or dropping the bundle.
+
+### §178e — `system:capture_N` still resolves under PipeWire, and that is the hazard (2026-09-26)
+
+A second transition session (there are two again, as with mpc2emu earlier
+today) warned that the presence test in `capture_ports()` could pass by
+accident. Checked here with a positive control, because a negative result is
+worthless unless the unsafe forms are shown to succeed:
+
+```
+SAFE (what this project uses)
+  "system:capture_15" in [p.name for p in client.get_ports()]   -> False
+  names beginning "system:"                                     -> []
+  `jack_lsp` lines containing "system:"                         -> 0
+
+UNSAFE (positive control -- these SUCCEED)
+  client.get_port_by_name("system:capture_15")
+      -> 'Scarlett 18i8 3rd Gen Mehrkanal:capture_AUX14'
+  client.get_ports("system:.*")      -> 36 ports, all the Scarlett
+  jack_connect system:capture_15 ... -> returns 0
+```
+
+**Sharper than "an alias": it is a lookup-time remap.** The real port's own
+aliases are `alsa:pcm:2:hw:2:capture:capture_14` and
+`Scarlett 18i8 USB:capture_AUX14` — **`system:capture_15` is not among them.**
+Nothing is registered under that name; pipewire-jack resolves it against the
+*current default node* when asked. So it is not a stale name that happens to
+still work, it is a name that tracks whatever the default source is. Today
+that is the Scarlett multichannel node and the answer is right. The day the
+default changes, the identical call returns a different machine's input and
+nothing raises.
+
+Both resolvers in play are safe, verified rather than assumed: `bench/rig.py`
+matches against `jack_lsp` lines, and mpc2emu's `_resolve_port` matches
+`[pt.name for pt in client.get_ports(is_audio=True, is_output=True)]` — flags,
+not a name pattern, so the names come back real. The reasoning is now a
+comment at the point of edit rather than only here, since a note is not a
+mechanism (§178c).
+
+**This belongs with the "owner alive" guards, not with the port rename.** The
+rename announces itself: the port is missing and the connect fails. This one
+raises nothing, returns something plausible, and is correct until the day it
+is not — the same class as a client whose owner is alive but not servicing it,
+and the same class as the silent capture of the wrong instrument. The
+transition session's own note that "on the playback side the alias is already
+wrong for 3–6" is the proof that the remap is not merely harmless-today: on
+one side of the same mechanism it is already returning the wrong port.
