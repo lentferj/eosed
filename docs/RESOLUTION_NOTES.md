@@ -19267,3 +19267,43 @@ proven absent, and the guards cost nothing.
 `docs/CAPTURES.md` records which physical input each machine is on using the
 old names. That mapping is still physically true — capture_13/14 is still the
 S3000XL — so the names there are left as historical record with a pointer here.
+
+### §178a — Churn measured under PipeWire: the ceiling is gone, one guard in four relaxes (2026-09-26)
+
+The transition session measured what §178 left open, the same day. 60 cycles of
+`jack_rec` against the live rig — 20 clean exits, 20 SIGTERM mid-capture, 20
+SIGKILL mid-capture — with `jack_lsp` under a 3 s timeout after every one:
+
+- **60/60** `jack_lsp` answered, max latency 32 ms, zero failures.
+- **0** lingering `jackrec:*` ports. A SIGKILL'd client was gone by the very
+  next listing; `pw-dump` showed no client object owned by a dead process.
+- Same pipewire PID throughout, RSS unchanged (176700 kB both ends).
+
+So **the ~8-cycle create/destroy ceiling does not reproduce**, and **an orphan
+no longer needs a server restart** — PipeWire reaps a client when its socket
+closes. Caveat carried from them: this was at RT prio 20 (RTKit cap); after the
+next reboot the audio thread is FIFO 95.
+
+**What this actually licenses, and what it does not.** The four things we run
+are not one finding, and only one of them was tested:
+
+| what | rationale | status |
+|---|---|---|
+| batch captures into few long-lived processes | the ~8-cycle ceiling | **relaxed** — 60 sequential cycles, no wedge. A sweep may be several processes again. |
+| `tools/rig.py` guard 2, BaseException on kill | a killed process leaks its registration | **belt-and-braces now** — 40/40 killed clients reaped. Kept: it also closes the recorder cleanly. |
+| `tools/rig.py` guard 3, the SIGALRM deadline | a *blocked* capture holds the client and hangs `jack_lsp` rig-wide | **fully load-bearing** — they did not test a client that is alive but stuck, and said so. |
+| `tools/rig.py` guard 1, close-on-failed-construction | `__init__` raises after `activate()`, the half-built object is discarded with no reference left | **fully load-bearing, and NOT covered by their test** — see below. |
+
+**Guard 1 is the one to be careful about.** Their orphan case is a *dead
+process*: `jack_rec` is SIGKILLed, its socket closes, PipeWire reaps. Ours is
+not. `Rig.__init__` leaks its client inside a **Python process that keeps
+running** — the object is unreferenced but the client is registered and its
+socket is open, which is precisely the condition their measurement shows
+PipeWire responding to. "Reaped when the socket closes" says nothing about a
+socket that stays open. Whether such a client is harmless under PipeWire, or
+accumulates the way it did under jackd, is **untested in either direction**, so
+guard 1 stays exactly as written and `cls.__new__(cls)` keeps its comment.
+
+The distinction generalises: §147's two failure modes were *owner died* and
+*owner alive but not servicing the client*. Only the first was measured here,
+and it is the one our code was already best at surviving.
