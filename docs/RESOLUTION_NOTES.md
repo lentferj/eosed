@@ -19452,9 +19452,10 @@ keeping or dropping the bundle.
 
 ### §178e — `system:capture_N` still resolves under PipeWire, and that is the hazard (2026-09-26)
 
-A second transition session (there are two again, as with mpc2emu earlier
-today) warned that the presence test in `capture_ports()` could pass by
-accident. Checked here with a positive control, because a negative result is
+The transition session warned that the presence test in `capture_ports()`
+could pass by accident. (~~A *second* transition session~~ — struck: it was
+the same session under a changed address, see the note at the end of this
+section.) Checked here with a positive control, because a negative result is
 worthless unless the unsafe forms are shown to succeed:
 
 ```
@@ -19486,6 +19487,19 @@ matches against `jack_lsp` lines, and mpc2emu's `_resolve_port` matches
 not a name pattern, so the names come back real. The reasoning is now a
 comment at the point of edit rather than only here, since a note is not a
 mechanism (§178c).
+
+**A session's address is not its identity.** This message arrived from a
+different socket and a different name suffix than the transition session's
+earlier broadcast, and I reported it as a second session duplicating the
+first. It was neither: one session, one continuous context, a new address
+after a reconnect. The inference was from the address alone.
+
+Which means the same conclusion drawn earlier today — that two mpc2emu
+sessions had independently re-commissioned one rig crossing — **rests on the
+same evidence and is now unverified.** It was drawn from two socket numbers
+and nothing else. Not retracted, because it may still be true; demoted to
+unverified, because the one time this inference could be checked, it was
+wrong. To establish it, ask.
 
 **This belongs with the "owner alive" guards, not with the port rename.** The
 rename announces itself: the port is missing and the connect fails. This one
