@@ -19349,3 +19349,44 @@ They also report `krz_audio_measure.py` in their tree wrapping `connect` in a
 bare `except`, which would give a silent capture that analyses cleanly. No
 equivalent here: nothing under `bench/` or in the probe scripts catches around
 a connect — they all go through `Rig`, whose read-back assertion is the guard.
+
+### §178c — A retired constraint goes on taxing the experiments, and the tax is invisible (2026-09-26)
+
+mpc2emu reported what their stale client budget actually cost, and it is worth
+keeping because the cost did not look like a failure.
+
+Two hours before the 60-cycle result landed, they had a positive control
+scripted into a power-cycle test — a known-good program, there to make a
+*silent* result interpretable — and **dropped it partly to save a JACK
+client**. The result came back positive, so the control was never needed. They
+recorded it anyway, correctly: that was luck about which way the result fell,
+not judgement. The hazard the control was traded against had been retired half
+an hour earlier.
+
+**This is how an obsolete budget is paid.** Not in crashes — a stale constraint
+that no longer matches reality does not announce itself by breaking. It shows
+up as experiments quietly designed smaller: a control dropped, a sweep
+shortened, a null accepted without its counterpart. Every one of those looks
+like a normal decision at the time, and if the result happens to fall the easy
+way, nothing ever flags it.
+
+**So when a constraint is retired, the job is not finished by relabelling the
+note.** Go and look at what it shaped while it was live, because those designs
+do not update themselves.
+
+Done here, and the answer is clean: no measurement in this tree traded away a
+control for a client. §34's lesson runs the other way — "the null was not
+accepted without a control" — and the one place a design is justified by
+process count (§72's six-body cord sweep, "all six captured in one process at
+one gain") had **gain consistency** as its real reason, with the client budget
+merely agreeing. That is worth naming precisely: the budget never cost us
+anything because it happened to coincide with a validity requirement, not
+because we were weighing it correctly. Had the two pulled apart, nothing in
+the method would have caught it.
+
+**And the distinction their `krz_audio_measure.py` item ends on is general
+enough to keep.** It sits in their TODO with "fix before running" against it,
+and they flagged that this is *a note, not a mechanism*. A note depends on
+being read by whoever runs the thing next; a mechanism does not. `tools/rig.py`
+exists because a guard rewritten from memory each time is not a guard — the
+same sentence, arrived at from the other direction.
