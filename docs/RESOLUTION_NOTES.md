@@ -19345,10 +19345,23 @@ Checked, not assumed. Their archival copy under `docs/re_procedures/` turned
 out to be *more* complete than the working one, not stale — worth remembering
 before treating a diverging archival copy as the out-of-date side.
 
-They also report `krz_audio_measure.py` in their tree wrapping `connect` in a
-bare `except`, which would give a silent capture that analyses cleanly. No
-equivalent here: nothing under `bench/` or in the probe scripts catches around
-a connect — they all go through `Rig`, whose read-back assertion is the guard.
+~~They also report `krz_audio_measure.py` in their tree wrapping `connect` in a
+bare `except`, which would give a silent capture that analyses cleanly.~~
+**STRUCK 2026-09-26 — false, and about the most careful script of the five.**
+mpc2emu retracted it (539148c) and I read the file myself rather than take the
+retraction on trust. Its `except Exception` prints and continues, but the very
+next loop does a `get_all_connections` read-back and **raises** — *"refusing to
+record silence that would analyse cleanly"* — after `deactivate(); close()`, so
+it does not leak the client either. It is the only one of their five with a
+read-back at all; the other four wrap nothing, so `connect()` propagates. All
+five fail loudly, by two mechanisms, and none can produce the silent capture.
+
+The check that follows was sound but was prompted by a false premise, so it
+stands on its own: nothing under `bench/` or in the probe scripts catches
+around a connect — they all go through `Rig`, whose read-back assertion is the
+guard. **The shape remains a good review target even though no instance of it
+exists on either side**: a swallowed connect error with no read-back after it.
+Their script's assertion and `Rig`'s are the same defence, reached separately.
 
 ### §178c — A retired constraint goes on taxing the experiments, and the tax is invisible (2026-09-26)
 
@@ -19384,9 +19397,13 @@ anything because it happened to coincide with a validity requirement, not
 because we were weighing it correctly. Had the two pulled apart, nothing in
 the method would have caught it.
 
-**And the distinction their `krz_audio_measure.py` item ends on is general
-enough to keep.** It sits in their TODO with "fix before running" against it,
-and they flagged that this is *a note, not a mechanism*. A note depends on
+**And the distinction their (since-retracted) `krz_audio_measure.py` item ends
+on is general
+enough to keep.** It sat in their TODO with "fix before running" against it
+— for a defect that turned out not to exist — and they flagged that this is
+*a note, not a mechanism*. The distinction survives the retraction intact,
+and arguably lands harder: the TODO entry was the only thing standing between
+that script and a hazard, and it was guarding nothing. A note depends on
 being read by whoever runs the thing next; a mechanism does not. `tools/rig.py`
 exists because a guard rewritten from memory each time is not a guard — the
 same sentence, arrived at from the other direction.
