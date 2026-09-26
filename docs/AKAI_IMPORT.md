@@ -2908,3 +2908,59 @@ drop.
 at identical full velocity range carrying different samples is exactly the
 shape of a stereo pair, preserved as two zones — which is what the whole
 mechanism would have collapsed if it fired.
+
+## The ±24 keyfollow read is not needed, and the law it would confirm is already exact
+
+Asked again on 2026-09-26: does EOS knee the Key→FilterFreq keyfollow above
+`kf` 12, and is it asymmetric? A disc program carrying `kf = −24` and `+24`
+together was proposed as the material that would settle it.
+
+**Both halves are already answered, and neither answer needs the rig.**
+
+- **No knee.** EOS's only saturation is `clamp(kf, -50, +50)`, read as literal
+  `pea` operands at *both* keyfollow cord sites — `0x44632` (S1000) and
+  `0x46956` (S3000), identical instruction for instruction. There is no knee at
+  12, at 24, or anywhere below 50.
+- **No asymmetry.** Measured 17 of 17 exact across `kf −12 … +12` on
+  2026-09-22, `+12 → +18` and `−12 → −18` in different volumes, against
+  predictions registered beforehand.
+
+So a converter saturating at 1.0 oct/oct (`kf` 12) is clipping at **a quarter**
+of where EOS clips, not at half: the clamp is at 50, not 24. And on material
+reaching `kf −30 … +40`, **nothing saturates under EOS's law at all** — the
+whole observed corpus range sits inside the clamp.
+
+### The predicted values, both units, so the confirmation is pre-registered
+
+```
+  kf      stored byte  =  round(clamp(kf,-50,50) * 96/50)
+  wire    read-back    =  round(stored * 100/127)
+
+   kf    4     5    12   -12    24   -24    30   -30    40    50    64
+  stor   8    10    23   -23    46   -46    58   -58    77    96    96
+  wire   6     8    18   -18    36   -36    46   -46    61    76    76
+```
+
+The four boxed points are the ones already measured; the rest are predictions.
+A `±24` read should return **wire ±36**. If it ever returns anything else, the
+end-to-end law is wrong and not merely incomplete.
+
+### ⚠ The trap for anyone implementing this: `96/64` is the WIRE relation
+
+`round(kf * 96/64)` fits every measurement, and it is the **wrong constant to
+put in a converter that writes stored bytes.** It is the product of the
+firmware's law and the SysEx read-back rescale:
+
+```
+  96/50  *  100/127  =  1.5  =  96/64
+```
+
+A converter emitting a bank file writes the **stored** byte, so it wants
+`96/50`. Using `96/64` there writes 36 where EOS writes 46 — a 22 % shortfall
+that would look correct against any SysEx read-back, because the read-back
+applies the missing factor on the way out. **The error is invisible to the
+instrument that would be used to check it.**
+
+This is the same shape as the resolution above: an instrument that converts
+units is not neutral, and its conversion belongs in the comparison. There it
+made a correct law look impossible; here it would make a wrong one look right.
