@@ -19307,3 +19307,45 @@ guard 1 stays exactly as written and `cls.__new__(cls)` keeps its comment.
 The distinction generalises: §147's two failure modes were *owner died* and
 *owner alive but not servicing the client*. Only the first was measured here,
 and it is the one our code was already best at surviving.
+
+### §178b — Two resolvers converged; this one now defers to theirs (2026-09-26)
+
+mpc2emu added `_PersistentRecorder._resolve_port` the same afternoon (093fc1b),
+independently, and arrived at the same three rules: legacy name first,
+suffix-match `capture_AUX{N-1}`, **raise on zero or several**. Independent
+convergence on the raise is the part worth recording — it was argued from the
+same 2026-09-02 wrong-instrument capture on both sides.
+
+Theirs is placed better than ours. `_resolve_port` runs inside `reconnect()`
+against `self.client.get_ports()`, i.e. on the client that already exists.
+`bench/rig.py` cannot do that: it needs the names *before* the client is
+built, so `_live_ports()` shells out to `jack_lsp` — which registers a client
+of its own, the very churn §147 is about. They also fall back to the
+transition session's map file with the encoding pinned to utf-8, which is the
+one file where riding the locale codec would bite.
+
+So `capture_ports()` now checks for `_resolve_port` and, when present, passes
+the legacy names straight through. One fewer client per process, and one
+resolver instead of two that could drift. This is not load-bearing for
+correctness — their resolver returns an already-live name unchanged, so
+double-resolution was a no-op either way; the local fallback stays for a
+rollback of their change.
+
+Verified both paths: delegating returns `system:capture_15/16` for their code
+to translate, and the local fallback returns the `capture_AUX14/15` pair.
+
+**What eosed did NOT inherit from their tree.** Their working copy of
+`hw_measure.py` had lost its module-level bindings (`DEFAULT_DEVICE`,
+`_ACTIVE`, `MIDI_PORT_MATCH`, `MIDI_CHANNEL`, `CAPTURE`) — `use_device()`
+declares them `global` and assigns them, so any reference before the first
+call raised `NameError` and running the file as a CLI failed outright. It
+never reached us: `tools/rig.py` imports exactly one name, `_PersistentRecorder`,
+and nothing under `bench/` or the 11 probe scripts touches a hw_measure global.
+Checked, not assumed. Their archival copy under `docs/re_procedures/` turned
+out to be *more* complete than the working one, not stale — worth remembering
+before treating a diverging archival copy as the out-of-date side.
+
+They also report `krz_audio_measure.py` in their tree wrapping `connect` in a
+bare `except`, which would give a silent capture that analyses cleanly. No
+equivalent here: nothing under `bench/` or in the probe scripts catches around
+a connect — they all go through `Rig`, whose read-back assertion is the guard.
