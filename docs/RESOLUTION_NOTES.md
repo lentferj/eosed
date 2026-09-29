@@ -19853,3 +19853,86 @@ rather than spectrum: the off-the-end read changes neither the playback rate
 (the affected notes match their octave partners to 0.3%, the tightest pairs in
 the sweep) nor the output level (−19.9 to −20.2 dBFS, inside the spread of all
 28). Both are what an interpolation selector predicts.
+
+### §179d — The rate conversion IS an additive pitch offset, shown for the output rate (2026-09-29)
+
+mpc2emu withdrew the "spectral envelope is rate-invariant" finding: their
+windows were anchored at the MIDI clock plus 0.05 s while this rig's
+program-change-to-note latency is 0.71–0.93 s, so **every spectrum in that
+line of work measured the pre-note noise floor.** Re-anchored on each note's
+own envelope peak the centroid tracks the rate at slope 0.80. §179c's
+conclusion was right in substance and reached for the wrong reason — the
+metrics were never blind, the windows were empty.
+
+Their re-anchored run answers §179c's gate: **nothing at all six one-step
+boundaries**, z between −0.80 and +1.23 against a 20-pair null, mean +0.30,
+not in one direction. They bound rather than exclude — the null's sd is
+0.51 dB and there is no positive control for a *filter* change specifically —
+which is the right reading. The gate was mine and it is settled as I framed
+it: the sparse-spectrum disc is **no longer justified by the selector
+argument.** It remains justified by the looped-voice leg, which duration
+cannot reach.
+
+### Their question: is the declared rate folded into `P` before `0x96028` sees it?
+
+**The mechanism is in the instruction stream for the OUTPUT rate, and it is
+additive in the same 1/768-octave units:**
+
+```
+  95f8e:  movel #-383,%d0
+  95f94:  movel %d0,%a5@(36)      ; base pitch offset
+  95f98:  jsr 0x25410             ; -> 44100 or 48000, per a flag at 0x10000590
+  95f9e:  cmpl #48000,%d0
+  95fa6:  moveq #94,%d7           ;   48 kHz out -> 94
+  95faa:  moveq #0,%d7            ;   44.1 kHz out -> 0
+  95fb2:  subl %d7,%d0
+  95fb6:  movel %d7,%a5@(36)      ; offset -= that
+```
+
+`log2(48000/44100) × 768 = 94.04`. **The constant is the log of the rate
+ratio in table units, exact to the unit.** And `%a1@(36)` is added to the
+pitch at `0x96064`, i.e. **before** the octave split, the modulo and the
+clamp.
+
+So rate conversion in this design is *an additive offset in log units applied
+upstream of the band mechanism*. **Anything that shifts the rate shifts the
+bands bodily**, because the bands are a function of `P` and `P` contains the
+rate term. A key-versus-root-only rule is architecturally implausible: there
+is no other way to express a rate ratio in this representation.
+
+⚠ **What that is NOT.** This is the *output* rate — a global, constant across
+voices. I have **not** located where the *sample's declared* rate enters, so
+this is an architectural argument, not a located constant, and it does not
+close their cell by itself.
+
+### The 32000 cell discriminates and the 22050 cell cannot
+
+They proposed root 60 at 22050 and 32000. **22050 is degenerate twice over.**
+Beyond their own point that both hypotheses predict its single break at 118:
+`log2(44100/22050) × 768 = 768` exactly — one octave, **exactly 12
+semitones** — so the bands land on the same pitch classes and the shift is
+invisible to any test that reads note numbers modulo 12.
+
+**32000 is the cell.** `log2(44100/32000) × 768 = 355.4` units = **5.55
+semitones**, not an integer. If the rate is folded into `P` the bands move by
+a non-integer number of semitones and their edges land *between* keys — so
+the observed band changes width or position off the semitone grid. If the
+rule is key-only they do not move at all. Nothing else in the proposal
+separates the two hypotheses this sharply, and it tests quantisation of `P`
+at the same time.
+
+### The teardown that held the rig, and a fix in this tree
+
+They also report `hw_measure` hanging for 45 minutes **after** a completed
+capture, swallowing SIGTERM from its own `timeout 900`; only SIGKILL ended
+it. No data lost, no lingering JACK clients.
+
+**That is §178a's alive-but-stuck case, observed for the first time** — the
+one the 60-cycle churn measurement explicitly did not cover, and the reason
+that section kept the deadline guard while relaxing the batching budget.
+`tools/rig.py` had the same hole: `_on_signal` called `close()` and then
+`sys.exit(1)`, so a `close()` that hangs hangs the handler too. It now arms a
+5 s `SIGALRM` to `os._exit` around the close — `os._exit` rather than
+`sys.exit` because `SystemExit` can be swallowed by an `except` on the way
+out, which is how 45 minutes happen. A teardown that can hang is not a
+teardown.

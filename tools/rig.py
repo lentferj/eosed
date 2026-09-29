@@ -53,6 +53,7 @@ closes your OWN client only. Once a client outlives its owner, only a server
 restart clears it. These guards are the whole defence.
 """
 import atexit
+import os
 import signal
 import sys
 
@@ -85,8 +86,28 @@ class Rig:
         signal.signal(signal.SIGALRM, self._on_deadline)
 
     def _on_signal(self, signum, frame):
-        self.close()
-        sys.exit(1)
+        """Close, but never let a hung close() hold the rig.
+
+        mpc2emu, 2026-09-29: their recorder hung for 45 minutes AFTER a
+        completed capture and **swallowed SIGTERM from its own `timeout 900`**
+        -- only SIGKILL ended it. That is the alive-but-stuck case RESOLUTION
+        NOTES 178a lists as the one the PipeWire churn measurement did not
+        cover, observed for the first time. The capture had already been
+        written, so the cost was the rig being held, not data.
+
+        A teardown that can hang is not a teardown. The alarm below bounds it:
+        if close() has not returned in five seconds, `os._exit` leaves without
+        unwinding, which is the right trade -- the process is going away
+        either way, and a held rig blocks every session on the machine.
+        `os._exit` rather than `sys.exit` because SystemExit can be swallowed
+        by an `except` on the way out, which is how the 45 minutes happened.
+        """
+        signal.signal(signal.SIGALRM, lambda *_: os._exit(1))
+        signal.alarm(5)
+        try:
+            self.close()
+        finally:
+            os._exit(1)
 
     def _on_deadline(self, signum, frame):
         raise TimeoutError("capture exceeded its deadline")
