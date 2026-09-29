@@ -55,7 +55,6 @@ restart clears it. These guards are the whole defence.
 import atexit
 import os
 import signal
-import sys
 
 
 class Rig:
