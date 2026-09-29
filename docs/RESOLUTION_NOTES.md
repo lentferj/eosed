@@ -19797,3 +19797,59 @@ low-26 corruption — 104/116 get `0x01f04e75` and survive, 106/118 get
 `0x03002140` and do not. So corrupting those bits is not sufficient, and
 nothing here predicts which garbage is fatal. What ends a voice remains
 unlocated on both sides.
+
+### §179c — Test the selector where it is DESIGNED to vary: six steps, already-loaded material (2026-09-29)
+
+mpc2emu took two more spectral instruments to the 8–15× sweep and both went
+blind, each caught by a control before it travelled: per-bin log-spectral rms
+read 7.6–7.8 dB for bit-identical ratios, adjacent ratios *and* ratios 50%
+apart alike; a 1/6-octave smoothed envelope returned a negative control
+*lower* than its positive. Over 8–15× this material's spectral envelope does
+not depend on playback rate at all — the audible output comes from the bottom
+~2 kHz of the sample, stretched and reconstruction-filtered, and arrives as
+rate-independent noise.
+
+**Their conclusion — that a sparse, known spectrum is needed — is right about
+this sample, but the measurement does not have to happen at 12×, and that
+changes what it costs.**
+
+The selector's whole design range is **below 4×**. It steps every 0.5× of rate
+and saturates at 6 from 3.75×, so all six in-range transitions sit inside two
+octaves of the root, on any sample:
+
+```
+  notes   63 -> 64     field 0 -> 1     ratio 1.189 -> 1.260
+          69 -> 70           1 -> 2           1.682 -> 1.782
+          74 -> 75           2 -> 3           2.245 -> 2.378
+          77 -> 78           3 -> 4           2.669 -> 2.828
+          80 -> 81           4 -> 5           3.174 -> 3.363
+          82 -> 83           5 -> 6           3.563 -> 3.775
+```
+
+Six independent adjacent-semitone pairs, each a 5.9% rate change against a
+one-step change of the field — the same adjacency argument as §179b's 103/104,
+but at rates where the instrument is not blind. At 1.26× the sample's audible
+band maps to roughly 0–10 kHz and survives the capture intact; **their metrics
+failed at 8–15× because they were used out of range, not because they are the
+wrong metrics.**
+
+**What this settles, and what it does not.** If a one-step change is
+measurable at any of the six, the field is audible on this rig and the
+corruption route is worth the disc. If nothing shows at all six, the
+listen-for-it route is dead regardless of what disc is built — and that is
+worth knowing *before* asking Jan for a build, because it is the cheaper
+experiment by a wide margin: no new material, no front-panel load, one sweep
+of notes 60–84 on the preset already resident. It does **not** prove directly
+that the 6 → 15 replacement is audible; a one-step calibration is the evidence
+that would let that be argued rather than assumed.
+
+Their proposal for a sparse-spectrum disc stands on its own merits and is
+Jan's call; it also re-answers the pitch law with a real f0 instead of through
+duration, which duration cannot do. **Correctly routed to Jan rather than
+acted on** — it is a disc build and a front-panel load.
+
+Two negatives from §179b survive, since they came from duration and level
+rather than spectrum: the off-the-end read changes neither the playback rate
+(the affected notes match their octave partners to 0.3%, the tightest pairs in
+the sweep) nor the output level (−19.9 to −20.2 dBFS, inside the spread of all
+28). Both are what an interpolation selector predicts.
