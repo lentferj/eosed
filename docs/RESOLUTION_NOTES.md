@@ -20011,3 +20011,53 @@ Both branches, `tools/rig.py`. The guard I had written was correct and I had
 not watched it fire; the branch that was *wrong* was the one I would never
 have tested, because it only shows up in the exit status of a run that
 succeeds.
+
+### §179g — Both halves of the teardown exit were wrong, in opposite directions
+
+mpc2emu measured *their* version on this thread's prompt and found the
+complementary defect. Neither of us had it right:
+
+| | clean path | forced path | defect |
+|---|---|---|---|
+| this file, first attempt | `os._exit(1)` | `os._exit(1)` | distinguishes the paths, **loses the signal semantics on every run** — a caller sees 1 where 143 is correct |
+| mpc2emu | re-raise → 143 | `os._exit(128+signum)` → 143 | semantics correct, **the two paths are indistinguishable by status**, and the only other tell is a 5 s delay nobody watches |
+
+The version with neither defect keeps the status correct for the caller on
+both paths and carries the *difference* on stderr instead:
+
+```
+  clean teardown   ->  rc 143, immediate,   no line
+  wedged teardown  ->  rc 143, after 5.0 s, one line naming the deadline and
+                       warning the recorder or MIDI port may still be held
+```
+
+Verified on both branches in `tools/rig.py` with the teardown mutated to
+`sleep(3600)`. `os.write` to fd 2 rather than `print`, since this runs in a
+signal handler during a teardown that has already proved it can block.
+
+**The exit status was carrying two jobs.** It has to tell a wrapper how the
+process died, and we were also asking it to tell a human whether the rig was
+released — and those conflict, because the correct answer to the first is the
+same on both paths. Once they are separated, both are cheap.
+
+### The instrument masked the quantity under test — five times in one night
+
+Recorded as a hazard rather than an anecdote, because this was the shape of
+**four of the five errors** in tonight's work and none of them was a wrong
+hypothesis:
+
+- spectral windows anchored on the MIDI clock measured the pre-note noise
+  floor, and noise-against-noise reads *equidistant at every ratio* — the
+  exact signature of a null;
+- a spectral centroid that cannot see a difference both hypotheses predict;
+- a 1/6-octave envelope whose negative control came out below its positive;
+- `timeout -s TERM` used to deliver the signal in a test **whose subject was
+  the exit status** — `timeout` returns its own 124 regardless of how the
+  child died, so the quantity under test was masked by the tool delivering
+  the stimulus;
+- and the one that is not an instrument: a guard written correctly and never
+  watched fire.
+
+The generalisation is the fourth one: **the apparatus that delivers the
+stimulus can destroy the measurement.** Ask what the instrument does to the
+quantity, not only whether the instrument works.

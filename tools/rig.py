@@ -101,20 +101,47 @@ class Rig:
         `os._exit` rather than `sys.exit` because SystemExit can be swallowed
         by an `except` on the way out, which is how the 45 minutes happened.
         """
-        signal.signal(signal.SIGALRM, lambda *_: os._exit(1))
+        signal.signal(signal.SIGALRM, lambda *_: self._force_exit(signum))
         signal.alarm(5)
         try:
             self.close()
         except BaseException:
-            os._exit(1)
+            self._force_exit(signum)
         # ORDINARY PATH: disarm and die of the signal we were sent, so the exit
         # status is the real one (143 for SIGTERM) and a caller's `timeout` or
-        # shell sees what it expects. mpc2emu's version of this fix, which is
-        # better than the unconditional `os._exit` this replaced -- that got
-        # the rig released but threw away the signal semantics on every run.
+        # shell sees what it expects.
         signal.alarm(0)
         signal.signal(signum, signal.SIG_DFL)
         os.kill(os.getpid(), signum)
+
+    def _force_exit(self, signum):
+        """Leave without unwinding, and SAY SO.
+
+        Both halves of this were got wrong once, in opposite directions, and
+        the combination is neither:
+
+        - Exiting `1` here (this file, first attempt) distinguishes the forced
+          path from the clean one but throws the signal semantics away on
+          EVERY run -- a caller's `timeout` or shell then sees 1 where 143 is
+          correct.
+        - Exiting `128 + signum` and nothing else (mpc2emu, 2026-09-29) keeps
+          the semantics and loses the distinction: both paths exit 143, so the
+          one status a human or a wrapper might notice is identical whether
+          the rig was released or is still held. The only other tell is a 5 s
+          delay nobody watches.
+
+        So: the status stays correct for the caller, and the DIFFERENCE is
+        carried by a line on stderr instead of by the status. `os.write` to fd
+        2 rather than `print`, because this runs in a signal handler and
+        during a teardown that has already proved it can block.
+        """
+        try:
+            os.write(2, b"rig: teardown exceeded its 5s deadline -- leaving "
+                        b"without it. THE RECORDER OR MIDI PORT MAY STILL BE "
+                        b"HELD; check before the next capture.\n")
+        except BaseException:
+            pass
+        os._exit(128 + signum)
 
     def _on_deadline(self, signum, frame):
         raise TimeoutError("capture exceeded its deadline")
