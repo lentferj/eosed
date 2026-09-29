@@ -19716,3 +19716,84 @@ duration: **notes 110 and 122 compute bit-identical ratios (8.979), as do 100,
 112 and 124 (10.078).** Notes a full octave apart should therefore sound at
 **the same pitch**. That is the claim §179 actually makes, and no duration
 measurement tests it.
+
+### §179b — What the corrupted field is, and the A/B that does not need equal ratios (2026-09-29)
+
+The sawtooth is confirmed on duration: octave-apart pairs agree to under 1%
+where the naive model predicts 2× and 4× apart, R² 0.99685 against 0.03132,
+with a negative control at 19%. §179 stands. (Their slope is 0.773 with a
++0.631 s intercept, so `duration = SAMPLE_S/ratio + overhead` is not exact and
+the slope is not a validated constant — the test rests on the within-pair
+comparison, which does not use it.)
+
+**Their spectral-centroid instrument was void and they caught it themselves**:
+every predicted-identical pair matched, and then the negative control — two
+notes that differ 1.5× under *both* hypotheses — came out at a ratio of 1.002.
+Above ~10× a 44.1 kHz sample's spectrum is stretched past the capture band and
+only its bottom survives; the centroid carries no rate information. *A
+statistic that cannot see a difference both hypotheses predict cannot confirm
+either*, and the control that catches it is a difference known to exist.
+
+### The field is a rate-stepped selector, and OR replaces it rather than raising it
+
+Decoding the 48 valid entries as bits 26–31:
+
+```
+  ratio >= 0.00  ->  0        ratio >= 2.75  ->  4
+  ratio >= 1.25  ->  1        ratio >= 3.25  ->  5
+  ratio >= 1.75  ->  2        ratio >= 3.75  ->  6   (saturated)
+  ratio >= 2.25  ->  3
+```
+
+A monotone step every 0.5× of playback rate, saturating at 6 — the shape of an
+**interpolation / anti-alias selector**: the faster the sample is read, the
+more the reconstruction filter has to come down. Only 3 of the 6 bits are ever
+used by the table.
+
+The write is `(old & 0x03FFFFFF) | entry`, so **bits 26–31 are replaced** by the
+entry and the **low 26 bits are preserved then OR-ed with whatever the entry
+has there.** A valid entry has zero low bits; an off-the-end one does not:
+
+```
+  idx  entry       field  low-26 OR-ed in   notes
+   45  0x18000000    6     0x00000000       102,114,126   (intended)
+   47  0x18000000    6     0x00000000       103,115       (last valid entry)
+   50  0x3df04e75   15     0x01f04e75       104,116
+   53  0x4a2f0007   18     0x022f0007       105,117
+   57  0x0f002140    3     0x03002140       106,118  FREE-RUNS
+   60  0x21400008    8     0x01400008       107,119  FREE-RUNS
+```
+
+**Every note in their sweep should have field 6** — the table saturates there
+from 3.75× and the whole sweep is above 8×. So the intended value is constant
+across all 28 notes, and any difference between two of them in this field is
+*entirely* the off-the-end read.
+
+**What to listen for, and it is directional.** The selector is replaced, not
+raised, so the affected notes get 15, 18, 3 and 8 where 6 was intended — three
+of them outside the table's own 0–6 range. Notes **106 and 118 get 3, a
+*lower* setting at a *higher* rate: less reconstruction filtering, so brighter
+and more aliased**, not duller. That is a timbre prediction with a direction,
+and it is consistent with their two negatives — a filter-selector change alters
+neither rate (0.3%) nor peak level (±0.3 dB).
+
+### The A/B they said could not be built
+
+They wanted a same-ratio pair across the boundary and correctly observed none
+exists, since `idx = floor(ratio*4)`. **Equal ratio is not needed — adjacent is
+enough**, because the intended field is constant at 6 across the whole sweep:
+
+> **Note 103 vs note 104**, and independently **115 vs 116**. Adjacent
+> semitones, 5.9% apart in rate, straddling ratio 12.0. The lower one reads the
+> last valid entry (field 6, no low-bit corruption); the upper one reads off
+> the end (field 15, low 26 bits OR-ed with `0x01f04e75`).
+
+Both pairs are already in sweep 3's capture. If 103 and 104 are timbrally
+indistinguishable beyond a 6% rate difference, the off-the-end read is inert
+and §179a's upper-half account fails.
+
+**Still unexplained: the free-run.** All four off-the-end notes take large
+low-26 corruption — 104/116 get `0x01f04e75` and survive, 106/118 get
+`0x03002140` and do not. So corrupting those bits is not sufficient, and
+nothing here predicts which garbage is fatal. What ends a voice remains
+unlocated on both sides.
