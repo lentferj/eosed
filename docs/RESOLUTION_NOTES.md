@@ -19990,3 +19990,24 @@ the same quantity and should not be reconciled to one number.
 
 **44053 is not a typo for 44100.** It is presumably the machine's real
 converter clock; it appears as a literal double and is the divisor here.
+
+### §179f — The teardown deadline, mutation-checked on both branches
+
+mpc2emu built the hang rather than reasoning about it — teardown replaced by
+`sleep(3600)` — and their version disarms the alarm on the ordinary path so a
+normal exit still dies of the signal it was sent. Mine unconditionally
+`os._exit`ed, which released the rig but threw away the signal semantics on
+*every* run, so a caller's `timeout` or shell saw 1 instead of 143. Adopted,
+and then checked here the same way, by sending the signal directly rather than
+through `timeout` (whose own 124 masks the child's status — the first attempt
+measured nothing for that reason):
+
+```
+  teardown returns normally  ->  rc 143 (128+15), immediate
+  teardown hangs             ->  rc 1   (os._exit), after exactly 5.0 s
+```
+
+Both branches, `tools/rig.py`. The guard I had written was correct and I had
+not watched it fire; the branch that was *wrong* was the one I would never
+have tested, because it only shows up in the exit status of a run that
+succeeds.

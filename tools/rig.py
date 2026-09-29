@@ -105,8 +105,16 @@ class Rig:
         signal.alarm(5)
         try:
             self.close()
-        finally:
+        except BaseException:
             os._exit(1)
+        # ORDINARY PATH: disarm and die of the signal we were sent, so the exit
+        # status is the real one (143 for SIGTERM) and a caller's `timeout` or
+        # shell sees what it expects. mpc2emu's version of this fix, which is
+        # better than the unconditional `os._exit` this replaced -- that got
+        # the rig released but threw away the signal semantics on every run.
+        signal.alarm(0)
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
 
     def _on_deadline(self, signum, frame):
         raise TimeoutError("capture exceeded its deadline")
