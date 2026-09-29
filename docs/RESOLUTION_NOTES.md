@@ -19630,3 +19630,89 @@ down. Four notes, same disc, same detector:
 
 Either outcome is worth more than the disassembly can add on its own, because
 the end-of-sample comparison is not in this function and I have not located it.
+
+### §179a — The band is probably TWO defects, and one of them is an off-the-end table read (2026-09-29)
+
+mpc2emu measured notes 88–100: **all normal, including 94–97.** So the rule is
+not `P mod 768`, my branch 2 is refuted, and their re-measurement of note 96 on
+sweep 3's instrument (2.010 s against 108's 7.650 s, same 6 s gate) makes the
+96-vs-108 comparison like-for-like. Two notes writing identical `%d5` behave
+differently.
+
+**Confirmed from the code, independently of the measurement:** `%d7` is zeroed
+at `0x960d8` and immediately reloaded from `%a1@(24)` as the write-mode
+selector. The unclamped exponent is dead the instant the shift is done, so
+nothing downstream in `0x96028` can see it. The decision is outside this
+function — their measurement and the instruction stream agree.
+
+### The second table is 48 entries long and the index reaches 60
+
+After the shift:
+
+```
+  960d4:  movel %d5,%d0
+  960d6:  moveq #10,%d1
+  960da:  asrl %d1,%d0                  ; idx = d5 >> 10 = floor(ratio*4)
+  960ce:  moveal #0x96bfc,%a0
+  960e0:  movel %a0@(0,%d0:l:4),%d6
+  ...
+  9610c:  movel #0x03FFFFFF,%d0
+  96116:  andl %a5@(8),%d0              ; keep the low 26 bits
+  9611a:  orl %d6,%d0                   ; OR the table value in
+  9611c:  movel %d0,%a5@(8)
+```
+
+The mask says the table entries are meant to occupy **bits 26–31 only**.
+Exactly **48 entries satisfy that** — `0x96bfc` … `0x96cbb`, values stepping
+`0x00000000, 0x04000000 … 0x18000000` and saturating at `0x18000000` from
+index 15 — and entry 48 is the first with low bits set, because entry 48 is
+where the table ends and instructions begin. That boundary is structural, not
+eyeballed.
+
+**`%d5` can reach `8184 << 3 = 65472`, so `idx` reaches 60.** Indices 48–60
+read instructions as table data and OR them into `%a5@(8)`, corrupting the low
+26 bits the mask was written to preserve. `idx >= 48` is `ratio >= 12.0`.
+
+### Cross-tabulated against all 40 measured notes
+
+```
+                          note stops    free-runs
+  idx < 48  (in table)        28            4       <- 108,109,120,121
+  idx >= 48 (off the end)      4            4       <- 104,105,116,117 / 106,107,118,119
+```
+
+**The off-the-end read is necessary for the upper half of every band and never
+occurs for the lower half.** So the "4-semitone band" is very likely **two
+defects that happen to be adjacent**, not one:
+
+- **Upper half (+46, +47 of each cycle, idx 57 and 60):** reads past the table.
+  Notes 104/105/116/117 also read past it (idx 50, 53) and survive, so whether
+  the garbage is fatal depends on which bits it sets — consistent, not proven.
+- **Lower half (+48, +49, i.e. 108/109 and 120/121):** idx 32 and 33, well
+  inside the table, and **bit-identical writes to notes 96/97 which are
+  normal.** Nothing in this function distinguishes them. Cause unknown and
+  outside `0x96028`; it correlates with the unclamped exponent being ≥ 4.
+
+**This also resolves their two puzzles.** Why 94/95 are normal while 106/107
+free-run with the same residue `d6`: the index is a function of the *ratio*,
+not the residue, and at `d7 = 2` the ratio is halved (7.13, 7.55 → idx 28, 30,
+in range). And why "+47 is 15.10 and free-runs while +50 is 17.96 and is
+normal": +50's ratio is not 17.96, it is **8.979** — the clamp already
+happened. The threshold is on the *clamped* ratio, which is the only one
+anything downstream sees.
+
+### The test that separates surviving from working
+
+Notes **104, 105, 116, 117** read off the end of the table and OR instruction
+bytes into a register whose low 26 bits the firmware explicitly tried to
+preserve — and they were scored **normal**, because the detector asks only
+whether the voice stops. Their own caveat (a) — *"normal means the voice
+STOPS, not that it plays correctly"* — now has a target: **those four notes
+should be audibly wrong while still stopping.** If they are clean, the
+off-the-end read is inert and the upper-half explanation fails.
+
+And the sawtooth itself is directly testable on pitch rather than through
+duration: **notes 110 and 122 compute bit-identical ratios (8.979), as do 100,
+112 and 124 (10.078).** Notes a full octave apart should therefore sound at
+**the same pitch**. That is the claim §179 actually makes, and no duration
+measurement tests it.
