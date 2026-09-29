@@ -19509,3 +19509,124 @@ and the same class as the silent capture of the wrong instrument. The
 transition session's own note that "on the playback side the alias is already
 wrong for 3–6" is the proof that the remap is not merely harmless-today: on
 one side of the same mechanism it is already returning the wrong port.
+
+## §179 — The playback-rate "ceiling" is a clamped exponent over a 768-entry mantissa table, and the periodicity is a modulo (2026-09-29)
+
+mpc2emu measured that transposition above the long-assumed ceiling is not a
+ceiling but recurring 4-semitone bands at ratio ×16 and ×32, and asked two
+firmware questions. The first is answered completely; the second is not, and
+the difference matters because the answer to the first **predicts their data
+without an overflow anywhere.**
+
+### The pitch path: `0x96028`
+
+One argument, a pointer to the voice's pitch block (`%a1`); `%a1@` points at
+the hardware voice registers (`%a5`). Target pitch is `%a1@(8)`, compared
+against `%a1@(10)` and skipped if unchanged; `%a1@(36)` is a pitch offset
+added before the split; `%a1@(24)` selects a one-write or two-write mode.
+
+**The table is at `0x965fa`: exactly 768 entries of `trunc(4096 · 2^(k/768))`**,
+`4096 … 8184`, verified entry by entry — max deviation 0.998, i.e. pure
+truncation. 768 entries per octave is **1/64 semitone**, and the mantissa is
+Q12.
+
+The split, read rather than inferred:
+
+```
+  96096:  cmpl #768,%d6          ; pitch in 1/768-octave units
+  9609c:  blts 0x960be
+  9609e:  addl #-768,%d6
+  960a4:  addql #1,%d7           ;  d7 = floor(P/768)
+  960a6:  addl #-768,%d6
+  960ac:  bpls 0x960a4           ;  d6 = P mod 768
+  960ae:  addl #768,%d6
+  960b4:  cmpl #3,%d7
+  960ba:  bles 0x960be
+  960bc:  moveq #3,%d7           ; *** THE EXPONENT IS CLAMPED TO 3 ***
+  960be:  moveal #0x965fa,%a0
+  960c4:  movew %a0@(0,%d6:l:2),%d5
+  960ca:  lsll %d7,%d5           ;  d5 = mantissa << exponent
+```
+
+### Answer to their question 1: the layout, and why the limit is where it is
+
+`%d5` is `mantissa · 2^exponent`, i.e. **ratio × 4096**. It is then written as
+`%d5 << 16` into `%a5@(4)` (and into the top half of `%a5@(16)`), so the
+hardware word is **ratio × 2^28 — Q4.28, four integer bits.**
+
+Four integer bits is a hard ceiling of 16, and that is exactly why the clamp
+is 3: `8184/4096 × 2^3 = 15.984`, the largest value that fits. The clamp is
+not a policy choice sitting above a capable engine; it is the field width,
+written out.
+
+The downward path (`0x9608c`) mirrors this with `asrl` and **no clamp at
+all** — down is unlimited, up stops at 3. The asymmetry is in the instruction
+stream.
+
+### Answer to their question 1b: there is no overflow, and that is the point
+
+Their hypothesis was an integer field overflowing 4 bits at ×16 and 5 at ×32.
+**Refuted: the exponent never reaches 4.** It is clamped first, and `%d6` is
+`P mod 768` regardless — so above +48 semitones the mantissa index *wraps to
+the bottom of the table and climbs again*. The playback ratio is a **sawtooth
+of period exactly 12 semitones**, running 8.000 → 15.102 and dropping back:
+
+```
+ note  +rel   d6   d7  clamp    ratio      measured
+  100   +40  256    3    3     10.078      normal
+  105   +45  576    3    3     13.453      normal   1.43 s
+  106   +46  640    3    3     14.254      FREE-RUNS
+  107   +47  704    3    3     15.102      FREE-RUNS
+  108   +48    0    4    3      8.000      FREE-RUNS
+  109   +49   64    4    3      8.475      FREE-RUNS
+  110   +50  128    4    3      8.979      normal   1.83 s
+  117   +57  576    4    3     13.453      normal   1.44 s
+  118   +58  640    4    3     14.254      FREE-RUNS
+  ...
+  122   +62  128    5    3      8.979      normal   1.83 s
+```
+
+**This reproduces their duration data independently of the band question.**
+Notes 110 and 122 compute *bit-identical* ratios (8.979) and they measured
+1.83 s for both; notes 105, 117 compute 13.453 and they measured 1.43 and
+1.44. The 12-semitone repeat in the durations is the table modulo, and it is
+not a defect — it is a wrong pitch produced by design limits, played
+correctly.
+
+**And it explains the asymmetry they offered as the test of the mechanism.**
+No band at ×8 because the clamp bites at exponent 4; the first wrap is
+therefore at +48 and every 12 semitones above. Their prediction of a band at
++70…+73 follows too, and is out of MIDI range as they said.
+
+### What this does NOT answer, and the cheap experiment that would
+
+**Why the voice fails to stop is still open.** Nothing above bears on the end
+comparison, and the sawtooth alone predicts a wrong pitch, not a free-run.
+
+Worse for any quick story: **notes 96 and 108 produce identical `%d5`**
+(32768, ratio 8.000) and therefore identical hardware writes from this
+function. They report 96 as normal and 108 as free-running. Both cannot be
+true of this path, so either the free-run is decided somewhere that still sees
+the **unclamped** pitch, or the note-96 datum — which came from an earlier
+pass whose instrument they have since disowned — does not compare.
+
+**The band is `d6 ∈ {0, 64, 640, 704}`, i.e. `P mod 768`, with no dependence
+on `d7` in the data.** If that is the whole rule, then the band recurs
+*downward* as well:
+
+> **Notes 94 and 95 (+34, +35) should free-run, and they are reachable.**
+
+They wrote that the ×8 band was absent and that the next test was at +70…+73,
+beyond a 128-key keyboard. It is not beyond it — the period is the table
+modulo, 12 semitones, not the exponent, so the same band sits at 94–97 going
+down. Four notes, same disc, same detector:
+
+- **94, 95 free-run** → the rule is `P mod 768` alone, and note 96 needs
+  re-measuring on sweep 3's instrument.
+- **94, 95 normal** → the rule involves the unclamped exponent, and the
+  free-run is decided outside `0x96028`.
+- **96, 97 free-run too** → the earlier-pass datum was wrong, and the rule is
+  clean.
+
+Either outcome is worth more than the disassembly can add on its own, because
+the end-of-sample comparison is not in this function and I have not located it.
