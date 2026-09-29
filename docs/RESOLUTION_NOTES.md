@@ -19936,3 +19936,57 @@ that section kept the deadline guard while relaxing the batching budget.
 `sys.exit` because `SystemExit` can be swallowed by an `except` on the way
 out, which is how 45 minutes happen. A teardown that can hang is not a
 teardown.
+
+### §179e — The declared rate IS converted into the same table units, and the reference is 44053 (2026-09-29)
+
+Their question — does the sample's declared rate enter the same log-unit
+pitch space as the output rate does — is answered by two constants.
+
+`0x38bb2` is a rate-code dispatch (11025 / 22050 / 32000 / 44100 / 48000)
+which stores the Hz value and calls **`0x49984`**, whose result is kept as a
+word. That function is soft-float and its two literals name it:
+
+```
+  49988:  movel #0x8be71074,%sp@-
+  4998e:  movel #0x40914ff5,%sp@-   ; double 1107.98979 = 768 / ln(2)
+  49994:  movel #0x00000000,%sp@-
+  4999a:  movel #0x40e582a0,%sp@-   ; double 44053.0
+  499a0:  jsr ...                   ; divide
+  499b2:  bsrw 0x49878              ; natural log
+  499b8:  jsr ...                   ; multiply
+  499c0:  jsr ...                   ; -> integer
+```
+
+**`768 / ln(2)` is exactly the constant that turns a natural log into
+1/768-octave units** — the units of the mantissa table at `0x965fa`. So the
+function computes `round(768 · log2(rate / 44053))`: **the declared rate
+becomes an additive offset in the same log units as everything else in
+`0x96028`.** Together with `%a1@(36)` carrying the output-rate term in those
+same units, the architecture is settled — **rates move the bands bodily.**
+
+⚠ **Not traced:** the path from that word to the pitch adder. The converter
+and its units are proven by the constants; that the result reaches `%a1@(8)`
+or `%a1@(36)` is inference from the units, not a followed write.
+
+### The reference is 44053, not 44100
+
+```
+  rate     units (ref 44053)    semitones     (their base 44100)
+  11025      -1534.819          -23.9815        -1536.000
+  22050       -766.819          -11.9815         -768.000
+  27777       -510.988           -7.9842         -512.170
+  32000       -354.177           -5.5340         -355.359
+  44100         +1.181           +0.0185            0.000
+  48000        +95.074           +1.4855          +93.892
+```
+
+Every figure shifts by **+1.181 units** against a 44100 base — below the
+1/64-semitone grid, so **no conclusion moves**: 22050 and 27777 remain on the
+key grid to within 0.02 semitone and 32000 remains the cell. But the firmware
+has no 44100 reference anywhere in this path, and a remedy table computed
+against 44100 carries a constant 1.18-unit error. The output-rate correction
+at `0x95fa6` is a *separate* constant (`94`, against 44100) — the two are not
+the same quantity and should not be reconciled to one number.
+
+**44053 is not a typo for 44100.** It is presumably the machine's real
+converter clock; it appears as a literal double and is the divisor here.
