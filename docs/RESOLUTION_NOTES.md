@@ -19843,6 +19843,14 @@ of notes 60–84 on the preset already resident. It does **not** prove directly
 that the 6 → 15 replacement is audible; a one-step calibration is the evidence
 that would let that be argued rather than assumed.
 
+⚠ **The gate was answered; the inference above was scoped too wide, and that is
+mine.** The gate said nothing about band, and the answer came back from a
+matched-frequency comparison lying **entirely below 1175 Hz** — inside the
+region where the fixed reconstruction filter is flat to 0.00 dB, so a selector
+acting above the knee would produce the same null. What the measurement
+supports is *"not audible above ~0.6 dB **below 1175 Hz**"*. §179h carries the
+correction and the filter table that bounds it.
+
 Their proposal for a sparse-spectrum disc stands on its own merits and is
 Jan's call; it also re-answers the pitch law with a real f0 instead of through
 duration, which duration cannot do. **Correctly routed to Jan rather than
@@ -20061,3 +20069,144 @@ hypothesis:
 The generalisation is the fourth one: **the apparatus that delivers the
 stimulus can destroy the measurement.** Ask what the instrument does to the
 quantity, not only whether the instrument works.
+
+### §179h — Is the selector inaudible? YES below 1175 Hz. Is the corner 1.2 kHz? NO — ~1.5 kHz (2026-10-02)
+
+**mpc2emu answered §179c on hardware today** (`docs/eosed_handover_selector.md`
+in their tree, commit `6d35acd`). No selector effect: field-to-field spread
+0.17 dB against a 0.29 dB residual sd, 0.59 sd, matched-frequency cross-field
+pairs agreeing within 0.4 dB.
+
+**I checked their code rather than their writeup, and one of the three checks
+came back against the scope of the claim, one changed a number, and two of my
+own objections were refuted by the source.** Recorded here because the handover
+is the answer to *our* gate, so the scope belongs in our file as much as
+theirs.
+
+#### The arithmetic checks out — all ten pairs
+
+Every `(output Hz, selector field)` pair in their decisive table reproduces
+exactly from `tests/re_banks/sweep_selector_xpose4.py`: `SAMPLE_PARTIALS` =
+`TARGETS/24` = 83.33 / 250 / 416.67 / 583.33 / 750 Hz, `ratio_for(note)` =
+`2^((note-60)/12)`, `partials_for(note)` = `f * r`, and `selector_field` taking
+the **last** satisfied threshold. 441 Hz fld 0 is note 61's third partial; 445 Hz
+fld 2 is note 70's second; 787 Hz fld 2 is note 71's third.
+
+This is the check `docs/AKAI_IMPORT.md`'s "Confirmed both ends" table failed —
+identified endpoints, arithmetic between them unverified. **This one passes, and
+it passes against the code that produced the numbers.**
+
+#### Two of my objections were wrong, and the source says why
+
+- **The comb's own spectrum is flat, so no source baseline is needed.** My
+  first objection was that a partial falling with harmonic number is a property
+  of the *sample*, not the machine, and that the −7.46 dB could be the disc.
+  `gen_e4xt_xpose4.py` sets `PARTIAL_AMP = 0.12` for **all five** partials:
+  the source is flat **by construction**, so a measured droop is the machine's.
+  Stronger than the measurement I had asked for.
+- **There are no unaccounted harmonics.** I assumed output pitch was
+  `partial / ratio`. It is `partial * ratio` — raising the key raises the
+  pitch. The five placed sinusoids therefore span the whole 83.3 Hz – 3178 Hz
+  on their own; note 85 tops out at 3178.4 Hz, which is exactly their top band.
+  The question I meant to ask ("which partials cover 2.6–3.2 kHz") answers
+  itself: the 750 Hz partial at notes 82–85.
+
+Both came from reading the handover's prose and not the file beside it.
+
+#### The null is a BELOW-the-corner null, and the gate that used it was mine
+
+**All five matched-frequency pairs compare at 441–842 Hz.** Their own filter
+table says the machine is flat to 0.00 dB below 1175 Hz. So the decisive
+measurement sits entirely inside the region where the fixed filter does
+nothing — and **a reconstruction-filter selector whose action lives above the
+knee would produce exactly this result.**
+
+This does not impeach their run, which scopes itself correctly ("on this rig,
+at these ratios, on this material", and their §5.2 names the upward extension as
+the next step). It impeaches the sentence built on top of it — *"§179b's
+listen-for-it route is dead"* — and **that sentence is mine.** §179c's gate
+read *"if nothing shows at all six, the listen-for-it route is dead regardless
+of what disc is built"*, with no band in it. The gate was answered; the
+inference inherited a restriction nobody wrote down.
+
+**What survives, stated at the width the measurement supports:** a one-step
+change of the field is **not audible above ~0.6 dB below 1175 Hz**, on this rig,
+at ratios 1.06–3.36, on this material. §179b stays open on the off-the-end
+values 15/18/3/8 — as they say, an out-of-range value is not an in-range one.
+
+#### Their nine rows do not fit a one-pole at 1.2 kHz
+
+| output Hz | measured | one-pole, fc 1200 | residual |
+|---|---|---|---|
+| 1175 | 0.00 | −2.92 | **−2.92** |
+| 1357 | −0.66 | −3.58 | −2.92 |
+| 1540 | −1.29 | −4.23 | −2.94 |
+| 1904 | −3.33 | −5.46 | −2.13 |
+| 2632 | −6.01 | −7.64 | −1.63 |
+| 3178 | −7.46 | −9.04 | −1.58 |
+
+Inverting each row independently for the corner it implies gives a **drift, not
+a constant** — and a one-pole gives a constant by construction:
+
+```
+   1357 Hz -> 3350     2086 Hz -> 1637     2632 Hz -> 1522
+   1540 Hz -> 2619     2268 Hz -> 1537     3178 Hz -> 1486
+   1722 Hz -> 1814     1904 Hz -> 1773     2086 Hz -> 1637
+```
+
+Best single one-pole over all nine rows: **fc ≈ 1708 Hz, rms 0.98 dB.** That
+exceeds the **0.75 dB** their analyser holds against an exact one-pole
+(`CORNER = 400`, `SELFTEST_TOL_DB = 0.75`) — so their instrument is sharp
+enough to say the response is not a one-pole at any corner, and the writeup
+does not say it. Refitting the four rows at 1540 Hz and above alone gives
+**fc ≈ 1631 Hz**, with residuals +0.35 … +0.65 dB: the shape is a **shallow
+knee feeding a ~1.5–1.6 kHz one-pole asymptote**, the knee gentler than any
+single pole.
+
+⚠ **What this rests on, so it stays a question rather than a refutation:** I used
+the midpoint −6.01 for their "−5.66 … −6.36" row, and a fit over eight
+**band-averages that widen with frequency** cannot resolve shape — the bottom
+bands are 182 Hz wide, the top one is n=1 by their own caveat. The robust part
+is the arithmetic about their **stated** number. "Not a one-pole at all" is the
+softer claim, and it is theirs to accept or refute.
+
+#### And this closes the door on a level test of 103-vs-104
+
+Their own caution — that any 103-vs-104 difference must exceed what the fixed
+filter predicts for the 5.9% rate shift — is now a number:
+
+| band | slope | droop from 0.084 octave |
+|---|---|---|
+| 265 – 1175 Hz | 0.00 dB/oct | **0.00 dB** |
+| 2268 – 2632 Hz | −4.61 dB/oct | −0.39 dB |
+| 2996 – 3178 Hz | −17.04 dB/oct | **−1.44 dB** |
+
+**In the top band the rate shift alone is five times their 0.29 dB residual**,
+so a *level* comparison of an adjacent-semitone pair cannot survive there. And
+below ~1.2 kHz, where a level test *is* clean, is precisely where their fixed
+filter is flat and a filter-selector cannot show. **The two constraints meet,
+and on this comb the honest test has no clean band.**
+
+Their §5.2 is still the right next step, but it has to be a **spectral-shape**
+comparison rather than a level comparison, and that is a different experiment
+from the one their section describes.
+
+#### What we are asking them for
+
+1. **The per-partial levels, not the nine band-averages.** The numbers are
+   already in the capture; nothing needs re-running. Five points per note
+   across 26 notes is the resolution the one-pole question needs, and widening
+   the bands is what hid it.
+2. **Confirmation of which quantity `−5.66 … −6.36` is** — mean, range, or
+   spread across partials — since that row carries the fit either way.
+
+Until (1) arrives, **"corner ~1.2 kHz" should not be cited by either project.**
+The curve is solid; that number is not.
+
+Also worth crediting, since it is the kind of thing that is easy to leave
+unsaid: `selector_field()`'s own docstring records that its first version
+returned the **first** threshold met rather than the highest, labelling
+twenty-two notes `1` in a column that looked stable, and `CORNER = 400` was
+chosen over 2 kHz precisely because a 2 kHz corner would have left every
+partial untouched and **passed the self-test for the wrong reason**. Both are
+instrument hygiene of exactly the kind this project's records exist to keep.
