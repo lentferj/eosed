@@ -20210,3 +20210,109 @@ twenty-two notes `1` in a column that looked stable, and `CORNER = 400` was
 chosen over 2 kHz precisely because a 2 kHz corner would have left every
 partial untouched and **passed the self-test for the wrong reason**. Both are
 instrument hygiene of exactly the kind this project's records exist to keep.
+
+### §179i — The sawtooth sounds, and the corrupted field does not reshape the filter (2026-10-03)
+
+**Ran Jan's "do 1) autonomously": the §179b A/B on the wide-spectrum disc.**
+XPOSE4 P000 (`XP4 CMB LOW 60`, LOW comb) notes 100/103/104/110/112/115/116/
+122/124 plus P001 (`XP4 CMB HIGH 60`) 103/104, one capture per preset, analyser
+positive-controlled first (their self-test, PASS, 0.00 dB worst error).
+Onsets from audio, sounded-gated (20 dB), selection sanity-checked from the
+peaks. Scratch analysis in `/tmp/opencode/cap_ab.py` (not committed);
+recordings + JSON in `/tmp/opencode/ab_low.wav`, `ab_high.wav`,
+`ab_low.json`, `ab_high.json`.
+
+#### Pitch and duration: the wrap is heard, twice over
+
+| note | naive ratio (dur) | effective (dur) | measured | hears |
+|---|---|---|---|---|
+| 100 | 10.079 (278 ms) | 10.078 (278 ms) | 280 ms, 840/2520/4200/5879/7559 | agree (control) |
+| 103 | 11.986 (234 ms) | — | 235 ms, partials as predicted | normal |
+| 104 | 12.699 (221 ms) | — | 225 ms, partials as predicted | normal |
+| 110 | 20.159 (139 ms) | **8.979 (312 ms)** | **320 ms, 748/2245/3742/5239/6736** | **sawtooth** |
+| 112 | 20.159 (139 ms) | **10.078 (278 ms)** | **280 ms, identical to 100** | **sawtooth** |
+| 115 | 23.973 (117 ms) | **11.986 (234 ms)** | **240 ms, 999/2997/4994/6992/8990** | **wrapped** |
+| 116 | 25.399 (110 ms) | **12.699 (221 ms)** | **225 ms, 1058/3175/5291/7408/9524** | **wrapped** |
+| 122 | 35.918 (78 ms) | **8.979 (312 ms)** | **315 ms, same peaks as 110** | **sawtooth** |
+| 124 | 40.317 (69 ms) | **10.078 (278 ms)** | **280 ms, identical to 100** | **sawtooth** |
+
+Every discriminating note lands on the sawtooth side in **both** channels:
+pitch (partials where the wrapped ratio says, up to 19 kHz) and duration
+(2.80 s ÷ effective ratio to ±5 ms). No free-runs anywhere: 104, 115, 116,
+110, 112, 122, 124 all stop normally. The off-the-end entry does not break
+the voice; the voice plays at the wrapped pitch and stops.
+
+This answers mpc2emu's point 4 first question (f0 on 110/122, the one test
+separating "ratio wrong" from "ratio right"): **the ratio is wrong the way
+§179 says, and something else stops the note early — still open (B2).**
+
+#### Levels: the corrupted field costs level, not timbre
+
+Per-partial levels re the lowest partial, same note shapes:
+
+| pair | Δ per partial (dB) | character |
+|---|---|---|
+| LOW 103 → 104 | −0.47, −0.31, −0.39, −0.45 | flat ≈ −0.4 |
+| LOW 115 → 116 (at wrapped partials) | −0.48, −0.30, −0.40, −0.42 | flat ≈ −0.4 |
+| HIGH 103 → 104 | −1.08, −1.11, −1.35, −1.28 | flat ≈ −1.2 |
+
+The valid-vs-corrupted entry change (field 6 vs off-the-end garbage) does
+**not reshape the filter**: consecutive-partial spacing is preserved to
+<0.1 dB (e.g. LOW 4.71/2.82/2.15 vs 4.55/2.90/2.21). What it does is a
+**uniform relative shift of partial 1 vs the rest** — −0.4 dB on LOW,
+−1.2 dB on HIGH. A smooth fixed-filter rate shift must tilt progressively
+with frequency over a 9:1 partial span; this is flat, so it is not §179h's
+filter — it is tied to the entry change.
+
+The significance is calibrated, not asserted: same-effective-ratio pairs
+across different keys reproduce to **0.02–0.03 dB** (100 ≡ 112 ≡ 124;
+103 ≡ 115; 104 ≡ 116), so the −0.4 dB offset stands **13× above the
+reproduction floor**, and it replicates across two independent octaves.
+Single take per note each — take-variation is not excluded by repetition,
+but the cross-octave replication makes random wobble implausible.
+
+Audibility, stated without reaching: a <0.1 dB shape change is no timbre
+difference; a −0.4 dB (LOW) / −1.2 dB (HIGH) relative level offset between
+adjacent semitones is measurable and, on HIGH, near the single-presentation
+discrimination boundary. Whether that counts as "the corrupted field is
+audible" is a criterion question, not a measurement question.
+
+#### What this run cost in instrument bugs — all four caught before reporting
+
+1. My print formatter evaluated the success branch while printing a refusal
+   (`KeyError: 'dur_ms`), hiding the first refusal's reason.
+2. `note_end` searched for the fall from **onset**: on a slow attack the
+   first above-threshold frame sits below the end threshold, returning
+   end == onset (zero segment) — selectively eating the two quietest-looking
+   notes. Searches from the peak now.
+3. The unbounded peak search found the FILE's max (a later note): 33 s
+   "durations" and five-notes-at-once spectra. Bounded by scheduled
+   note-off + 1 s now.
+4. The onset time base used the unclamped window start: clamping a negative
+   `lo` to frame 0 without moving the base predated the onset by exactly
+   the clamped 0.5 s, planting it in silence — and the sounded check then
+   **correctly** refused its own wrong input. The guard worked; the caller
+   was wrong. Same shape as mpc2emu's §E4BBANDPLAN lesson: a guard that
+   reports a reason is debuggable, one that says only "no" is not.
+5. A wrong inference that never left the session: envelope absolutes read
+   110/122 as "~20 dB quieter than the rest" — the whole capture peaks at
+   −24 dBFS (rig gain staging), and their spectra sit at 96+ dB like every
+   other note. Compared a number against an unmeasured imagined one.
+
+#### Bench notes for the record
+
+- 00:07: no EOS answered broadcast inquiry on 37 outputs — machine was
+  powered off. Direct-port topology re-verified (mididings strip cannot
+  touch my path), so power/cable were the only candidates. Jan repowered.
+- The mounted `/dev/sdb1` (family videos, Persian folder names) is personal
+  media, **not** the sampler card — untouched. The ZuluSCSI card was never
+  mounted anywhere visible; "left unmounted" stands.
+- Mid-load race: a background catalog poll caught the hand load in flight
+  (P000 "Untitled", P001–P004 nameless, HIGH 60 apparently at P005). The
+  definitive re-read after "loaded": all 18 slots answer, P000 LOW 60 …
+  P017 EDGE HI −04. A catalog taken during a load is not a catalog.
+- PC-to-first-note latency after a program change ran ~2.4 s (vs ~0.6 s
+  steady-state) — the first note of run 2 needed a wider onset search.
+  Nothing in the rig assumes latency; that is why the search is generous.
+- Two JACK clients total (one per capture), both exited; no process of
+  mine holds a port. Bank left in RAM as loaded.
