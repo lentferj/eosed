@@ -171,7 +171,7 @@ def cmd_send(args: argparse.Namespace, bridge) -> None:
     print(f"  will overwrite : preset {preset}")
     try:
         print(f"  that slot now  : {bridge.get_preset_name(preset)!r}")
-    except Exception as exc:                     # noqa: BLE001 - advisory only
+    except Exception as exc:
         print(f"  that slot now  : unreadable ({exc.__class__.__name__}) -- "
               f"proceed only if you know what is there")
 
@@ -188,7 +188,7 @@ def cmd_send(args: argparse.Namespace, bridge) -> None:
     print(f"  sent           : preset {written}, {len(data)} bytes")
     try:
         print(f"  slot now reads : {bridge.get_preset_name(written)!r}")
-    except Exception:                            # noqa: BLE001
+    except Exception:
         print("  slot now reads : (name read-back failed)")
 
 

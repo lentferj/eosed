@@ -71,8 +71,8 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual import work
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Static
@@ -172,9 +172,9 @@ _MODE_WIDTH = {"quadrant": lcd_mod.WIDTH // 2,     # 120, 2x2 px per cell
                "half": lcd_mod.WIDTH,              # 240, 1x2 px per cell
                "braille": lcd_mod.WIDTH // 2}      # 120, 2x4 px per cell
 
-_MODE_RENDER = {"quadrant": lambda bm: lcd_mod.to_quadrants(bm),
-                "half": lambda bm: lcd_mod.to_halfblocks(bm),
-                "braille": lambda bm: lcd_mod.to_braille(bm)}
+_MODE_RENDER = {"quadrant": lcd_mod.to_quadrants,
+                "half": lcd_mod.to_halfblocks,
+                "braille": lcd_mod.to_braille}
 
 #: The button layout needs this much; the display may need more.
 MIN_PANEL_WIDTH = 124
@@ -213,7 +213,7 @@ LCD_STYLE = {
 class _Cell:
     """One drawn control: a label, its keyboard hint, and its panel code."""
 
-    __slots__ = ("label", "hint", "code", "width")
+    __slots__ = ("code", "hint", "label", "width")
 
     def __init__(self, label: str, hint: str, code: Optional[int], width: int = 9):
         self.label = label
@@ -334,7 +334,7 @@ def _caption(text: str, width: int = PANEL_WIDTH) -> str:
     return "[dim]" + text.ljust(width)[:width] + "[/dim]"
 
 
-def render_panel(active: Optional[int] = None, *, armed: bool = False,
+def render_panel(active: Optional[int] = None, *, armed: bool = False,  # noqa: C901 -- layout is one straight-line drawing routine; splitting it buys nothing
                  status: str = "", bitmap=None, mode: str = "quadrant") -> str:
     """The panel as Rich markup. Pure -- no widgets, so it is testable.
 
