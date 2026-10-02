@@ -308,6 +308,10 @@ async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
 
         await pilot.press("u")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
+        # The scan flag clears on the worker before its results reach the UI
+        # thread -- wait for the outcome itself, not the flag that precedes
+        # it. (Flaked on CI with the sweep's own status line still showing.)
+        assert await _wait_for(pilot, lambda: "used by" in app.last_status)
         assert "used by 1 preset(s)" in app.last_status
         calls_after_full_scan = app.bridge.calls
         assert calls_after_full_scan > 0

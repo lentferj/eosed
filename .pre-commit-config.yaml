@@ -13,6 +13,10 @@ repos:
     rev: v2.4.0
     hooks:
       - id: mypy
+        # Tests are out of scope (the Makefile checks eos/ eosed/ only):
+        # 2600 lines of fakes and widget handles would need their own
+        # typing pass, which is not this pipeline.
+        exclude: '^tests/'
         # The hook runs mypy in its own env WITHOUT the project installed,
         # so untyped third-party imports (textual, rtmidi) come back Any and
         # strict flags misfire on our code (no-any-return, untyped-decorator
