@@ -843,7 +843,7 @@ FILTER_TYPE_NAMES: Dict[int, str] = {
 _ENVELOPE_GROUPS = ("voice.amp.env", "voice.filter.env", "voice.aux.env")
 
 
-def _known_value_name(param: Parameter, value: int) -> Optional[str]:
+def _known_value_name(param: Parameter, value: int) -> Optional[str]:  # noqa: C901 -- one branch per value family by design; a dispatch table would hide the family groupings this documents
     """Look up a human-readable name for one parameter's value, across every
     enum/name table this module defines. Returns None if this parameter (or
     this particular value) has no known name — callers should fall back to
