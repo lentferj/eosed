@@ -80,7 +80,7 @@ extend-exclude = ["bench/", "probes/", "tools/"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "S", "SIM", "UP", "C4", "PL", "RUF", "C901"]
 ignore = [
-    # --- Style preferences that would require mass-fixing ---
+    # --- Genuine style preferences (not bugs, would require mass-fixing) ---
     "E501",    # line-too-long: handled by formatter, not linter
     "S101",    # assert: allowed in tests (see per-file-ignores below)
     "UP006",   # use `list` instead of `List` (mass-fix, not a bug)
@@ -112,27 +112,6 @@ ignore = [
     "B023",    # function-uses-loop-variable
     "B905",    # zip-without-explicit-strict
     "B909",    # loop-iterator-mutation
-    # --- Remaining existing violations (baselined) ---
-    "I001",    # import sorting (8 existing)
-    "S110",    # try-except-pass (7 existing)
-    "S112",    # try-except-continue (1 existing)
-    "S607",    # partial executable path (1 existing)
-    "SIM105",  # contextlib.suppress (4 existing)
-    "SIM300",  # yoda condition (2 existing)
-    "C420",    # unnecessary dict comprehension (4 existing)
-    "PLW0108", # unnecessary lambda (3 existing)
-    "RUF100",  # unused noqa (4 existing)
-    "RUF059",  # unused unpacked variable (6 existing)
-    "RUF023",  # unsorted __slots__ (1 existing)
-    "RUF005",  # list concatenation (1 existing)
-    "PLR1711", # useless return (2 existing)
-    "PLR0917", # too many positional arguments (2 existing)
-    # --- Final existing violations (baselined) ---
-    "PLW0603", # global statement (1 existing)
-    "C901",    # too complex (5 existing: autodetect, _known_value_name, _run_full_sweep, render_panel, 2 tests)
-    "B904",    # raise from (1 existing)
-    "PLC0207", # string split (1 existing)
-    "F401",    # unused import (3 existing in tests)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -143,31 +122,19 @@ max-complexity = 10
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = false
+warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-check_untyped_defs = false
-no_implicit_optional = false
-warn_redundant_casts = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
 warn_unused_ignores = true
+warn_unreachable = true
 show_error_codes = true
 pretty = true
 exclude = ["bench/", "probes/", "tools/"]
-# Existing violations baselined (31 errors in 4 files)
-# These are pre-existing type issues that would require mass-fixing.
-# New code should be fully typed.
-disable_error_code = [
-    "union-attr",
-    "arg-type",
-    "assignment",
-    "call-overload",
-    "return",
-    "call-arg",
-    "attr-defined",
-    "import-untyped",
-    "var-annotated",
-]
 
 [tool.vulture]
 min_confidence = 80

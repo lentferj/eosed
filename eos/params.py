@@ -426,7 +426,7 @@ PARAMETERS_BY_NAME: Dict[str, Parameter] = {p.name: p for p in _PARAMS}
 SAMPLE_ZONE_PARAM_IDS: List[int] = [38, 39, 40, 42, 44, 45, 46, 47, 48, 49, 50, 51, 52]
 
 
-def lookup(id_or_name) -> Parameter:
+def lookup(id_or_name: int | str) -> Parameter:
     """Resolve a parameter by numeric id or by name (e.g. "E4_PRESET_VOLUME")."""
     if isinstance(id_or_name, int):
         try:

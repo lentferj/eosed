@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import ClassVar, Dict, List, Optional, Sequence, Tuple
+from typing import ClassVar, Dict, List, Optional, Sequence, Tuple, TypeVar
 
 # --- framing constants --------------------------------------------------
 
@@ -366,6 +366,9 @@ def _decode_fields(fields: Sequence[Tuple[str, int]], payload: Sequence[int]) ->
 # Each concrete subclass below declares its own `device_id` field instead,
 # always last, and gets `encode`/`decode` for free from the mixin.
 
+_FieldMessageT = TypeVar("_FieldMessageT", bound="_FieldMessage")
+_NoFieldMessageT = TypeVar("_NoFieldMessageT", bound="_NoFieldMessage")
+
 class _FieldMessage:
     """Mixin for fixed-field, no-checksum editor messages.
 
@@ -377,6 +380,9 @@ class _FieldMessage:
 
     COMMAND: ClassVar[int] = 0
     FIELDS: ClassVar[Sequence[Tuple[str, int]]] = ()
+    # Provided by each @dataclass subclass (see docstring above); declared
+    # here so the mixin's encode/decode type-check without a cast.
+    device_id: int
 
     def encode(self) -> bytes:
         values = {name: getattr(self, name) for name, _ in self.FIELDS}
@@ -384,12 +390,14 @@ class _FieldMessage:
         return build_frame(self.COMMAND, payload, device_id=self.device_id)
 
     @classmethod
-    def decode(cls, data: Sequence[int]):
+    def decode(cls: type[_FieldMessageT], data: Sequence[int]) -> _FieldMessageT:
         device_id, command, payload = parse_frame(data)
         if command != cls.COMMAND:
             raise ValueError(f"{cls.__name__}: expected command {cls.COMMAND:#x}, got {command:#x}")
         values = _decode_fields(cls.FIELDS, payload)
-        return cls(device_id=device_id, **values)
+        # device_id comes from the @dataclass subclass, which this mixin
+        # cannot name; see the device_id declaration above.
+        return cls(device_id=device_id, **values)  # type: ignore[call-arg]
 
 
 class _NoFieldMessage:
@@ -400,16 +408,19 @@ class _NoFieldMessage:
     """
 
     COMMAND: ClassVar[int] = 0
+    # Provided by each @dataclass subclass; see _FieldMessage.device_id.
+    device_id: int
 
     def encode(self) -> bytes:
         return build_frame(self.COMMAND, [], device_id=self.device_id)
 
     @classmethod
-    def decode(cls, data: Sequence[int]):
+    def decode(cls: type[_NoFieldMessageT], data: Sequence[int]) -> _NoFieldMessageT:
         device_id, command, _ = parse_frame(data)
         if command != cls.COMMAND:
             raise ValueError(f"{cls.__name__}: expected command {cls.COMMAND:#x}, got {command:#x}")
-        return cls(device_id=device_id)
+        # See _FieldMessage.decode: device_id lives on the subclass.
+        return cls(device_id=device_id)  # type: ignore[call-arg]
 
 
 # -- Parameter Edit / Request (0x01 / 0x02) — checksummed, variable length --
