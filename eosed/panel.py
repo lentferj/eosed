@@ -525,6 +525,11 @@ class PanelScreen(ModalScreen):
     #: queueing the user's keypresses behind screen traffic.
     POLL_SECONDS = 0.5
 
+    #: Key names Textual dispatches to actions. on_key lets these through and
+    #: consumes everything else, so they are precomputed once here rather than
+    #: rebuilt from BINDINGS on every keypress.
+    _BINDING_KEYS = frozenset(binding.key for binding in BINDINGS)
+
     def __init__(self, *, allow_write: bool, device_id: int, send=None,
                  bitmap=None, poll=None):
         super().__init__()
@@ -649,7 +654,7 @@ class PanelScreen(ModalScreen):
         # handler consumes every key by design, so any new binding is dead on
         # arrival unless it is also named here, and nothing fails loudly when
         # it is not. Deriving the set means adding a Binding is enough.
-        if key in {binding.key for binding in self.BINDINGS}:
+        if key in self._BINDING_KEYS:
             return
 
         # Exclusive by design: every other key is consumed here, mapped or

@@ -49,8 +49,10 @@ docs/RESOLUTION_NOTES.md before relying on this against real hardware.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
+import tomllib
 from typing import Callable, Dict, List, Optional, Tuple
 
 import rtmidi  # noqa: E402
@@ -96,9 +98,6 @@ def _read_config(path: str) -> Tuple[dict, str]:
     with the data and :func:`_update_config` refuses to overwrite a file it
     could not read.
     """
-    import os
-    import tomllib
-
     if not os.path.exists(path):
         return {}, "missing"
     try:
@@ -119,7 +118,7 @@ def _read_config(path: str) -> Tuple[dict, str]:
         text = raw.decode("cp1252", errors="replace")
     try:
         return tomllib.loads(text), "ok"
-    except Exception:
+    except tomllib.TOMLDecodeError:
         return {}, "unreadable"
 
 
@@ -623,6 +622,10 @@ class EosBridge:
         self.inquiry: Optional[m.DeviceInquiryReply] = None
         # Lazily-read MIDIGLO_BASIC_CHANNEL (id 198) — see basic_channel().
         self._basic_channel: Optional[int] = None
+        # One-frame pushback for _consume_trailing_eof/_receive: a frame read
+        # while looking for the trailing EOF that turned out not to be EOF is
+        # handed back to the next _receive rather than dropped.
+        self._pushback: Optional[bytes] = None
 
     # -- constructors ---------------------------------------------------
     @classmethod
@@ -876,7 +879,7 @@ class EosBridge:
         A single frame may have been pushed back by :meth:`_consume_trailing_eof`
         when it read something that was not the EOF it went looking for; that
         frame is returned first rather than dropped."""
-        pushed = getattr(self, "_pushback", None)
+        pushed = self._pushback
         if pushed is not None:
             self._pushback = None
             return pushed
