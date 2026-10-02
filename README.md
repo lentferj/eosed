@@ -208,6 +208,28 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
 
+## Development checks
+
+Install the dev dependencies and run the full check suite:
+
+```sh
+pip install -e ".[dev]"
+make check
+```
+
+This runs, in order:
+
+1. **`make lint`** — `ruff check` (linting + import sorting)
+2. **`make typecheck`** — `mypy` (type checking)
+3. **`make test`** — `pytest` with coverage
+4. **`make audit`** — `pip-audit`, `vulture`, `deptry`, `detect-secrets`
+
+Run individual targets as needed: `make lint`, `make format`, `make typecheck`,
+`make test`, `make audit`.
+
+Pre-commit hooks are installed via `pre-commit install` and run ruff, mypy, and
+detect-secrets on every commit.
+
 ## Quick Start
 
 Needs **Python 3.11 or 3.12** (see [Python version](#python-version-pick-311-or-312)

@@ -43,7 +43,18 @@ Source = "https://github.com/lentferj/eosed"
 Issues = "https://github.com/lentferj/eosed/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-asyncio>=0.23"]
+dev = [
+    "pytest>=7",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=6.0",
+    "ruff>=0.16",
+    "mypy>=1.15",
+    "pip-audit>=2.7",
+    "vulture>=2.14",
+    "deptry>=0.25",
+    "detect-secrets>=1.5",
+    "pre-commit>=4.0",
+]
 
 [project.scripts]
 eosed = "eosed.app:main"
@@ -59,3 +70,111 @@ license-files = ["LICENSE", "COPYING"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--cov=eos --cov=eosed --cov-report=term-missing --cov-report=xml"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["bench/", "probes/", "tools/"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "S", "SIM", "UP", "C4", "PL", "RUF", "C901"]
+ignore = [
+    # --- Style preferences that would require mass-fixing ---
+    "E501",    # line-too-long: handled by formatter, not linter
+    "S101",    # assert: allowed in tests (see per-file-ignores below)
+    "UP006",   # use `list` instead of `List` (mass-fix, not a bug)
+    "UP035",   # import from collections.abc (mass-fix, not a bug)
+    "UP037",   # remove quotes from type annotation (mass-fix, not a bug)
+    "UP045",   # use `X | None` for type annotations (mass-fix, not a bug)
+    "PLC0415", # import should be at top-level (mass-fix, not a bug)
+    # --- Complexity / design preferences ---
+    "PLR0911",  # too-many-return-statements
+    "PLR0912",  # too-many-branches
+    "PLR0913",  # too-many-arguments
+    "PLR0915",  # too-many-locals
+    "PLR2004",  # magic-value-comparison
+    # --- Unicode / style ---
+    "RUF001",  # ambiguous-unicode-character-string
+    "RUF002",  # ambiguous-unicode-character-docstring
+    "RUF003",  # ambiguous-unicode-character-comment
+    "RUF012",  # mutable-class-default
+    "RUF013",  # implicit-optional
+    # --- Simplification suggestions ---
+    "SIM108",  # if-else-block-instead-of-ternary
+    "SIM117",  # multiple-with-statements
+    # --- Comprehension style ---
+    "C408",    # unnecessary-dict-call
+    "C416",    # unnecessary-comprehension
+    "C419",    # unnecessary-comprehension-in-call
+    # --- Bugbear exceptions ---
+    "B008",    # function-call-in-default-argument
+    "B023",    # function-uses-loop-variable
+    "B905",    # zip-without-explicit-strict
+    "B909",    # loop-iterator-mutation
+    # --- Remaining existing violations (baselined) ---
+    "I001",    # import sorting (8 existing)
+    "S110",    # try-except-pass (7 existing)
+    "S112",    # try-except-continue (1 existing)
+    "S607",    # partial executable path (1 existing)
+    "SIM105",  # contextlib.suppress (4 existing)
+    "SIM300",  # yoda condition (2 existing)
+    "C420",    # unnecessary dict comprehension (4 existing)
+    "PLW0108", # unnecessary lambda (3 existing)
+    "RUF100",  # unused noqa (4 existing)
+    "RUF059",  # unused unpacked variable (6 existing)
+    "RUF023",  # unsorted __slots__ (1 existing)
+    "RUF005",  # list concatenation (1 existing)
+    "PLR1711", # useless return (2 existing)
+    "PLR0917", # too many positional arguments (2 existing)
+    # --- Final existing violations (baselined) ---
+    "PLW0603", # global statement (1 existing)
+    "C901",    # too complex (5 existing: autodetect, _known_value_name, _run_full_sweep, render_panel, 2 tests)
+    "B904",    # raise from (1 existing)
+    "PLC0207", # string split (1 existing)
+    "F401",    # unused import (3 existing in tests)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is the point of tests
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+no_implicit_optional = false
+warn_redundant_casts = false
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+exclude = ["bench/", "probes/", "tools/"]
+# Existing violations baselined (31 errors in 4 files)
+# These are pre-existing type issues that would require mass-fixing.
+# New code should be fully typed.
+disable_error_code = [
+    "union-attr",
+    "arg-type",
+    "assignment",
+    "call-overload",
+    "return",
+    "call-arg",
+    "attr-defined",
+    "import-untyped",
+    "var-annotated",
+]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["eos/", "eosed/"]
+
+[tool.deptry]
+# Existing violations baselined (16 findings)
+# These are pre-existing dependency issues that would require mass-fixing.
+# New dependencies should be properly declared.
+ignore = ["DEP001", "DEP002", "DEP003"]
