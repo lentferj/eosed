@@ -1230,9 +1230,9 @@ def test_an_unparseable_config_is_left_alone_rather_than_overwritten(tmp_path, c
     encoding removed only one of its causes -- a stray bracket, a truncated
     file, or the next encoding surprise all still reach it.
     """
-    # The warning is once-per-run, so the flag has to be cleared here or this
-    # test passes or fails depending on what ran before it.
-    bridge_mod._warned_unreadable = False
+    # The warning is once-per-run, so the warned set has to be cleared here
+    # or this test passes or fails depending on what ran before it.
+    bridge_mod._warned_unreadable.clear()
 
     path = tmp_path / "config.toml"
     original = ('cache_depth = "full"\n'

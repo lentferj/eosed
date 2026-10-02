@@ -49,13 +49,14 @@ docs/RESOLUTION_NOTES.md before relying on this against real hardware.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
 import tomllib
 from typing import Callable, Dict, List, Optional, Tuple
 
-import rtmidi  # noqa: E402
+import rtmidi
 
 from eos import messages as m
 from eos import params as p
@@ -77,9 +78,10 @@ DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's Bridge
 # Read-modify-write (not a blind overwrite) so unrelated keys survive each
 # other's saves — this file holds more than one independent setting.
 
-#: Set once, by the first save that had to leave a config alone. Keeps the
-#: warning to one line per run rather than one per setting saved.
-_warned_unreadable = False
+#: Paths already warned about, once per run. A set rather than a bool (which
+#: would need a `global` to reassign): membership is the whole state, and in
+#: practice there is one config file, so this warns exactly once per run.
+_warned_unreadable: set = set()
 
 
 def _read_config(path: str) -> Tuple[dict, str]:
@@ -137,12 +139,10 @@ def _update_config(path: str, **changes) -> None:
     nuisance; a file quietly emptied is not recoverable by the user, who has
     no reason to suspect it happened.
     """
-    global _warned_unreadable
-
     data, status = _read_config(path)
     if status == "unreadable":
-        if not _warned_unreadable:
-            _warned_unreadable = True
+        if path not in _warned_unreadable:
+            _warned_unreadable.add(path)
             print(f"eosed: {path} could not be parsed, so settings are not "
                   f"being saved. Fix or delete it; nothing has been "
                   f"overwritten.", file=sys.stderr)
@@ -390,10 +390,8 @@ class MidiUnavailable(RuntimeError):
 
 
 def _delete_quiet(port) -> None:
-    try:
+    with contextlib.suppress(Exception):
         port.delete()
-    except Exception:
-        pass
 
 
 def _probe(factory, what: str):
@@ -642,7 +640,7 @@ class EosBridge:
         return cls(out, in_port, f"standard:{port_name}", device_id=device_id, timeout=timeout)
 
     @classmethod
-    def autodetect(cls, *, gap: float = SEND_GAP, write_gap: Optional[float] = None,
+    def autodetect(cls, *, gap: float = SEND_GAP, write_gap: Optional[float] = None,  # noqa: C901 -- port-sweep state machine; the refuse-to-guess multi-device logic must stay in one reviewable place
                    device_id: Optional[int] = None,
                    timeout: float = AUTODETECT_TIMEOUT,
                    on_try: Optional[Callable[[str], None]] = None,
@@ -780,7 +778,7 @@ class EosBridge:
                 for recv_name, data in seen:
                     try:
                         reply = m.parse_device_inquiry_reply(data)
-                    except Exception:
+                    except Exception:  # noqa: S112 -- a malformed reply in a broadcast sweep is routine noise, not worth logging per port
                         continue
                     by_id.setdefault(reply.device_id, (recv_name, reply))
                 if not by_id:
@@ -1324,7 +1322,7 @@ class EosBridge:
                 except DumpChecksumError:
                     if attempt == max_retries:
                         raise DumpChecksumError(
-                            f"device NAKed packet {packet} {max_retries} times")
+                            f"device NAKed packet {packet} {max_retries} times") from None
                     self._send(frame)
 
         # "no response required" -- nothing is read back for this one.
@@ -1471,10 +1469,8 @@ class EosBridge:
     # -- lifecycle -----------------------------------------------------------
     def close(self) -> None:
         for port in (self.midi_out, self.midi_in):
-            try:
+            with contextlib.suppress(Exception):
                 port.close_port()
-            except Exception:
-                pass
             raw = getattr(port, "_port", None)
             if raw is not None:
                 _delete_quiet(raw)
