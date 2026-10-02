@@ -18,8 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "probes"))
 
-import panel_capture as pc                                    # noqa: E402
-
+import panel_capture as pc
 
 PANEL_ENABLE = [0xF0, 0x18, 0x7F, 0x00, 0x00, 0x10, 0xF7]
 PANEL_INIT = [0xF0, 0x18, 0x7F, 0x00, 0x00, 0x7F, 0x11, 0x00, 0x08, 0xF7]
@@ -112,7 +111,7 @@ def test_known_fragments_are_recognised_but_only_exactly():
     # A frame that merely starts like one must not be labelled as it -- the
     # published fragments are third-party and unverified, so a loose match
     # would manufacture agreement with a document we have not confirmed.
-    assert pc.describe_known(PANEL_INIT[:-1] + [0x00, 0xF7]) is None
+    assert pc.describe_known([*PANEL_INIT[:-1], 0x00, 0xF7]) is None
 
 
 def test_diff_positions_finds_changed_offsets():

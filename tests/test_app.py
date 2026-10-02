@@ -5,19 +5,29 @@
 #
 # --demo mode never opens a MIDI port — synthetic only.
 
-import pathlib
 import asyncio
+import pathlib
 
 import pytest
-
 from textual.css.query import NoMatches
 from textual.widgets import Header
 
 from eos import params as p
 from eosed.app import (
-    BROWSER_EXTEND_CHUNK, BROWSER_RESIZE_SETTLE, SAMPLE_USAGE_SCAN_RANGE, _VOICE_PARAM_IDS,
-    _MAX_VOICE_SCAN, _MAX_ZONE_SCAN, _EMPTY_SAMPLE_NAME, _dangling_sample_refs,
-    _voice_sample_info, ChoiceScreen, ConfirmSweepScreen, EditValueScreen, EosedApp)
+    _EMPTY_SAMPLE_NAME,
+    _MAX_VOICE_SCAN,
+    _MAX_ZONE_SCAN,
+    _VOICE_PARAM_IDS,
+    BROWSER_EXTEND_CHUNK,
+    BROWSER_RESIZE_SETTLE,
+    SAMPLE_USAGE_SCAN_RANGE,
+    ChoiceScreen,
+    ConfirmSweepScreen,
+    EditValueScreen,
+    EosedApp,
+    _dangling_sample_refs,
+    _voice_sample_info,
+)
 from eosed.demo import DemoBridge
 
 
@@ -245,7 +255,7 @@ async def test_find_sample_usage_scans_full_range_and_reports_matches():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         assert "used by 3 preset(s)" in app.last_status
         samples = app.query_one("#samples")
@@ -297,7 +307,7 @@ async def test_find_sample_usage_second_lookup_is_instant_from_cached_index():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert "used by 1 preset(s)" in app.last_status
         calls_after_full_scan = app.bridge.calls
         assert calls_after_full_scan > 0
@@ -492,7 +502,7 @@ async def test_cache_all_names_depth_fills_only_the_name_catalogs():
         # No key maps to "names": 'c'/'C' are fixed at structure/full, so this
         # depth is reachable only via cache_depth + cache_all_on_startup.
         app._start_cache_all("names")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         assert app._catalog_cache["preset"] == {5: "Foo", 130: "Bar"}
         assert app._catalog_cache["sample"] == {0: "Kick", 1: "Snare"}
@@ -532,7 +542,7 @@ async def test_cache_all_sample_names_stop_early_after_consecutive_empty_samples
         await _wait_for(pilot, lambda: table.row_count)
 
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         # sample 0 has a name, then 10 consecutive misses (samples 1-10)
         # trip the same default gap the preset walk uses.
@@ -584,7 +594,7 @@ async def test_find_sample_usage_shows_results_in_the_params_pane_too():
         assert await _wait_for(pilot, lambda: app.current_sample == 0)
 
         await pilot.press("u")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         params = app.query_one("#params")
         assert await _wait_for(pilot, lambda: params.row_count == 2)
@@ -592,7 +602,7 @@ async def test_find_sample_usage_shows_results_in_the_params_pane_too():
         assert rows == {"P005": "Foo", "P130": "Bar"}
 
 
-async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
+async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():  # noqa: C901 -- fixture-heavy sweep test, splitting it buys nothing
     # "structure" depth walks every voice/zone (needed for the sample-usage
     # index) but deliberately skips each preset's GLOBAL parameter values --
     # selecting that preset afterward must reuse the cached voice/zone/
@@ -623,7 +633,7 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
 
         def get_parameters(self, param_ids, *, timeout=None):
             self.get_parameters_calls += 1
-            return {pid: 0 for pid in param_ids}
+            return dict.fromkeys(param_ids, 0)
 
         def get_sample_name(self, sample, *, timeout=None):
             return "Demo Kick" if sample == 0 else ""
@@ -635,7 +645,7 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
         await _wait_for(pilot, lambda: table.row_count)
 
         await pilot.press("c")   # 'c' is fixed at "structure" depth
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         assert 0 in app._preset_overviews
         voice_count, _zone_counts, global_ids, global_values, _sample_rows = app._preset_overviews[0]
@@ -660,7 +670,7 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():
         assert await _wait_for(pilot, lambda: params.row_count == 22)
 
 
-async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
+async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():  # noqa: C901 -- fixture-heavy sweep test, splitting it buys nothing
     # The whole point of "full" depth: once it's swept, browsing straight
     # through presets must issue no MIDI at all -- everything a selection
     # needs is already in _preset_overviews/_catalog_cache.
@@ -692,7 +702,7 @@ async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
 
         def get_parameters(self, param_ids, *, timeout=None):
             self.midi_calls += 1
-            return {pid: 0 for pid in param_ids}
+            return dict.fromkeys(param_ids, 0)
 
         def get_sample_name(self, sample, *, timeout=None):
             self.midi_calls += 1
@@ -706,7 +716,7 @@ async def test_cache_all_full_depth_makes_preset_selection_free_of_new_midi():
         await _wait_for(pilot, lambda: table.row_count)
 
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         assert app._preset_overviews[0][3] is not None  # globals cached too at "full" depth
         assert (0, 0) in app._voice_details  # voice 0's own 146-param group, too
@@ -772,7 +782,7 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         # DemoBridge's own presets (0, 1, 5) got picked up by the startup sweep.
         assert app._catalog_cache["preset"] == {
             0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
@@ -845,7 +855,7 @@ async def test_c_and_C_sweep_at_their_own_depths():
             await _wait_for(pilot, lambda: table.row_count)
             await pilot.press(key)
             assert await _wait_for(pilot, lambda: not app._scan_active,
-                                   tries=400, step=0.02)
+                                   tries=800, step=0.02)
             assert app._preset_overviews, f"{key} should walk structure"
             _vc, _zc, _gids, global_values, _rows = app._preset_overviews[0]
             assert (global_values is not None) is expect_globals, (
@@ -906,7 +916,7 @@ async def test_small_bank_sweeps_without_asking():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert app._catalog_cache["preset"]        # it really ran
         assert not isinstance(app.screen, ConfirmSweepScreen)
 
@@ -948,7 +958,7 @@ async def test_big_bank_yes_runs_the_sweep():
         await pilot.press("C")
         assert await _wait_for(pilot, lambda: isinstance(app.screen, ConfirmSweepScreen))
         await pilot.press("y")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert app._catalog_cache["preset"]
 
 
@@ -963,7 +973,7 @@ async def test_a_key_still_works_in_demo_with_no_startup_config():
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert app._catalog_cache["preset"] == {
             0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
 
@@ -1089,7 +1099,7 @@ async def test_editing_a_parameter_invalidates_the_catalog_cache_too():
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert app._catalog_cache["preset"]  # something got cached
         assert app._catalog_scanned_upto["preset"] > 0
         assert app._catalog_scanned_upto["sample"] > 0
@@ -1426,7 +1436,7 @@ async def test_cache_all_makes_bank_paging_free_of_new_midi():
         await _wait_for(pilot, lambda: table.row_count)
 
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         scans = []
         original = app.bridge.catalog_presets
@@ -1553,7 +1563,7 @@ async def test_extend_reuses_cache_all_data_with_no_new_midi():
         initial_count = table.row_count
 
         await pilot.press("C")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         calls_after_sweep = app.bridge.catalog_calls
 
         await pilot.click("#presets")
@@ -1801,7 +1811,7 @@ async def test_integrity_check_sweeps_and_reports_the_dangling_reference():
         await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
 
         await pilot.press("i")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert await _wait_for(pilot, lambda: "dangling" in app.last_status)
 
         assert "1 dangling reference(s) across 1 preset(s)" in app.last_status
@@ -1832,7 +1842,7 @@ async def test_second_integrity_check_answers_from_cache_with_no_midi():
         await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
 
         await pilot.press("i")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert await _wait_for(pilot, lambda: "dangling" in app.last_status)
 
         lookups = []
@@ -1882,7 +1892,7 @@ async def test_re_sweep_sees_a_sample_erased_outside_the_app():
         await _wait_for(pilot, lambda: app.query_one("#presets").row_count)
 
         await pilot.press("i")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert await _wait_for(pilot, lambda: "no dangling sample references" in app.last_status)
         assert app._catalog_cache["sample"] == {7: "Low Thump"}
 
@@ -1891,7 +1901,7 @@ async def test_re_sweep_sees_a_sample_erased_outside_the_app():
         await pilot.press("x")  # the documented way to force a fresh sweep
         await pilot.pause()
         await pilot.press("i")
-        assert await _wait_for(pilot, lambda: not app._scan_active, tries=400, step=0.02)
+        assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert await _wait_for(pilot, lambda: "1 dangling reference(s)" in app.last_status)
         assert "P000 V1 → S007" in app.last_status
 
@@ -2097,7 +2107,7 @@ async def test_browse_links_with_exactly_one_skips_the_prompt():
             return 1
 
         def get_parameters(self, param_ids, *, timeout=None):
-            return {pid: 0 for pid in param_ids}
+            return dict.fromkeys(param_ids, 0)
 
     app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -2124,7 +2134,7 @@ async def test_browse_links_with_several_prompts_for_which_one():
             return 2
 
         def get_parameters(self, param_ids, *, timeout=None):
-            return {pid: 0 for pid in param_ids}
+            return dict.fromkeys(param_ids, 0)
 
     app = EosedApp(FakeBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:

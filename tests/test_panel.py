@@ -14,7 +14,6 @@ from eos import panel as pp
 from eos.panel import Key
 from eosed.panel import KEYMAP, WHEEL, PanelScreen, render_panel
 
-
 # --- protocol frames (§28-§30) ----------------------------------------------
 
 def test_open_session_is_the_captured_frame():
@@ -398,8 +397,9 @@ async def test_polling_updates_the_screen_and_survives_a_failing_port():
     import json
     import pathlib
 
-    from eos import lcd
     from textual.app import App
+
+    from eos import lcd
 
     capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
                "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
@@ -454,7 +454,7 @@ def test_soft_keys_are_aligned_under_the_displays_soft_menu_positions():
     # evenly spaced, and none at the extreme edges
     gaps = {columns[i + 1] - columns[i] for i in range(5)}
     assert gaps == {20}
-    assert 0 < columns[0] and columns[-1] < lcd.WIDTH // 2
+    assert columns[0] > 0 and columns[-1] < lcd.WIDTH // 2
 
 
 def test_all_three_render_modes_draw_the_screen():
@@ -569,7 +569,6 @@ def test_the_lcd_renders_as_dark_ink_on_a_pale_field():
     import pathlib
 
     from eos import lcd
-    from eosed.panel import LCD_GLASS, LCD_INK
 
     capture = (pathlib.Path(__file__).resolve().parent.parent / "docs" /
                "captures" / "panel_e4xt_fw470_2026-08-14.jsonl")
@@ -623,7 +622,6 @@ def test_the_panel_shows_its_own_meta_keys():
     # footer at the bottom of the terminal is the *main app's* legend and this
     # is a modal, so the panel's own bindings appear nowhere else. A binding
     # nobody can find is not much better than one that does not exist.
-    from eosed.panel import RENDER_MODES
 
     art = render_panel()
     for key in ("ctrl+e", "ctrl+t", "ctrl+r", "ctrl+g"):

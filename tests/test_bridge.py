@@ -14,7 +14,6 @@ from eos import messages as m
 from eos import params as p
 from eos.bridge import EosBridge, MultiIn, ThrottledOut
 
-
 # --- fake rtmidi (for port enumeration / autodetect / ThrottledOut tests) --
 
 class FakeOut:
@@ -743,7 +742,7 @@ def test_set_parameter_is_fire_and_forget():
 
     def handler(frame):
         sent.append(frame)
-        return None  # no reply, matching the spec (no ACK for Parameter Edit)
+        # No reply: the spec defines no ACK for a Parameter Edit.
 
     bridge = _bridge_with(handler)
     bridge.set_parameter(1, -6 & 0x3FFF)
@@ -757,7 +756,7 @@ def test_set_parameters_chunks_at_max_edits():
 
     def handler(frame):
         sent.append(frame)
-        return None
+        # No reply: Parameter Edits are fire-and-forget, one chunk per message.
 
     bridge = _bridge_with(handler)
     values = [(i, i) for i in range(m.MAX_PARAMETER_EDITS + 5)]
@@ -983,7 +982,7 @@ def test_dump_preset_old_happy_path():
     payload = name + bytes(range(40))  # 56 bytes total, arbitrary "preset data"
 
     def handler(frame):
-        _, command, fpayload = m.parse_frame(frame)
+        _, command, _fpayload = m.parse_frame(frame)
         if command == m.Command.PRESET_DUMP_REQUEST:
             return [
                 m.OldDumpHeader(byte_count=len(payload)).encode(),
@@ -1372,7 +1371,7 @@ def test_send_preset_old_gives_up_after_max_retries():
 
 def test_send_preset_old_raises_when_device_cancels():
     def handler(frame):
-        _, command, payload = m.parse_frame(frame)
+        _, command, _payload = m.parse_frame(frame)
         if command == m.Command.PRESET_DUMP:
             return [m.Cancel().encode()]
         return None

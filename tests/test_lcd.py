@@ -142,7 +142,7 @@ def test_a_partial_frame_escalates_rather_than_rendering_a_fragment():
 def test_full_min_bytes_is_derived_not_hardcoded():
     # A real full screen must clear the threshold, and the threshold must sit
     # above the empty-update size -- otherwise the three cases collapse.
-    assert lcd.FULL_MIN_BYTES <= len(max(_frames(), key=len))
+    assert len(max(_frames(), key=len)) >= lcd.FULL_MIN_BYTES
     assert lcd.EMPTY_UPDATE_MAX < lcd.FULL_MIN_BYTES
 
 

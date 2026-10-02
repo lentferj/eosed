@@ -29,14 +29,22 @@ Scope is deliberately the tracked set rather than the working tree: bench and
 scratch files are not distributed and are not held to this.
 """
 import ast
+import shutil
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+#: S607 wants an absolute executable path. Resolved once here rather than
+#: inline so the helper still fails loudly (FileNotFoundError from a bogus
+#: PATH) instead of silently testing nothing.
+_GIT = shutil.which("git") or "git"
+
 
 def _tracked_python():
-    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
+    # argv is a resolved local binary plus static args; no user input reaches
+    # this call. (S607 wants the absolute path; see _GIT above.)
+    out = subprocess.run([_GIT, "ls-files", "*.py"], cwd=ROOT,  # noqa: S603
                          capture_output=True, text=True, check=True).stdout
     return [ROOT / line for line in out.split() if line]
 

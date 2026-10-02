@@ -11,7 +11,6 @@ import pytest
 
 from eos import messages as m
 
-
 # --- framing ------------------------------------------------------------
 
 def test_build_and_parse_frame_roundtrip():
@@ -352,7 +351,7 @@ def test_multimode_map_channels():
     dump = m.MultimodeMapDump(raw=bytes((i % 100) for i in range(128)))
     channels = dump.channels()
     assert len(channels) == 16  # 128 bytes / 8 bytes-per-channel
-    preset, volume, pan, submix = channels[0]
+    preset, _volume, _pan, _submix = channels[0]
     assert preset == m.decode_u14(0, 1)
 
 
