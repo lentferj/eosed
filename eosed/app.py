@@ -52,6 +52,7 @@ explicit arm-then-fire confirmation in :class:`MasterScreen`.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import math
 import threading
 from dataclasses import dataclass, replace
@@ -70,8 +71,8 @@ from textual.widgets.option_list import Option
 
 from eos import bridge as bridge_mod
 from eos import lcd as lcd_mod
-from eos import panel as panel_proto
 from eos import messages as m
+from eos import panel as panel_proto
 from eos import params as p
 from eosed.demo import DemoBridge
 from eosed.panel import PanelScreen
@@ -1098,7 +1099,7 @@ class EosedApp(App):
 
     def _legend_key(self, key: str) -> str:
         """First key of a binding, in the form a user would type it."""
-        first = key.split(",")[0]
+        first = key.split(",", maxsplit=1)[0]
         return self._LEGEND_KEY_NAMES.get(first, first)
 
     def _legend_blocks(self) -> List[str]:
@@ -1221,10 +1222,8 @@ class EosedApp(App):
             self._resize_timer.stop()
             self._resize_timer = None
         if self.bridge is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self.bridge.close()
-            except Exception:
-                pass
 
     def _ui_gone(self) -> bool:
         """True once the app has shut down and its pane tree is unmounted.
@@ -1253,10 +1252,8 @@ class EosedApp(App):
 
     def set_status(self, text: str) -> None:
         self.last_status = text  # exposed for tests, matching k2kremote's convention
-        try:
+        with contextlib.suppress(Exception):
             self.query_one("#status", Static).update(text)
-        except Exception:
-            pass
 
     # -- dynamic preset page size -------------------------------------------
     def _desired_browser_window(self) -> int:
@@ -1358,7 +1355,7 @@ class EosedApp(App):
             return
         self.call_from_thread(self._show_bank_page, bank, start, window, names, None, cursor)
 
-    def _show_bank_page(self, bank: str, start: int, window: int, names: Dict[int, str],
+    def _show_bank_page(self, bank: str, start: int, window: int, names: Dict[int, str],  # noqa: PLR0917 -- one view-model tuple threaded through workers; splitting it churns every call site
                         status: Optional[str] = None, cursor: Optional[int] = None) -> None:
         if self._ui_gone():
             return
@@ -1699,7 +1696,7 @@ class EosedApp(App):
         self.call_from_thread(self._show_preset_overview, preset, voice_count, zone_counts,
                               global_ids, global_values, sample_rows)
 
-    def _show_preset_overview(self, preset: int, voice_count: int, zone_counts: Dict[int, int],
+    def _show_preset_overview(self, preset: int, voice_count: int, zone_counts: Dict[int, int],  # noqa: PLR0917 -- same view-model tuple as _show_bank_page; see there
                               ids: List[int], values: Dict[int, int],
                               sample_rows: List[Tuple[int, str, str]]) -> None:
         if self._ui_gone():
@@ -2132,13 +2129,12 @@ class EosedApp(App):
         """
         estimate = None
         used_kb = None
-        try:
+        # Sizing is best-effort by design: never block the sweep on it.
+        with contextlib.suppress(Exception):
             with self._bridge_lock:
                 memory = self.bridge.preset_memory()
             used_kb = max(0, memory.total_kb - memory.free_kb)
             estimate = _estimate_sweep_seconds(depth, used_kb)
-        except Exception:
-            pass  # sizing is a courtesy; never block the sweep on it
 
         if estimate is None or estimate < _SWEEP_CONFIRM_SECONDS:
             self._start_cache_all(depth)
@@ -2238,7 +2234,7 @@ class EosedApp(App):
         if result["depth"] == "full":
             self._voice_details = result["voice_details"]
 
-    def _run_full_sweep(self, depth: str) -> dict:
+    def _run_full_sweep(self, depth: str) -> dict:  # noqa: C901 -- the sweep is one state machine by design; splitting it risks the cancel/early-stop/promote discipline
         """One preset-range walk shared by 'u' (always "structure") and 'a'
         (the configured depth). Fills in as much as ``depth`` calls for and
         returns it all in a dict for the caller to decide what to do with
@@ -2332,15 +2328,17 @@ class EosedApp(App):
                     # the name lazily, only once voices were found; cache-
                     # all needs every preset's name unconditionally, so the
                     # two steps are decoupled here instead.
+                    # No name here is fine -- matches catalog_presets' "skip it"
+                    # convention (best-effort by design).
                     name: Optional[str] = None
-                    try:
+                    with contextlib.suppress(Exception):
                         name = self.bridge.get_preset_name(preset)
                         preset_names[preset] = name
-                    except Exception:
-                        pass  # no name here -- matches catalog_presets' "skip it" convention
                     found_voices = False
                     if walk_voices:
-                        try:
+                        # Best-effort by design: a voice walk that raises counts
+                        # as "empty" below (same convention as catalog_presets).
+                        with contextlib.suppress(Exception):
                             zone_counts: Dict[int, int] = {}
                             by_voice: Dict[int, List[int]] = {}
                             voice_count = 0
@@ -2373,8 +2371,6 @@ class EosedApp(App):
                                 used_samples = {s for numbers in by_voice.values() for s in numbers}
                                 for used in used_samples:
                                     sample_index.setdefault(used, []).append((preset, name or ""))
-                        except Exception:
-                            pass  # best-effort, same convention as catalog_presets -- counts as "empty" below
                     if walk_voices:
                         if found_voices:
                             consecutive_empty = 0
@@ -2555,7 +2551,7 @@ class EosedApp(App):
         # as the user is concerned, and ten separate entries would make both
         # the history and 'z' close to useless for it. The entry keeps its
         # ORIGINAL `old`, so undoing it returns to where the run started.
-        voice, link, scope = self._current_scope()
+        voice, link, _scope = self._current_scope()
         if self._changes:
             last = self._changes[-1]
             if (last.param_id == param_id and last.voice == voice
