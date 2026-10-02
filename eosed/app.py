@@ -56,10 +56,10 @@ import contextlib
 import math
 import threading
 from dataclasses import dataclass, replace
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, cast
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -74,6 +74,11 @@ from eos import lcd as lcd_mod
 from eos import messages as m
 from eos import panel as panel_proto
 from eos import params as p
+
+# BridgeLike (either bridge implementation) lives in eosed.cli, which defines
+# it for the same reason: cli and app both drive EosBridge and DemoBridge
+# through their shared surface, and neither may own it twice.
+from eosed.cli import BridgeLike
 from eosed.demo import DemoBridge
 from eosed.panel import PanelScreen
 
@@ -255,7 +260,9 @@ class _Change:
     def describe(self, value: object) -> str:
         if self.param_id is None:
             return repr(value)
-        return p.describe_value(p.PARAMETERS[self.param_id], int(value))
+        # param_id is not None here, so this is a parameter value (an int),
+        # not a preset name (a str) -- see _Change's fields.
+        return p.describe_value(p.PARAMETERS[self.param_id], cast(int, value))
 
 
 class HistoryScreen(ModalScreen[None]):
@@ -374,7 +381,7 @@ def _dangling_sample_refs(overviews: Dict[int, Tuple]) -> List[Tuple[int, int, s
     return found
 
 
-def _voice_sample_info(bridge, preset: int, voice: int) -> Optional[Tuple[int, List[int]]]:
+def _voice_sample_info(bridge: BridgeLike, preset: int, voice: int) -> Optional[Tuple[int, List[int]]]:
     """Best-effort: (zone count, [raw sample number(s)]) for one voice, or
     ``None`` if this voice index doesn't exist on this preset at all.
 
@@ -583,6 +590,11 @@ class ChoiceScreen(ModalScreen[Optional[int]]):
             widget.highlighted = self._values.index(self.current)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        # Options in this dialog are always built with id=str(value) above,
+        # but the widget types id as Optional -- refuse a None rather than
+        # crashing int() on it.
+        if event.option.id is None:
+            return
         self.dismiss(int(event.option.id))
 
     def action_cancel(self) -> None:
@@ -656,7 +668,7 @@ class MasterScreen(ModalScreen[Optional[str]]):
             lines.append(f"ARMED: {self.armed} — press Enter to FIRE.")
         self.query_one("#body", Static).update("\n".join(lines))
 
-    def on_key(self, event) -> None:
+    def on_key(self, event: events.Key) -> None:
         if event.key in self._ACTIONS:
             action, _ = self._ACTIONS[event.key]
             if action == "delete_preset" and self.preset is None:
@@ -775,7 +787,7 @@ class _FillWidthDataTable(DataTable):
         self._require_update_dimensions = True
         self.refresh()
 
-    def on_resize(self, event) -> None:
+    def on_resize(self, event: events.Resize) -> None:
         self._stretch_last_column()
         if self.resize_callback is not None:
             self.resize_callback()
@@ -796,10 +808,12 @@ class _BankBrowserTable(_FillWidthDataTable):
     ]
 
     def action_prev_bank_page(self) -> None:
-        self.app.action_prev_page()
+        # These table widgets only ever run inside EosedApp (see compose);
+        # App itself does not declare the actions, so the cast states it.
+        cast("EosedApp", self.app).action_prev_page()
 
     def action_next_bank_page(self) -> None:
-        self.app.action_next_page()
+        cast("EosedApp", self.app).action_next_page()
 
 
 class _KeyHints(Static):
@@ -834,7 +848,7 @@ class _KeyHints(Static):
     def on_mount(self) -> None:
         self._render_hints()
 
-    def on_resize(self, event) -> None:
+    def on_resize(self, event: events.Resize) -> None:
         self._render_hints()
 
     def _render_hints(self) -> None:
@@ -917,7 +931,7 @@ class EosedApp(App):
         Binding("minus", "nudge_down", "Value -1"),
     ]
 
-    def __init__(self, bridge, *, allow_write: bool, demo: bool,
+    def __init__(self, bridge: Optional[BridgeLike], *, allow_write: bool, demo: bool,
                 connect_kwargs: Optional[dict] = None,
                 panel_render: str = "quadrant"):
         super().__init__()
@@ -1089,6 +1103,23 @@ class EosedApp(App):
     def _bank_state(self, bank: Optional[str] = None) -> _BankState:
         return self._bank_states[bank if bank is not None else self.bank]
 
+    @property
+    def _live_bridge(self) -> BridgeLike:
+        """The connection, for workers that only run post-connect.
+
+        ``self.bridge`` is None between construction and a successful
+        connect, so every worker touching MIDI would need its own None
+        check. They run only after connect (or after a failed connect
+        left nothing to do), which mypy cannot see -- this centralises
+        the one honest answer: fail loudly as "no connection", which the
+        workers' existing try/except turns into a status line, instead
+        of an AttributeError traceback from a None dereference.
+        """
+        bridge = self.bridge
+        if bridge is None:
+            raise RuntimeError("no connection")
+        return bridge
+
     # -- layout ---------------------------------------------------------
     # Textual key *names* that should not be shown to the user verbatim. A
     # binding may list several keys ("plus,equals_sign"), which is exactly
@@ -1107,8 +1138,11 @@ class EosedApp(App):
         # the legend text — unlike k2kremote's separate LEGEND_BLOCKS table,
         # there is no second list to keep in sync by hand. `show=False`
         # entries (e.g. "enter") are hidden the same way Footer hid them.
+        # isinstance narrows for mypy: App's BINDINGS type admits tuples, but
+        # every entry here is a Binding (a tuple could not carry show=...).
         return [f"{self._legend_key(binding.key)} {binding.description}"
-                for binding in self.BINDINGS if binding.show]
+                for binding in self.BINDINGS
+                if isinstance(binding, Binding) and binding.show]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -1322,7 +1356,7 @@ class EosedApp(App):
 
     # -- bank browser (presets or samples) -----------------------------------
     @staticmethod
-    def _catalog_fn(bridge, bank: str):
+    def _catalog_fn(bridge: BridgeLike, bank: str) -> Callable[..., Dict[int, str]]:
         return bridge.catalog_presets if bank == "preset" else bridge.catalog_samples
 
     def _catalog_cache_covers(self, bank: str, wanted: range) -> bool:
@@ -1430,7 +1464,7 @@ class EosedApp(App):
                 names = {number: cache[number] for number in extend_range if number in cache}
             else:
                 with self._bridge_lock:
-                    names = self._catalog_fn(self.bridge, bank)(extend_range)
+                    names = self._catalog_fn(self._live_bridge, bank)(extend_range)
         except Exception as exc:
             self._extending[bank] = False
             self.call_from_thread(self.set_status, f"error: {exc}")
@@ -1536,29 +1570,35 @@ class EosedApp(App):
             self._show_or_reload_preset_overview()
 
     def _show_or_reload_preset_overview(self) -> None:
-        cached = self._preset_overviews.get(self.current_preset)
-        if cached is not None and cached[3] is not None:
-            # Nothing about drilling into a voice/link (or switching Sample
-            # bank and back) changes what the preset-level view would
-            # recompute — reuse it instead of re-walking every voice/zone
-            # over MIDI again.
-            self._show_preset_overview(self.current_preset, *cached)
-        elif cached is not None:
+        preset = self.current_preset
+        if preset is None:
+            return
+        cached = self._preset_overviews.get(preset)
+        if cached is None:
+            self._load_preset_overview(preset)
+            return
+        voice_count, zone_counts, global_ids, global_values, sample_rows = cached
+        if global_values is None:
             # A "structure"-depth cache-all sweep walked this preset's
             # voices/zones/samples but deliberately skipped its GLOBAL
             # values (that's the whole point of that depth level) — fetch
             # just those instead of redoing everything else over MIDI.
-            self._load_preset_globals_only(self.current_preset, cached)
-        else:
-            self._load_preset_overview(self.current_preset)
+            self._load_preset_globals_only(preset, cached)
+            return
+        # Nothing about drilling into a voice/link (or switching Sample
+        # bank and back) changes what the preset-level view would
+        # recompute — reuse it instead of re-walking every voice/zone
+        # over MIDI again.
+        self._show_preset_overview(preset, voice_count, zone_counts,
+                                   global_ids, global_values, sample_rows)
 
     @work(thread=True)
     def _load_preset_globals_only(self, preset: int, cached: Tuple) -> None:
         voice_count, zone_counts, global_ids, _, sample_rows = cached
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(_PRESET_SELECT, preset)
-                global_values = self.bridge.get_parameters(global_ids)
+                self._live_bridge.set_parameter(_PRESET_SELECT, preset)
+                global_values = self._live_bridge.get_parameters(global_ids)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -1665,7 +1705,7 @@ class EosedApp(App):
     def _send_program_change_for_preset(self, preset: int) -> None:
         try:
             with self._bridge_lock:
-                self.bridge.send_program_change(preset)
+                self._live_bridge.send_program_change(preset)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"program change error: {exc}")
 
@@ -1674,19 +1714,19 @@ class EosedApp(App):
         self.call_from_thread(self.set_status, f"loading preset {preset} ...")
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(_PRESET_SELECT, preset)
+                self._live_bridge.set_parameter(_PRESET_SELECT, preset)
                 zone_counts: Dict[int, int] = {}
                 by_voice: Dict[int, List[int]] = {}
                 voice_count = 0
                 for voice in range(_MAX_VOICE_SCAN):
-                    info = _voice_sample_info(self.bridge, preset, voice)
+                    info = _voice_sample_info(self._live_bridge, preset, voice)
                     if info is None:
                         break
                     zone_counts[voice] = info[0]
                     by_voice[voice] = info[1]
                     voice_count = voice + 1
                 global_ids = _group_param_ids("global")
-                global_values = self.bridge.get_parameters(global_ids)
+                global_values = self._live_bridge.get_parameters(global_ids)
                 sample_rows = self._resolve_sample_rows(by_voice)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
@@ -1729,16 +1769,23 @@ class EosedApp(App):
         # overview when available, rather than re-walking voices just to
         # bound this modal's range (preset_num_voices cannot be trusted at
         # all — see _voice_sample_info's docstring / RESOLUTION_NOTES §12).
-        cached = self._preset_overviews.get(self.current_preset)
+        # action_browse_voices already refused a missing preset, but this
+        # runs on a worker after it: re-check rather than assuming the
+        # selection survived the hop between threads.
+        preset = self.current_preset
+        if preset is None:
+            self.call_from_thread(self.set_status, "select a preset first")
+            return
+        cached = self._preset_overviews.get(preset)
         if cached is not None:
             count = cached[0]
         else:
             try:
                 with self._bridge_lock:
-                    self.bridge.set_parameter(_PRESET_SELECT, self.current_preset)
+                    self._live_bridge.set_parameter(_PRESET_SELECT, preset)
                     count = 0
                     for voice in range(_MAX_VOICE_SCAN):
-                        if _voice_sample_info(self.bridge, self.current_preset, voice) is None:
+                        if _voice_sample_info(self._live_bridge, preset, voice) is None:
                             break
                         count += 1
             except Exception as exc:
@@ -1789,8 +1836,8 @@ class EosedApp(App):
         self.call_from_thread(self.set_status, f"loading voice V{voice + 1} ...")
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(_PRESET_SELECT, preset)
-                info = _voice_sample_info(self.bridge, preset, voice)
+                self._live_bridge.set_parameter(_PRESET_SELECT, preset)
+                info = _voice_sample_info(self._live_bridge, preset, voice)
                 numbers = [] if info is None else info[1]
                 # _voice_sample_info leaves SAMPLE_ZONE_SELECT pointed at the
                 # last zone it read; re-selecting the voice resets that (spec:
@@ -1798,8 +1845,8 @@ class EosedApp(App):
                 # so the group read below is the voice's own scope, not one
                 # zone's — otherwise voice-only fields (CTUNE, XPOSE, RT_*)
                 # come back as the spec's -1/"not applicable" sentinel.
-                self.bridge.set_parameter(_VOICE_SELECT, voice)
-                voice_values = self.bridge.get_parameters(_VOICE_PARAM_IDS)
+                self._live_bridge.set_parameter(_VOICE_SELECT, voice)
+                voice_values = self._live_bridge.get_parameters(_VOICE_PARAM_IDS)
                 sample_rows = self._resolve_sample_rows({voice: numbers})
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
@@ -1825,9 +1872,15 @@ class EosedApp(App):
 
     @work(thread=True)
     def _start_browse_links(self) -> None:
+        # Same thread-hop reasoning as _start_browse_voices: re-check the
+        # selection the caller already validated.
+        preset = self.current_preset
+        if preset is None:
+            self.call_from_thread(self.set_status, "select a preset first")
+            return
         try:
             with self._bridge_lock:
-                count = self.bridge.preset_num_links(self.current_preset)
+                count = self._live_bridge.preset_num_links(preset)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -1861,10 +1914,10 @@ class EosedApp(App):
         self.call_from_thread(self.set_status, f"loading link L{link + 1} ...")
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(_PRESET_SELECT, preset)
-                self.bridge.set_parameter(_LINK_SELECT, link)
+                self._live_bridge.set_parameter(_PRESET_SELECT, preset)
+                self._live_bridge.set_parameter(_LINK_SELECT, link)
                 link_ids = _group_param_ids("link")
-                link_values = self.bridge.get_parameters(link_ids)
+                link_values = self._live_bridge.get_parameters(link_ids)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -1923,7 +1976,7 @@ class EosedApp(App):
                 name = memo[number]  # already resolved earlier in this same sweep — no MIDI
             else:
                 try:
-                    name = self.bridge.get_sample_name(number)
+                    name = self._live_bridge.get_sample_name(number)
                 except Exception:
                     name = ""
                 if memo is not None:
@@ -2132,7 +2185,7 @@ class EosedApp(App):
         # Sizing is best-effort by design: never block the sweep on it.
         with contextlib.suppress(Exception):
             with self._bridge_lock:
-                memory = self.bridge.preset_memory()
+                memory = self._live_bridge.preset_memory()
             used_kb = max(0, memory.total_kb - memory.free_kb)
             estimate = _estimate_sweep_seconds(depth, used_kb)
 
@@ -2309,7 +2362,7 @@ class EosedApp(App):
                         f"caching preset {preset}/{last} ({depth} — "
                         f"'escape' to cancel) ...")
                     try:
-                        self.bridge.set_parameter(_PRESET_SELECT, preset)
+                        self._live_bridge.set_parameter(_PRESET_SELECT, preset)
                     except Exception as exc:
                         # Was outside any try: a transport failure here (a
                         # dropped port, say) aborted the whole sweep with a
@@ -2332,7 +2385,7 @@ class EosedApp(App):
                     # convention (best-effort by design).
                     name: Optional[str] = None
                     with contextlib.suppress(Exception):
-                        name = self.bridge.get_preset_name(preset)
+                        name = self._live_bridge.get_preset_name(preset)
                         preset_names[preset] = name
                     found_voices = False
                     if walk_voices:
@@ -2343,7 +2396,7 @@ class EosedApp(App):
                             by_voice: Dict[int, List[int]] = {}
                             voice_count = 0
                             for voice in range(_MAX_VOICE_SCAN):
-                                info = _voice_sample_info(self.bridge, preset, voice)
+                                info = _voice_sample_info(self._live_bridge, preset, voice)
                                 if info is None:
                                     break
                                 zone_counts[voice] = info[0]
@@ -2357,12 +2410,18 @@ class EosedApp(App):
                                     # back the spec's -1/"not applicable"
                                     # sentinel otherwise (same fix already
                                     # in _load_voice_detail).
-                                    self.bridge.set_parameter(_VOICE_SELECT, voice)
+                                    self._live_bridge.set_parameter(_VOICE_SELECT, voice)
                                     voice_details[(preset, voice)] = (
-                                        info[1], self.bridge.get_parameters(_VOICE_PARAM_IDS))
+                                        info[1], self._live_bridge.get_parameters(_VOICE_PARAM_IDS))
                             found_voices = voice_count > 0
-                            global_values = (self.bridge.get_parameters(global_ids)
-                                             if depth == "full" else None)
+                            # global_ids is not None here whenever depth is
+                            # "full" (it is set exactly when walk_voices is,
+                            # which "full" implies), but the types cannot see
+                            # that -- fetch by the same memoized call rather
+                            # than asserting the correlation.
+                            global_values = (self._live_bridge.get_parameters(
+                                _group_param_ids("global"))
+                                if depth == "full" else None)
                             sample_rows = self._resolve_sample_rows(
                                 by_voice, sample_name_memo, use_catalog_cache=False)
                             overviews[preset] = (voice_count, zone_counts, global_ids,
@@ -2415,7 +2474,7 @@ class EosedApp(App):
                         self.call_from_thread(
                             self.set_status, f"caching sample names: {sample}/{last} ...")
                         try:
-                            fetched = self.bridge.get_sample_name(sample)
+                            fetched = self._live_bridge.get_sample_name(sample)
                         except Exception:
                             fetched = ""
                         if fetched.strip() and fetched.strip().casefold() != _EMPTY_SAMPLE_NAME.casefold():
@@ -2516,7 +2575,7 @@ class EosedApp(App):
         ids = self._current_param_ids
         try:
             with self._bridge_lock:
-                current = self.bridge.get_parameter(param_id)
+                current = self._live_bridge.get_parameter(param_id)
                 # The device's own 03h/04h range is authoritative over the
                 # static table (this module's standing rule), but it does not
                 # change under us -- so it is fetched once per parameter and
@@ -2524,7 +2583,7 @@ class EosedApp(App):
                 # trips instead of two.
                 rng = self._param_ranges.get(param_id)
                 if rng is None:
-                    rng = self.bridge.get_parameter_range(param_id)
+                    rng = self._live_bridge.get_parameter_range(param_id)
                     self._param_ranges[param_id] = rng
                 target = max(rng.minimum, min(rng.maximum, current + delta))
                 if target == current:
@@ -2533,8 +2592,8 @@ class EosedApp(App):
                         self.set_status,
                         f"{param.name} already at its {edge} ({current})")
                     return
-                self.bridge.set_parameter(param_id, target)
-                values = self.bridge.get_parameters(ids)
+                self._live_bridge.set_parameter(param_id, target)
+                values = self._live_bridge.get_parameters(ids)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -2566,8 +2625,8 @@ class EosedApp(App):
         param = p.PARAMETERS[param_id]
         try:
             with self._bridge_lock:
-                current = self.bridge.get_parameter(param_id)
-                rng = self.bridge.get_parameter_range(param_id)
+                current = self._live_bridge.get_parameter(param_id)
+                rng = self._live_bridge.get_parameter_range(param_id)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -2590,6 +2649,7 @@ class EosedApp(App):
 
         choices = p.value_choices(param)
         span = rng.maximum - rng.minimum + 1
+        screen: ModalScreen[Optional[int]]
         if choices and span <= ChoiceScreen.MAX_ROWS:
             screen = ChoiceScreen(param, current, rng.minimum, rng.maximum, choices)
         else:
@@ -2648,10 +2708,16 @@ class EosedApp(App):
     @work(thread=True)
     def _undo_changes(self, count: int) -> None:
         preset = self.current_preset
+        if preset is None:
+            # _start_undo does not check (it only needs a non-empty log), so
+            # the None that would crash set_parameter below is refused here,
+            # through the same _finish_undo path a mid-undo failure takes.
+            self.call_from_thread(self._finish_undo, [], "undo failed: no preset selected")
+            return
         reverted: List[_Change] = []
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(_PRESET_SELECT, preset)
+                self._live_bridge.set_parameter(_PRESET_SELECT, preset)
                 for _ in range(count):
                     if not self._changes:
                         break
@@ -2659,13 +2725,15 @@ class EosedApp(App):
                     # Restore the selection this edit was made under before
                     # writing -- see _Change's docstring.
                     if change.voice is not None:
-                        self.bridge.set_parameter(_VOICE_SELECT, change.voice)
+                        self._live_bridge.set_parameter(_VOICE_SELECT, change.voice)
                     elif change.link is not None:
-                        self.bridge.set_parameter(_LINK_SELECT, change.link)
+                        self._live_bridge.set_parameter(_LINK_SELECT, change.link)
                     if change.param_id is None:
-                        self.bridge.set_preset_name(preset, str(change.old))
+                        self._live_bridge.set_preset_name(preset, str(change.old))
                     else:
-                        self.bridge.set_parameter(change.param_id, int(change.old))
+                        # param_id is not None here, so old is the recorded
+                        # parameter value (an int) -- see _Change's fields.
+                        self._live_bridge.set_parameter(change.param_id, cast(int, change.old))
                     # Popped only after the write succeeded, so a failure
                     # part-way leaves the log describing what is still applied.
                     self._changes.pop()
@@ -2737,8 +2805,8 @@ class EosedApp(App):
         ids = self._current_param_ids
         try:
             with self._bridge_lock:
-                self.bridge.set_parameter(param_id, value)
-                values = self.bridge.get_parameters(ids)
+                self._live_bridge.set_parameter(param_id, value)
+                values = self._live_bridge.get_parameters(ids)
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -2784,10 +2852,10 @@ class EosedApp(App):
         try:
             with self._bridge_lock:
                 if bank == "preset":
-                    self.bridge.set_preset_name(number, name)
+                    self._live_bridge.set_preset_name(number, name)
                 else:
-                    self.bridge.set_sample_name(number, name)
-                names = self._catalog_fn(self.bridge, bank)(range(start, start + window))
+                    self._live_bridge.set_sample_name(number, name)
+                names = self._catalog_fn(self._live_bridge, bank)(range(start, start + window))
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
@@ -2821,7 +2889,7 @@ class EosedApp(App):
             device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
             out = getattr(self.bridge, "midi_out", None)
             if out is not None:
-                def send(frame):
+                def send(frame: List[int]) -> None:
                     # Under the same lock as the screen poll. Both share one
                     # MIDI port and ThrottledOut holds unguarded state (it
                     # imports no threading at all), so an unlocked keypress
@@ -2841,6 +2909,19 @@ class EosedApp(App):
         screen.render_mode = self.panel_render
         self.push_screen(screen)
 
+    def _require_eos_bridge(self) -> bridge_mod.EosBridge:
+        """The live-protocol bridge, for panel-protocol traffic.
+
+        DemoBridge has no _send/send_and_receive (demo never polls), so a
+        union call would lie about the surface. This narrows once -- loudly
+        on misuse, via the callers' existing failure paths -- instead of
+        AttributeError deep in a poll worker.
+        """
+        bridge = self._live_bridge
+        if not isinstance(bridge, bridge_mod.EosBridge):
+            raise RuntimeError("panel protocol needs live hardware")
+        return bridge
+
     def _open_panel_session(self, device_id: int) -> None:
         """Send the §28 session open. The device is silent until it arrives.
 
@@ -2850,11 +2931,12 @@ class EosedApp(App):
         """
         try:
             with self._bridge_lock:
-                self.bridge._send(bytes(panel_proto.open_session(device_id)), write=True)
+                self._require_eos_bridge()._send(
+                    bytes(panel_proto.open_session(device_id)), write=True)
         except Exception as exc:
             self.set_status(f"panel session could not be opened: {exc}")
 
-    def _panel_poll(self):
+    def _panel_poll(self) -> Optional[lcd_mod.Bitmap]:
         """§33b's refresh policy, over the app's own bridge.
 
         Runs under ``_bridge_lock`` because it shares one MIDI port pair with
@@ -2864,17 +2946,18 @@ class EosedApp(App):
         """
         if self.bridge is None or self.demo:
             return None
-        device_id = getattr(self.bridge, "device_id", m.DEFAULT_DEVICE_ID)
+        bridge = self._require_eos_bridge()
+        device_id = bridge.device_id
         try:
             with self._bridge_lock:
-                reply = list(self.bridge.send_and_receive(
+                reply = list(bridge.send_and_receive(
                     bytes(panel_proto.update_screen(device_id)), timeout=1.5))
                 decision = lcd_mod.classify_update(reply)
                 if decision == lcd_mod.RefreshDecision.IDLE:
                     return None
                 if decision == lcd_mod.RefreshDecision.USE:
                     return lcd_mod.decode_display(reply)
-                full = list(self.bridge.send_and_receive(
+                full = list(bridge.send_and_receive(
                     bytes(panel_proto.request_screen(device_id)), timeout=3.0))
             return lcd_mod.decode_display(full)
         except TimeoutError:
@@ -2904,14 +2987,18 @@ class EosedApp(App):
         try:
             with self._bridge_lock:
                 if action == "delete_preset":
-                    self.bridge.delete_preset(self.current_preset)
+                    # MasterScreen cannot arm this with no preset selected,
+                    # but the worker must not assume what the modal enforced.
+                    if self.current_preset is None:
+                        raise RuntimeError("no preset selected")
+                    self._live_bridge.delete_preset(self.current_preset)
                 elif action == "erase_bank":
-                    self.bridge.erase_ram_bank()
+                    self._live_bridge.erase_ram_bank()
                 elif action == "erase_all_presets":
-                    self.bridge.erase_all_ram_presets()
+                    self._live_bridge.erase_all_ram_presets()
                 elif action == "erase_all_samples":
-                    self.bridge.erase_all_ram_samples()
-                names = self._catalog_fn(self.bridge, bank)(range(start, start + window))
+                    self._live_bridge.erase_all_ram_samples()
+                names = self._catalog_fn(self._live_bridge, bank)(range(start, start + window))
         except Exception as exc:
             self.call_from_thread(self.set_status, f"error: {exc}")
             return
