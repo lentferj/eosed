@@ -68,10 +68,10 @@ than implying the whole feature is unbuilt.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
@@ -270,7 +270,11 @@ def visible_width(markup: str) -> int:
     return Text.from_markup(markup).cell_len
 
 
-def _placed(items, active: Optional[int], indent: int,
+#: One soft-key label: (display column, label, keyboard hint, panel code).
+_PlacedItem = Tuple[int, str, str, Optional[int]]
+
+
+def _placed(items: Sequence[_PlacedItem], active: Optional[int], indent: int,
             width: int = PANEL_WIDTH) -> Tuple[str, str]:
     """Two lines with each label centred on an explicit column.
 
@@ -292,7 +296,7 @@ def _placed(items, active: Optional[int], indent: int,
             if buf is labels:
                 spans.append((start, len(text), code))
 
-    def paint(buf, bold):
+    def paint(buf: List[str], bold: bool) -> str:
         out = ""
         index = 0
         while index < width:
@@ -309,7 +313,7 @@ def _placed(items, active: Optional[int], indent: int,
     return paint(labels, True), paint(hints, False)
 
 
-def _headings(*items, width: int = PANEL_WIDTH, indent: int = 3) -> str:
+def _headings(*items: Sequence[Any], width: int = PANEL_WIDTH, indent: int = 3) -> str:
     """A dim caption line with each label centred on a column.
 
     Headings are placed the same way the keys are, because on the hardware
@@ -335,7 +339,8 @@ def _caption(text: str, width: int = PANEL_WIDTH) -> str:
 
 
 def render_panel(active: Optional[int] = None, *, armed: bool = False,  # noqa: C901 -- layout is one straight-line drawing routine; splitting it buys nothing
-                 status: str = "", bitmap=None, mode: str = "quadrant") -> str:
+                 status: str = "", bitmap: Optional[lcd_mod.Bitmap] = None,
+                 mode: str = "quadrant") -> str:
     """The panel as Rich markup. Pure -- no widgets, so it is testable.
 
     ``active`` is the key code to highlight (the one just pressed). It matters
@@ -441,7 +446,7 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,  # noqa: 
     C_EXIT, C_PREV, C_NEXT, C_ENTER = sx(84), sx(92), sx(100), sx(108)
     C_LEFT, C_MID, C_RIGHT = sx(112), sx(116), sx(120)
 
-    def placed(items):
+    def placed(items: List[_PlacedItem]) -> None:
         for text in _placed(items, active, indent=3, width=total):
             line(text)
 
@@ -495,11 +500,11 @@ def render_panel(active: Optional[int] = None, *, armed: bool = False,  # noqa: 
                          (K3 - 4, "INC", "+ =", KEYMAP["="])],
                         active, indent=3, width=total):
         line(text)
-    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"),
-                ("+/-", "0", ".")):
+    for key_row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"),
+                    ("+/-", "0", ".")):
         keys = {"+/-": ",", ".": "."}
         items = [(col, label, keys.get(label, label), KEYMAP[keys.get(label, label)])
-                 for col, label in zip((K1, K2, K3), row)]
+                 for col, label in zip((K1, K2, K3), key_row)]
         for text in _placed(items, active, indent=3, width=total):
             line(text)
 
@@ -528,10 +533,13 @@ class PanelScreen(ModalScreen):
     #: Key names Textual dispatches to actions. on_key lets these through and
     #: consumes everything else, so they are precomputed once here rather than
     #: rebuilt from BINDINGS on every keypress.
-    _BINDING_KEYS = frozenset(binding.key for binding in BINDINGS)
+    _BINDING_KEYS = frozenset(
+        binding.key for binding in BINDINGS if isinstance(binding, Binding))
 
-    def __init__(self, *, allow_write: bool, device_id: int, send=None,
-                 bitmap=None, poll=None):
+    def __init__(self, *, allow_write: bool, device_id: int,
+                 send: Optional[Callable[[List[int]], None]] = None,
+                 bitmap: Optional[lcd_mod.Bitmap] = None,
+                 poll: Optional[Callable[[], Optional[lcd_mod.Bitmap]]] = None):
         super().__init__()
         self.allow_write = allow_write
         self.device_id = device_id
@@ -568,14 +576,19 @@ class PanelScreen(ModalScreen):
 
     @work(thread=True)
     def _poll_worker(self) -> None:
+        # Re-checked here, not just in _tick: the attribute can change
+        # between the guard and the worker starting.
+        poll = self._poll
+        if poll is None:
+            return
         try:
-            bitmap = self._poll()
+            bitmap = poll()
         except Exception as exc:                      # a dead port must not kill the UI
             self.app.call_from_thread(self._poll_failed, str(exc))
             return
         self.app.call_from_thread(self._poll_done, bitmap)
 
-    def _poll_done(self, bitmap) -> None:
+    def _poll_done(self, bitmap: Optional[lcd_mod.Bitmap]) -> None:
         self._polling = False
         if bitmap is not None:
             self.bitmap = bitmap
@@ -645,7 +658,7 @@ class PanelScreen(ModalScreen):
     # going through Textual's binding names for those invites a silent
     # mismatch between the art and the handler. One dict, one lookup.
 
-    def on_key(self, event) -> None:
+    def on_key(self, event: events.Key) -> None:
         key = event.key
         char = getattr(event, "character", None)
 
@@ -695,11 +708,11 @@ class PanelScreen(ModalScreen):
     # The most direct mapping available: a wheel for a wheel. Scrolling over
     # the panel turns the data wheel, which is what a hand expects and needs
     # no key at all.
-    def on_mouse_scroll_up(self, event) -> None:
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
         event.stop()
         self._wheel(+1)
 
-    def on_mouse_scroll_down(self, event) -> None:
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
         event.stop()
         self._wheel(-1)
 

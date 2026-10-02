@@ -136,6 +136,12 @@ show_error_codes = true
 pretty = true
 exclude = ["bench/", "probes/", "tools/"]
 
+# python-rtmidi ships no stubs or py.typed marker; the boundary is Any and
+# the casts at the two enumeration call sites document what we rely on.
+[[tool.mypy.overrides]]
+module = "rtmidi"
+ignore_missing_imports = true
+
 [tool.vulture]
 min_confidence = 80
 paths = ["eos/", "eosed/"]

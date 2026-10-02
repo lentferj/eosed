@@ -54,7 +54,7 @@ import os
 import sys
 import time
 import tomllib
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 import rtmidi
 
@@ -129,7 +129,7 @@ def _read_config_dict(path: str) -> dict:
     return _read_config(path)[0]
 
 
-def _update_config(path: str, **changes) -> None:
+def _update_config(path: str, **changes: object) -> None:
     """Read-modify-write one or more settings, or leave the file alone.
 
     **Refuses to write when the existing file could not be parsed.** The
@@ -214,7 +214,7 @@ def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
 # (the threshold) or the literal string "fullscan" to disable early-stop
 # and always sweep the complete range.
 
-def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH):
+def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH) -> int | str | None:
     """Returns an int threshold, the string "fullscan", or None if unset/invalid."""
     value = _read_config_dict(path).get("sample_usage_early_stop")
     if isinstance(value, int) and not isinstance(value, bool):
@@ -389,12 +389,12 @@ class MidiUnavailable(RuntimeError):
     """
 
 
-def _delete_quiet(port) -> None:
+def _delete_quiet(port: Any) -> None:
     with contextlib.suppress(Exception):
         port.delete()
 
 
-def _probe(factory, what: str):
+def _probe(factory: Callable[[], Any], what: str) -> Any:
     """Construct a transient rtmidi probe, or say why we couldn't.
 
     rtmidi raises out of the *constructor* when the backend is missing, so
@@ -410,7 +410,7 @@ def _probe(factory, what: str):
 def _enum_in() -> List[str]:
     probe = _probe(rtmidi.MidiIn, "input")
     try:
-        return probe.get_ports()
+        return cast(List[str], probe.get_ports())
     finally:
         _delete_quiet(probe)
 
@@ -418,7 +418,7 @@ def _enum_in() -> List[str]:
 def _enum_out() -> List[str]:
     probe = _probe(rtmidi.MidiOut, "output")
     try:
-        return probe.get_ports()
+        return cast(List[str], probe.get_ports())
     finally:
         _delete_quiet(probe)
 
@@ -496,7 +496,7 @@ class ThrottledOut:
         self._last = 0.0
         self._owed = 0.0
 
-    def send_message(self, message, *, write: bool = False) -> None:
+    def send_message(self, message: Sequence[int], *, write: bool = False) -> None:
         is_sysex = len(message) > 0 and message[0] == 0xF0
         if not is_sysex:
             self._port.send_message(message)
@@ -508,7 +508,7 @@ class ThrottledOut:
         self._last = time.time()
         self._owed = self._write_gap if write else self._gap
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._port, name)
 
 
@@ -533,7 +533,7 @@ class MultiIn:
         if not self.ports:
             raise RuntimeError(f"no input port matching {name!r}")
 
-    def get_message(self):
+    def get_message(self) -> Any:
         for port in self.ports:
             message = port.get_message()
             if message is not None:
@@ -581,7 +581,7 @@ class AmbiguousDevice(RuntimeError):
     wrong on contact with real hardware.
     """
 
-    def __init__(self, devices):
+    def __init__(self, devices: List[Tuple[int, str, str]]):
         self.devices = devices          # [(device_id, model, recv_port), ...]
         listing = "\n".join(
             f"  device id {did}: {model} on {port}" for did, model, port in devices)
@@ -610,7 +610,7 @@ class EosBridge:
     mirror).
     """
 
-    def __init__(self, midi_out, midi_in, description: str, *,
+    def __init__(self, midi_out: Any, midi_in: Any, description: str, *,
                  device_id: int = DEFAULT_DEVICE_ID, timeout: float = DEFAULT_TIMEOUT):
         self.midi_out = midi_out
         self.midi_in = midi_in
@@ -711,7 +711,7 @@ class EosBridge:
                 if port is not None:
                     _delete_quiet(port)
 
-        def collect_replies(into):
+        def collect_replies(into: List[Tuple[str, bytes]]) -> None:
             """Drain every listener, appending each Device Inquiry reply seen.
 
             Collects rather than returning the first: two machines on one wire
@@ -774,7 +774,7 @@ class EosBridge:
                 # is one device, not two. Two machines sharing an id are
                 # byte-identical on the wire and collapse here too — that case
                 # is undetectable and is a protocol violation by the user.
-                by_id = {}
+                by_id: Dict[int, Tuple[str, m.DeviceInquiryReply]] = {}
                 for recv_name, data in seen:
                     try:
                         reply = m.parse_device_inquiry_reply(data)
@@ -938,7 +938,7 @@ class EosBridge:
             device_id=raw.device_id,
         )
 
-    def get_parameters(self, param_ids, *, timeout: Optional[float] = None) -> Dict[int, int]:
+    def get_parameters(self, param_ids: Iterable[int], *, timeout: Optional[float] = None) -> Dict[int, int]:
         """Current value of several parameters in as few round trips as the
         spec allows (chunked at ``eos.messages.MAX_PARAMETER_REQUESTS`` ids
         per request). The spec says the response is "a complete Parameter
@@ -972,7 +972,7 @@ class EosBridge:
         edit = m.ParameterEdit(values=[(param_id, value & 0x3FFF)], device_id=self.device_id)
         self._send(edit.encode(), write=True)
 
-    def set_parameters(self, values) -> None:
+    def set_parameters(self, values: Iterable[Tuple[int, int]]) -> None:
         """Write several (param_id, value) pairs in as few messages as the
         spec allows (``eos.messages.MAX_PARAMETER_EDITS`` per message)."""
         values = list(values)
@@ -1080,9 +1080,9 @@ class EosBridge:
             self.send_and_receive(req.encode(), timeout=timeout)).num_szones
 
     # -- catalog (best-effort scan; the spec has no "list all presets") ---
-    def catalog_presets(self, preset_range=range(0, 128), *,
+    def catalog_presets(self, preset_range: range = range(0, 128), *,
                        timeout: Optional[float] = None,
-                       on_progress: Optional[Callable[[int], None]] = None) -> dict:
+                       on_progress: Optional[Callable[[int], None]] = None) -> Dict[int, str]:
         """Best-effort {preset_number: name} over ``preset_range``.
 
         There is no spec'd "give me every preset number in use" command, so
@@ -1106,9 +1106,9 @@ class EosBridge:
                 continue  # e.g. a CANCEL frame instead of a PresetName reply
         return names
 
-    def catalog_samples(self, sample_range=range(0, 128), *,
+    def catalog_samples(self, sample_range: range = range(0, 128), *,
                         timeout: Optional[float] = None,
-                        on_progress: Optional[Callable[[int], None]] = None) -> dict:
+                        on_progress: Optional[Callable[[int], None]] = None) -> Dict[int, str]:
         """Best-effort {sample_number: name} over ``sample_range`` — see
         :meth:`catalog_presets` for the same caveat."""
         names = {}

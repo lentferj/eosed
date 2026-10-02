@@ -21,6 +21,10 @@ from eos import messages as m
 from eos import params as p
 from eosed.demo import DemoBridge
 
+#: Either bridge implementation: the live MIDI one or the canned --demo one.
+#: The cli commands only use the shared request/reply surface both provide.
+BridgeLike = bridge_mod.EosBridge | DemoBridge
+
 
 def _parse_range(text: str) -> Tuple[int, int]:
     lo, _, hi = text.partition("-")
@@ -66,7 +70,7 @@ def cmd_ports(args: argparse.Namespace) -> None:
         print(f"  {name}")
 
 
-def cmd_inquire(args: argparse.Namespace, bridge) -> None:
+def cmd_inquire(args: argparse.Namespace, bridge: BridgeLike) -> None:
     reply = bridge.inquire()
     print(f"device id      : {reply.device_id}")
     print(f"family code    : {reply.family_code}")
@@ -75,7 +79,7 @@ def cmd_inquire(args: argparse.Namespace, bridge) -> None:
     print(f"firmware       : {reply.revision}")
 
 
-def cmd_config(args: argparse.Namespace, bridge) -> None:
+def cmd_config(args: argparse.Namespace, bridge: BridgeLike) -> None:
     cfg = bridge.configuration()
     flags = cfg.option_flags()
     print(f"RAM            : {cfg.ram_mb} MB")
@@ -95,7 +99,7 @@ def cmd_config(args: argparse.Namespace, bridge) -> None:
     print(f"ADAT I/O       : {ext_flags.adat_io}")
 
 
-def cmd_memory(args: argparse.Namespace, bridge) -> None:
+def cmd_memory(args: argparse.Namespace, bridge: BridgeLike) -> None:
     preset_mem = bridge.preset_memory()
     sample_mem = bridge.sample_memory()
     print(f"Preset memory  : {preset_mem.free_kb} / {preset_mem.total_kb} kB free")
@@ -103,7 +107,7 @@ def cmd_memory(args: argparse.Namespace, bridge) -> None:
           f"~{sample_mem.free_10kb * 10} kB free")
 
 
-def cmd_catalog(args: argparse.Namespace, bridge) -> None:
+def cmd_catalog(args: argparse.Namespace, bridge: BridgeLike) -> None:
     lo, hi = args.range
     preset_range = range(lo, hi + 1)
 
@@ -117,7 +121,7 @@ def cmd_catalog(args: argparse.Namespace, bridge) -> None:
         print(f"{number:4d}  {names[number]}")
 
 
-def cmd_get(args: argparse.Namespace, bridge) -> None:
+def cmd_get(args: argparse.Namespace, bridge: BridgeLike) -> None:
     key = int(args.param) if args.param.lstrip("-").isdigit() else args.param
     param = p.lookup(key)
     value = bridge.get_parameter(param.id)
@@ -136,7 +140,7 @@ def cmd_get(args: argparse.Namespace, bridge) -> None:
         print(f"  static range   : {param.minimum} .. {param.maximum} (spec, not device-verified)")
 
 
-def cmd_dump(args: argparse.Namespace, bridge) -> None:
+def cmd_dump(args: argparse.Namespace, bridge: BridgeLike) -> None:
     if args.new_format:
         header, data = bridge.dump_preset_new(args.preset)
         print(f"NEW format dump: preset {header.preset}, {len(data)}/{header.total_bytes} bytes")
@@ -148,7 +152,7 @@ def cmd_dump(args: argparse.Namespace, bridge) -> None:
     print(f"wrote {args.output}")
 
 
-def cmd_send(args: argparse.Namespace, bridge) -> None:
+def cmd_send(args: argparse.Namespace, bridge: BridgeLike) -> None:
     """Send a preset file back to the device -- the only whole-slot write here.
 
     Arm-then-fire, like the Master utilities: ``--allow-write`` arms it and a
@@ -251,7 +255,7 @@ _COMMANDS = {
 }
 
 
-def main(argv=None) -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 

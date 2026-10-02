@@ -13,7 +13,11 @@ repos:
     rev: v2.4.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-setuptools]
+        # The hook runs mypy in its own env WITHOUT the project installed,
+        # so untyped third-party imports (textual, rtmidi) come back Any and
+        # strict flags misfire on our code (no-any-return, untyped-decorator
+        # on textual's @work). These must match [project] dependencies above.
+        additional_dependencies: [types-setuptools, "textual>=0.80", "python-rtmidi>=1.5"]
 
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

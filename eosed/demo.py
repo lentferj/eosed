@@ -14,7 +14,7 @@ backed entirely by canned in-memory data.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from eos import messages as m
 from eos import params as p
@@ -118,7 +118,8 @@ class DemoBridge:
             return _NO_SUCH_VOICE_MARKER
         return self.param_values.get(param_id, 0)
 
-    def get_parameters(self, param_ids, *, timeout: Optional[float] = None) -> Dict[int, int]:
+    def get_parameters(self, param_ids: List[int], *,
+                       timeout: Optional[float] = None) -> Dict[int, int]:
         return {pid: self.param_values.get(pid, 0) for pid in param_ids}
 
     def get_parameter_range(self, param_id: int, *,
@@ -132,7 +133,7 @@ class DemoBridge:
     def set_parameter(self, param_id: int, value: int) -> None:
         self.param_values[param_id] = value
 
-    def set_parameters(self, values) -> None:
+    def set_parameters(self, values: Iterable[Tuple[int, int]]) -> None:
         for param_id, value in values:
             self.set_parameter(param_id, value)
 
@@ -165,9 +166,9 @@ class DemoBridge:
     def set_sample_name(self, sample: int, name: str) -> None:
         self.sample_names[sample] = name
 
-    def catalog_presets(self, preset_range=range(0, 128), *,
+    def catalog_presets(self, preset_range: range = range(0, 128), *,
                        timeout: Optional[float] = None,
-                       on_progress: Optional[Callable[[int], None]] = None) -> dict:
+                       on_progress: Optional[Callable[[int], None]] = None) -> Dict[int, str]:
         result = {}
         for number in preset_range:
             if on_progress is not None:
@@ -176,9 +177,9 @@ class DemoBridge:
                 result[number] = self.preset_names[number]
         return result
 
-    def catalog_samples(self, sample_range=range(0, 128), *,
+    def catalog_samples(self, sample_range: range = range(0, 128), *,
                         timeout: Optional[float] = None,
-                        on_progress: Optional[Callable[[int], None]] = None) -> dict:
+                        on_progress: Optional[Callable[[int], None]] = None) -> Dict[int, str]:
         result = {}
         for number in sample_range:
             if on_progress is not None:
@@ -211,7 +212,8 @@ class DemoBridge:
                         max_retries: int = 3) -> bytes:
         return bytes(m.encode_u14(preset)) + self._dump_body(preset)
 
-    def dump_preset_new(self, preset: int, *, timeout: Optional[float] = None, max_retries: int = 3):
+    def dump_preset_new(self, preset: int, *, timeout: Optional[float] = None,
+                        max_retries: int = 3) -> Tuple[m.NewDumpHeader, bytes]:
         data = self._dump_body(preset)
         header = m.NewDumpHeader(preset=preset, total_bytes=len(data), num_global_params=22,
                                  num_link_params=0, num_voice_params=0, num_zone_params=0,
