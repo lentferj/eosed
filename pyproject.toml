@@ -41,15 +41,28 @@ dependencies = [
     # docs/UX-SPEC.md -- but it has everything else, and had its own copy of
     # all of it. That copy is where this project's real bug lived: the
     # settings writer emitted string values unescaped.
-    "vinsynlib",
+    "vinsynlib>=0.1.0",
 ]
 
-# vinsynlib is not on PyPI. It is the shared base of this family of terminal
-# instrument browsers and lives in a sibling checkout, so it is installed from
-# the working tree rather than from an index. Editable, because a change to
-# the library is a change here and should not need a reinstall to see.
-[tool.uv.sources]
-vinsynlib = { path = "../vinsynlib", editable = true }
+# NO committed `[tool.uv.sources]` override, deliberately.
+#
+# The obvious thing here is `vinsynlib = { path = "../vinsynlib", editable =
+# true }`, and it is what this project had while the library was being
+# written. It cannot ship: a user who only has this repository -- every user
+# who has ever cloned it -- would get `error: Distribution not found at:
+# file:///.../vinsynlib` on `uv sync` or `pip install`, and an ImportError at
+# run time if they pulled without reinstalling. Adding a dependency is
+# allowed to cost an existing clone a reinstall; it is not allowed to cost it
+# a repository it does not have.
+#
+# So the library comes from the index, like everything else. To develop
+# against a *working copy* of it, install that alongside, which shadows the
+# published version in this environment only:
+#
+#     uv pip install --python .venv/bin/python --no-deps -e ../vinsynlib
+#
+# Nothing in this file needs to change for that, and nothing in it assumes a
+# sibling directory exists.
 
 [project.urls]
 Homepage = "https://github.com/lentferj/eosed"
@@ -71,8 +84,8 @@ dev = [
 ]
 
 [project.scripts]
-eosed = "eosed.app:main"
-eoscli = "eosed.cli:main"
+eosed = "eosed.entry:app"
+eoscli = "eosed.entry:cli"
 
 [tool.setuptools]
 packages = ["eos", "eosed"]
