@@ -213,7 +213,7 @@ def cmd_send(args: argparse.Namespace, bridge: BridgeLike) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = make_parser("eoscli", __doc__ or "")
+    parser = make_parser("eoscli", __doc__ or "", distribution="eosed")
     # Every shared option's help text is the family's, from vinsynlib.spec.
     # This tool used to word four of them its own way and leave --port with
     # no help at all, which is how "MIDI port name (default: autodetect via
