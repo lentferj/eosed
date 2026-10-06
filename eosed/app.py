@@ -62,7 +62,7 @@ from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.theme import Theme
@@ -81,6 +81,9 @@ from eos import params as p
 from eosed.cli import BridgeLike
 from eosed.demo import DemoBridge
 from eosed.panel import PanelScreen
+from vinsynlib.cli import add_common_arguments, make_parser, validate_common
+from vinsynlib.keys import legend_from_bindings
+from vinsynlib.keys import wrap_blocks as _wrap_blocks
 
 # The preset page size is not a fixed constant: it's recomputed from how many
 # rows the presets pane can actually show, so a taller terminal displays more
@@ -104,32 +107,36 @@ BROWSER_RESIZE_SETTLE = 0.4
 BROWSER_EXTEND_THRESHOLD = 10
 BROWSER_EXTEND_CHUNK = 50
 
-# Block separator in the key-hint legend (see _KeyHints/wrap_blocks below).
+# Block separator in the key-hint legend. The family's.
 _LEGEND_SEP = " · "
+
+#: Textual key names translated into what a user actually types, for
+#: :func:`vinsynlib.keys.legend_from_bindings`. Keyed on the binding's whole
+#: key string, which is what that function looks up.
+PRESS_NAMES = {
+    # "=" is accepted alongside "+" so nudging up does not need the shift
+    # key, and one binding serves both — so the whole string is the key here.
+    "plus,equals_sign": "+",
+    "minus": "-",
+    "pageup": "PgUp",
+    "pagedown": "PgDn",
+    "question_mark": "?",
+}
 
 
 def wrap_blocks(blocks: List[str], width: int, sep: str = _LEGEND_SEP) -> str:
     """Pack ``blocks`` into lines no wider than ``width``, joined by ``sep``.
 
-    Ported from the sibling k2kremote project (k2kremote/app.py's
-    ``wrap_blocks``, same author, GPL-2.0-or-later — see LICENSE), which
-    solved the identical problem for its own key-hint legend. Breaks
-    happen only *between* blocks, never inside one, so a binding like
-    "u Find usage" is never split mid-label; a block wider than ``width``
-    on its own simply occupies its own line rather than being cut.
+    Re-exported from :func:`vinsynlib.keys.wrap_blocks`, which every tool in
+    this family now uses. Kept as a name because it is part of this module's
+    published surface and because the tests call it directly.
+
+    It was ported here from the sibling k2kremote, and from there into four
+    other projects, all by the same author and all GPL-2.0-or-later — see
+    LICENSE. That it took five copies to notice the function was the same in
+    all of them is the reason it is one now.
     """
-    lines: List[str] = []
-    current = ""
-    for block in blocks:
-        candidate = block if not current else current + sep + block
-        if width and len(candidate) > width and current:
-            lines.append(current)
-            current = block
-        else:
-            current = candidate
-    if current:
-        lines.append(current)
-    return "\n".join(lines)
+    return _wrap_blocks(blocks, width, sep)
 
 # The full PRESET_SELECT wire range (spec'd 0-999), not the 0-127 default
 # catalog_presets/catalog_samples use elsewhere in this codebase. That
@@ -302,6 +309,48 @@ class HistoryScreen(ModalScreen[None]):
             table.add_row("—", "", "no changes yet", "", "")
         table.call_after_refresh(table._stretch_last_column)
         table.focus()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
+class HelpScreen(ModalScreen[None]):
+    """Every key, on demand. See EosedApp.action_help.
+
+    Deliberately NOT the legend: the legend is one or two lines at the
+    bottom of the screen and this is a dialog, so the two can be the same
+    *list* without being the same *widget* and the same layout. They are the
+    same list because both read ``BINDINGS`` through one function -- which is
+    the only way this does not become the second list to keep in step.
+    """
+
+    BINDINGS = [Binding("escape", "close", "Close"),
+                Binding("q", "close", "Close", show=False)]
+
+    CSS = """
+    HelpScreen { align: center middle; }
+    HelpScreen #help-box {
+        width: 64; height: auto; max-height: 80%; border: round $accent;
+        background: $surface; padding: 1 2;
+    }
+    HelpScreen #help-scroll { height: auto; max-height: 18; }
+    """
+
+    def __init__(self, blocks: List[str]):
+        super().__init__()
+        self._blocks = blocks
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("[b]eosed keys[/b]"),
+            VerticalScroll(
+                Static("\n".join(self._blocks), id="help-body"),
+                id="help-scroll",
+            ),
+            Static("[dim]w arms writes · m is the destructive menu · "
+                   "z undoes · esc closes[/dim]"),
+            id="help-box",
+        )
 
     def action_close(self) -> None:
         self.dismiss(None)
@@ -816,7 +865,7 @@ class _BankBrowserTable(_FillWidthDataTable):
         cast("EosedApp", self.app).action_next_page()
 
 
-class _KeyHints(Static):
+class KeyHints(Static):
     """The persistent, multi-line key-binding legend at the bottom of the
     screen.
 
@@ -837,9 +886,18 @@ class _KeyHints(Static):
     here is a single space-free token, so splitting on the first space is
     unambiguous) and re-styled: the key in the theme's accent red, the
     description in its muted secondary tone.
+
+    **Renamed from ``_KeyHints``, and now built on the family's widget.**
+    The class was private, which was this project's own business; the CSS
+    selector ``_KeyHints { height: auto; }`` went with the name, so this
+    carries its own. :class:`vinsynlib.ui.hints.KeyHints` is the same
+    folding, arrived at by five projects separately. What is added on top is
+    the two-tone rendering above, which is E4XT-specific: the accent red and
+    the muted secondary come from this instrument's own front panel, and the
+    family has no opinion about what colour a key hint is.
     """
 
-    DEFAULT_CSS = "_KeyHints { height: auto; }"
+    DEFAULT_CSS = "KeyHints { height: auto; }"
 
     def __init__(self, blocks: List[str], *, id: Optional[str] = None):
         super().__init__(id=id)
@@ -895,7 +953,7 @@ class EosedApp(App):
     #tables.compact #presets { width: 40%; }
     #tables.compact #params { width: 60%; }
 
-    /* Write mode armed (see action_toggle_write_mode): the top bar turns
+    /* Write gate armed (see action_toggle_write): the top bar turns
        the E4XT badge's own red instead of its default grey, as a
        persistent, glanceable reminder that edits/rename/Master are live. */
     Header.-write-armed { background: $accent; color: $foreground; }
@@ -919,11 +977,12 @@ class EosedApp(App):
         Binding("e", "toggle_view", "Extended view"),
         Binding("escape", "back_to_preset", "Back to preset"),
         Binding("k", "front_panel", "Front panel"),
-        Binding("m", "master_menu", "Master"),
-        Binding("w", "toggle_write_mode", "Write mode"),
+        Binding("m", "master", "Master"),
+        Binding("w", "toggle_write", "Write gate"),
         Binding("z", "undo", "Undo"),
         Binding("Z", "undo_all", "Undo all"),
         Binding("h", "history", "History"),
+        Binding("question_mark", "help", "Help"),
         # Arrow keys can't be used here -- they move the row cursor in every
         # pane, which is the one navigation the app can't give up. "=" is
         # accepted alongside "+" so nudging up doesn't need the shift key.
@@ -1121,28 +1180,24 @@ class EosedApp(App):
         return bridge
 
     # -- layout ---------------------------------------------------------
-    # Textual key *names* that should not be shown to the user verbatim. A
-    # binding may list several keys ("plus,equals_sign"), which is exactly
-    # what to dispatch on and exactly the wrong thing to print — the legend
-    # read "plus,equals_sign Value +1" before this.
-    _LEGEND_KEY_NAMES = {"equals_sign": "=", "plus": "+", "minus": "-",
-                         "pageup": "PgUp", "pagedown": "PgDn"}
-
-    def _legend_key(self, key: str) -> str:
-        """First key of a binding, in the form a user would type it."""
-        first = key.split(",", maxsplit=1)[0]
-        return self._LEGEND_KEY_NAMES.get(first, first)
+    # Textual key *names* that should not be shown to the user verbatim -- see
+    # PRESS_NAMES at module scope, which is where the table now lives so that
+    # legend_from_bindings can be handed it directly. A binding may list
+    # several keys, which is exactly what to dispatch on and exactly the wrong
+    # thing to print: the legend read "plus,equals_sign Value +1" before this.
+    _legend_key_names = PRESS_NAMES
 
     def _legend_blocks(self) -> List[str]:
         # BINDINGS is the single source of truth for both key dispatch and
         # the legend text — unlike k2kremote's separate LEGEND_BLOCKS table,
         # there is no second list to keep in sync by hand. `show=False`
         # entries (e.g. "enter") are hidden the same way Footer hid them.
-        # isinstance narrows for mypy: App's BINDINGS type admits tuples, but
-        # every entry here is a Binding (a tuple could not carry show=...).
-        return [f"{self._legend_key(binding.key)} {binding.description}"
-                for binding in self.BINDINGS
-                if isinstance(binding, Binding) and binding.show]
+        #
+        # This is now vinsynlib.keys.legend_from_bindings, which is what the
+        # other eight projects use, so a rule about what a legend contains
+        # changes here once rather than in a ninth copy. The help screen reads
+        # this same function, so `?` and the hint bar cannot disagree either.
+        return legend_from_bindings(self.BINDINGS, press_names=PRESS_NAMES)
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -1155,7 +1210,7 @@ class EosedApp(App):
             classes="compact" if self.compact_view else "",
         )
         yield Static("", id="status")
-        yield _KeyHints(self._legend_blocks(), id="keyhints")
+        yield KeyHints(self._legend_blocks(), id="keyhints")
 
     def action_toggle_view(self) -> None:
         self.compact_view = not self.compact_view
@@ -1168,7 +1223,7 @@ class EosedApp(App):
             bridge_mod.save_compact_view(self.compact_view, self._view_config_path)
         self.set_status(f"view: {'compact' if self.compact_view else 'extended'}")
 
-    def action_toggle_write_mode(self) -> None:
+    def action_toggle_write(self) -> None:
         # A runtime arm/disarm switch on top of --allow-write, not a
         # replacement for it: --allow-write (always on for --demo) just
         # sets the *starting* state; this key can arm or disarm either way,
@@ -1179,6 +1234,22 @@ class EosedApp(App):
         self._update_write_mode_indicator()
         self.set_status("write mode ON — edit/rename/Master enabled" if self.allow_write
                         else "write mode OFF — read-only")
+
+    def action_help(self) -> None:
+        """Show this screen.
+
+        Added with the family's shared `? help` key, which eosed did not
+        have. The key is the reason: a user who learns `? help` in any other
+        program of this family should not find it absent here, and the
+        spec's editor tier lists it alongside r, w, z, Z, h and m.
+
+        The body is assembled from BINDINGS through the same
+        `_legend_blocks` the hint bar at the bottom of the screen uses, so
+        there is one list of what the keys are rather than two. That is the
+        whole reason it is not written out: a hand-written key list is a
+        second list to keep in step with the first, and it drifts.
+        """
+        self.push_screen(HelpScreen(self._legend_blocks()))
 
     def _update_write_mode_indicator(self) -> None:
         # The E4XT badge's own red (see E4XT_THEME.accent) instead of the
@@ -2968,7 +3039,7 @@ class EosedApp(App):
         # the reason the pane stayed empty, which is exactly the fault the
         # config bug (§23) was about.
 
-    def action_master_menu(self) -> None:
+    def action_master(self) -> None:
         self.push_screen(MasterScreen(self.current_preset), self._on_master_result)
 
     def _on_master_result(self, action: Optional[str]) -> None:
@@ -3009,31 +3080,53 @@ class EosedApp(App):
 
 # --- CLI entry ---------------------------------------------------------------
 
-def main(argv: Optional[List[str]] = None) -> None:
-    parser = argparse.ArgumentParser(
-        prog="eosed", description="Textual editor for the EOS remote editor protocol.")
-    parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
-    parser.add_argument("--device-id", type=int, default=None,
-                        help="SysEx device id. With autodetect, selects WHICH device to "
-                             "use when several are connected; the EOS manual says each "
-                             "unit should have a different id. Default: whichever answers")
-    parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT,
-                        help="seconds to wait for any one reply "
-                             "(default: %(default)s)")
-    parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
-                        help="local settings file: caches the last successful autodetect port "
-                             "pair, and holds the view/cache-sweep/program-change "
-                             "preferences (default: config.toml; ignored if absent)")
-    parser.add_argument("--demo", action="store_true",
-                        help="use a canned in-memory device; never opens a MIDI port")
-    parser.add_argument("--panel-render", default="quadrant",
-                        choices=("quadrant", "half", "braille"),
-                        help="how the front panel (k) draws the LCD: quadrant "
-                             "and braille need 124 columns, half-block 244")
-    parser.add_argument("--allow-write", action="store_true",
-                        help="enable writes to real hardware (parameter edits, rename, the Master "
-                             "menu's destructive operations); always on for --demo")
-    args = parser.parse_args(argv)
+def build_parser() -> argparse.ArgumentParser:
+    parser = make_parser(
+        "eosed", "Textual editor for the EOS remote editor protocol.")
+    # Every shared option's help text is the family's, from vinsynlib.spec.
+    # --allow-write keeps the family's wording, which is the sharper of the
+    # two: "start with the write gate armed (default: locked)" says what the
+    # flag does and where it starts, where this project's own text described
+    # what it enables without saying that the default is the safe one.
+    #
+    # --channel is deliberately absent: this protocol selects with
+    # PRESET_SELECT, not a program change, so there is no channel to send one
+    # on, and a flag accepted and then ignored is worse than no flag.
+    add_common_arguments(
+        parser,
+        port=True,
+        channel=False,
+        device_id=True,
+        timeout=True,
+        config=True,
+        demo=True,
+        allow_write=True,
+    )
+    # --panel-render is eosed's own: it says how the front-panel emulation
+    # draws an LCD bitmap, which no other instrument in the family has and
+    # the family has no opinion about.
+    parser.add_argument(
+        "--panel-render", default="quadrant",
+        choices=("quadrant", "half", "braille"),
+        help="how the front panel (k) draws the LCD: quadrant "
+             "and braille need 124 columns, half-block 244")
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Run the editor. Returns the family's exit code.
+
+    Was `-> None`, like `eosed.cli.main` beside it. docs/UX-SPEC.md section 2
+    gives the family three codes -- 0 it worked, 1 it did not, 2 the command
+    line was wrong -- and a front door that cannot answer "did it work" is
+    not usable from a script, which is half of why it exists.
+    """
+    args = build_parser().parse_args(argv)
+
+    # The family's range check, before any port is opened: a --device-id
+    # outside 0-127 is not a device ID, and sending one addresses a machine
+    # that is not this one.
+    validate_common(args, channel_names=())
 
     if args.demo:
         app = EosedApp(DemoBridge(), allow_write=True, demo=True,
@@ -3045,7 +3138,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                                 config_path=args.config),
             panel_render=args.panel_render)
     app.run()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

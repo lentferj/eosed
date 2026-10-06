@@ -5,16 +5,19 @@
 #
 # These tests use fake MIDI ports — no hardware required.
 
+import sys
 import time
 
 import pytest
 
 from eos import bridge as bridge_mod
+from eos import config as eos_config
 from eos import messages as m
 from eos import params as p
 from eos.bridge import EosBridge, MultiIn, ThrottledOut
 
 # --- fake rtmidi (for port enumeration / autodetect / ThrottledOut tests) --
+
 
 class FakeOut:
     def __init__(self):
@@ -59,6 +62,27 @@ class FakeRtmidiModule:
     MidiIn = FakePort
 
 
+def _fake_rtmidi(monkeypatch, module=None):
+    """Put a fake rtmidi in front of both the bridge and the library.
+
+    Two modules, two reasons, and getting this wrong makes a test pass or
+    fail depending on the machine it runs on.
+
+    `eos.bridge` still imports rtmidi at module scope for the code that
+    OPENS a port -- `_open_out`, `_open_in`, `MultiIn` -- so tests of those
+    need the patch here. The port *enumeration* is now
+    `vinsynlib.midi.list_ports`, which imports rtmidi lazily inside the call,
+    so a test of that needs the patch in `sys.modules`. Patching only the
+    bridge leaves `list_ports` talking to the real MIDI stack: it passes on a
+    host with no ports, fails on one with any, and returns whatever this
+    machine actually has when it fails.
+    """
+    fake = FakeRtmidiModule if module is None else module
+    monkeypatch.setattr(bridge_mod, "rtmidi", fake)
+    monkeypatch.setitem(sys.modules, "rtmidi", fake)
+    return fake
+
+
 def test_throttle_enforces_gap_for_sysex():
     out = ThrottledOut(FakeOut(), gap=0.05)
     start = time.time()
@@ -82,12 +106,12 @@ def test_write_gap_applies_after_a_write_not_after_a_read():
     whatever follows it, while a read keeps the small one."""
     out = ThrottledOut(FakeOut(), gap=0.0, write_gap=0.20)
 
-    start = time.time()                      # read then read: no write gap owed
+    start = time.time()  # read then read: no write gap owed
     out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
     out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
     assert time.time() - start < 0.10
 
-    start = time.time()                      # write then anything: write gap owed
+    start = time.time()  # write then anything: write gap owed
     out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x01, 0xF7], write=True)
     out.send_message([0xF0, 0x18, 0x21, 0x00, 0x55, 0x02, 0xF7])
     assert time.time() - start >= 0.20
@@ -96,10 +120,11 @@ def test_write_gap_applies_after_a_write_not_after_a_read():
 def test_bridge_flags_only_fire_and_forget_sends_as_writes():
     """Requests block for a reply, so the round trip paces them; writes have
     nothing to pace against and must be the ones marked."""
+
     def handler(frame):
         _, command, _ = m.parse_frame(frame)
         if command == m.Command.PARAMETER_EDIT:
-            return None                       # a write: no reply exists
+            return None  # a write: no reply exists
         return m.ParameterEdit(values=[(1, 5)]).encode()
 
     bridge = _bridge_with(handler)
@@ -127,7 +152,7 @@ def test_non_sysex_is_not_throttled():
 
 
 def test_list_ports_and_bidirectional(monkeypatch):
-    monkeypatch.setattr(bridge_mod, "rtmidi", FakeRtmidiModule)
+    _fake_rtmidi(monkeypatch)
     ins, outs = bridge_mod.list_ports()
     assert ins == FakePort.PORTS
     assert outs == FakePort.PORTS
@@ -164,6 +189,7 @@ def test_multi_in_raises_if_nothing_matches(monkeypatch):
 
 # --- device inquiry autodetect ---------------------------------------------
 
+
 class _AutodetectPort:
     """A fake in/out port for autodetect: MidiOut records what's sent; a
     scripted MidiIn on the 'answering' port replies with a Device Inquiry
@@ -188,8 +214,25 @@ class _AutodetectPort:
 
     def send_message(self, message):
         if self.index == self.ANSWERING_INDEX:
-            reply = bytes([0xF0, 0x7E, 0x00, 0x06, 0x02, 0x18, 0x01, 0x04, 0x04, 0x05,
-                           ord('4'), ord('.'), ord('0'), ord('0'), 0xF7])
+            reply = bytes(
+                [
+                    0xF0,
+                    0x7E,
+                    0x00,
+                    0x06,
+                    0x02,
+                    0x18,
+                    0x01,
+                    0x04,
+                    0x04,
+                    0x05,
+                    ord("4"),
+                    ord("."),
+                    ord("0"),
+                    ord("0"),
+                    0xF7,
+                ]
+            )
             _AutodetectPort._pending_reply = list(reply)
 
     def get_message(self):
@@ -213,8 +256,23 @@ class _AutodetectRtmidi:
 
 def _inquiry_reply(device_id: int, member=(0x04, 0x04)) -> list:
     """A Universal Device Inquiry reply carrying a given SysEx device id."""
-    return [0xF0, 0x7E, device_id, 0x06, 0x02, 0x18, 0x01, 0x04, member[0], member[1],
-            ord('4'), ord('.'), ord('0'), ord('0'), 0xF7]
+    return [
+        0xF0,
+        0x7E,
+        device_id,
+        0x06,
+        0x02,
+        0x18,
+        0x01,
+        0x04,
+        member[0],
+        member[1],
+        ord("4"),
+        ord("."),
+        ord("0"),
+        ord("0"),
+        0xF7,
+    ]
 
 
 class _TwoMachinePort:
@@ -226,7 +284,7 @@ class _TwoMachinePort:
     """
 
     PORTS = ["Shared Out", "Machine A In", "Machine B In"]
-    IDS = {1: 3, 2: 7}          # input port index -> device id it answers with
+    IDS = {1: 3, 2: 7}  # input port index -> device id it answers with
     _unread = set()
 
     def __init__(self, queue_size_limit=None):
@@ -302,6 +360,7 @@ def test_autodetect_reports_nothing_found_for_an_absent_device_id(monkeypatch):
 def test_autodetect_one_device_on_two_input_ports_is_not_ambiguous(monkeypatch):
     """A single machine heard on two inputs (merged/THRU'd interface) answers
     twice with the SAME id -- that is one device, not an ambiguity."""
+
     class OneMachineTwoPorts(_TwoMachinePort):
         IDS = {1: 5, 2: 5}
 
@@ -347,6 +406,7 @@ def test_autodetect_raises_when_nothing_answers(monkeypatch):
 
 # --- last-known-good port cache ---------------------------------------------
 
+
 def test_load_last_ports_missing_file_returns_none(tmp_path):
     assert bridge_mod.load_last_ports(str(tmp_path / "does-not-exist.toml")) is None
 
@@ -386,7 +446,8 @@ def test_config_is_written_as_utf8_regardless_of_the_locale_codec(tmp_path, monk
     assert encodings, "config was never written"
     assert all(enc == "utf-8" for enc in encodings), (
         f"config written with encoding={encodings!r} -- an unspecified encoding "
-        f"means the locale codec, which is cp1252 on Windows")
+        f"means the locale codec, which is cp1252 on Windows"
+    )
 
 
 def test_config_written_by_a_pre_fix_windows_build_is_recovered(tmp_path):
@@ -395,8 +456,10 @@ def test_config_written_by_a_pre_fix_windows_build_is_recovered(tmp_path):
     # dropped one last time on first read after the fix.
     path = tmp_path / "config.toml"
     path.write_bytes(
-        "# eosed local config — gitignored, safe to delete.\n"
-        'cache_depth = "full"\n'.encode("cp1252"))
+        '# eosed local config — gitignored, safe to delete.\ncache_depth = "full"\n'.encode(
+            "cp1252"
+        )
+    )
 
     assert bridge_mod.load_cache_depth(str(path)) == "full"
 
@@ -462,10 +525,12 @@ def test_cache_all_settings_coexist_with_other_config_keys(tmp_path):
     path = str(tmp_path / "config.toml")
     bridge_mod.save_compact_view(True, path)
     bridge_mod.save_last_ports("Out Port", "In Port", path)
-    data = bridge_mod._read_config_dict(path)
-    data["cache_all_on_startup"] = True
-    data["cache_depth"] = "names"
-    bridge_mod._write_config_dict(data, path)
+    # Through eos.config.settings.update rather than the private
+    # _read_config_dict/_write_config_dict this file used to reach into: the
+    # arbitrary-key write is a real capability, it is the library's, and a
+    # test that pokes at the implementation of it is a test that breaks when
+    # the implementation moves -- which is what happened here.
+    eos_config.settings.update(path, cache_all_on_startup=True, cache_depth="names")
     assert bridge_mod.load_compact_view(path) is True
     assert bridge_mod.load_last_ports(path) == ("Out Port", "In Port")
     assert bridge_mod.load_cache_all_on_startup(path) is True
@@ -559,6 +624,7 @@ def test_autodetect_config_path_none_disables_caching(monkeypatch, tmp_path):
 
 # --- high-level operations against a scripted fake device -----------------
 
+
 class FakeDevice:
     """A minimal scripted EOS device. Pass the same instance as both
     midi_out and midi_in to an EosBridge: send_message() decodes what was
@@ -567,7 +633,7 @@ class FakeDevice:
     def __init__(self, handler):
         self.handler = handler
         self.sent = []
-        self.writes = []      # per-send: was it flagged as a fire-and-forget write?
+        self.writes = []  # per-send: was it flagged as a fire-and-forget write?
         self.inbox = []
 
     def send_message(self, message, *, write: bool = False):
@@ -599,8 +665,25 @@ def _bridge_with(handler, **kwargs) -> EosBridge:
 
 def test_inquire():
     def handler(frame):
-        return bytes([0xF0, 0x7E, 0x00, 0x06, 0x02, 0x18, 0x01, 0x04, 0x06, 0x05,
-                     ord('3'), ord('.'), ord('0'), ord('0'), 0xF7])
+        return bytes(
+            [
+                0xF0,
+                0x7E,
+                0x00,
+                0x06,
+                0x02,
+                0x18,
+                0x01,
+                0x04,
+                0x06,
+                0x05,
+                ord("3"),
+                ord("."),
+                ord("0"),
+                ord("0"),
+                0xF7,
+            ]
+        )
 
     bridge = _bridge_with(handler)
     reply = bridge.inquire()
@@ -617,26 +700,29 @@ def test_get_parameter():
     assert bridge.get_parameter(1) == 42
 
 
-@pytest.mark.parametrize("param_id, wire, expected", [
-    # E4_PRESET_TRANSPOSE (id 0, range [-24, 24]) -- the exact pair confirmed
-    # live against an E4XT Ultra rev 4.70 on 2026-07-31.
-    (0, -12 & 0x3FFF, -12),
-    (0, -24 & 0x3FFF, -24),
-    (0, 24, 24),
-    (0, 0, 0),
-    # E4_PRESET_CTRL_A (id 2, range [-1, 127]): -1 is the "off" sentinel that
-    # midi_control_display() renders, and read back as 16383 before this fix.
-    (2, 0x3FFF, -1),
-    (2, 64, 64),
-    # E4_GEN_SAMPLE (id 38) is SIGNED (device minimum -8), so its two
-    # undocumented sentinels sign-extend to -1 and -2 -- which is what the
-    # voice/zone structure walk compares against (RESOLUTION_NOTES §11/§12,
-    # §18a). Ordinary sample numbers are unaffected: they never set bit 13.
-    (38, 0x3FFF, -1),       # multisample
-    (38, 0x3FFE, -2),       # no such voice
-    (38, 999, 999),
-    (38, 0, 0),
-])
+@pytest.mark.parametrize(
+    "param_id, wire, expected",
+    [
+        # E4_PRESET_TRANSPOSE (id 0, range [-24, 24]) -- the exact pair confirmed
+        # live against an E4XT Ultra rev 4.70 on 2026-07-31.
+        (0, -12 & 0x3FFF, -12),
+        (0, -24 & 0x3FFF, -24),
+        (0, 24, 24),
+        (0, 0, 0),
+        # E4_PRESET_CTRL_A (id 2, range [-1, 127]): -1 is the "off" sentinel that
+        # midi_control_display() renders, and read back as 16383 before this fix.
+        (2, 0x3FFF, -1),
+        (2, 64, 64),
+        # E4_GEN_SAMPLE (id 38) is SIGNED (device minimum -8), so its two
+        # undocumented sentinels sign-extend to -1 and -2 -- which is what the
+        # voice/zone structure walk compares against (RESOLUTION_NOTES §11/§12,
+        # §18a). Ordinary sample numbers are unaffected: they never set bit 13.
+        (38, 0x3FFF, -1),  # multisample
+        (38, 0x3FFE, -2),  # no such voice
+        (38, 999, 999),
+        (38, 0, 0),
+    ],
+)
 def test_get_parameter_sign_extends_only_signed_params(param_id, wire, expected):
     def handler(frame):
         req = m.ParameterRequest.decode(frame)
@@ -712,6 +798,7 @@ def test_get_parameter_range_leaves_large_unsigned_maxima_alone():
     """id 61 = E4_VOICE_DELAY, unsigned 0..10000. Its maximum has bit 13 set,
     so an unconditional sign-extension turned it into -6384 -- caught live
     against an E4XT Ultra rev 4.70 (RESOLUTION_NOTES §18)."""
+
     def handler(frame):
         return m.ParameterRange(param_id=61, minimum=0, maximum=10000, default=0).encode()
 
@@ -723,6 +810,7 @@ def test_get_parameter_range_leaves_large_unsigned_maxima_alone():
 def test_parameter_range_and_value_agree_on_signedness():
     """The bug this pair of fixes closes: a range of [-24, 24] reported
     alongside a current value of 16372 for the same parameter."""
+
     def handler(frame):
         _, command, _ = m.parse_frame(frame)
         if command == m.Command.PARAMETER_MINMAXDEFAULT_REQUEST:
@@ -901,6 +989,7 @@ def test_catalog_presets_progress_callback():
 
 # --- bulk parameter fetch --------------------------------------------------
 
+
 def test_get_parameters_single_chunk():
     # spec: response is one ParameterEdit-format frame *per parameter*, not
     # one combined frame -- so the fake device must reply once per request.
@@ -910,8 +999,7 @@ def test_get_parameters_single_chunk():
 
     def handler(frame):
         req = m.ParameterRequest.decode(frame)
-        return [m.ParameterEdit(values=[(pid, on_the_wire[pid])]).encode()
-                for pid in req.param_ids]
+        return [m.ParameterEdit(values=[(pid, on_the_wire[pid])]).encode() for pid in req.param_ids]
 
     bridge = _bridge_with(handler)
     result = bridge.get_parameters([1, 6, 183])
@@ -946,11 +1034,15 @@ def test_get_parameters_ignores_unrequested_ids_in_reply():
 
 # --- destructive utilities (fire-and-forget) --------------------------------
 
-@pytest.mark.parametrize("method_name,expected_command", [
-    ("erase_ram_bank", m.Command.ERASE_RAM_BANK),
-    ("erase_all_ram_presets", m.Command.ERASE_ALL_RAM_PRESETS),
-    ("erase_all_ram_samples", m.Command.ERASE_ALL_RAM_SAMPLES),
-])
+
+@pytest.mark.parametrize(
+    "method_name,expected_command",
+    [
+        ("erase_ram_bank", m.Command.ERASE_RAM_BANK),
+        ("erase_all_ram_presets", m.Command.ERASE_ALL_RAM_PRESETS),
+        ("erase_all_ram_samples", m.Command.ERASE_ALL_RAM_SAMPLES),
+    ],
+)
 def test_destructive_no_arg_methods_send_expected_command(method_name, expected_command):
     def handler(frame):
         return None
@@ -976,6 +1068,7 @@ def test_delete_preset_sends_expected_command():
 
 
 # --- dump engine: OLD format -------------------------------------------
+
 
 def test_dump_preset_old_happy_path():
     name = b"Grand Piano     "
@@ -1065,14 +1158,25 @@ def test_dump_preset_old_gives_up_after_max_retries():
 
 # --- dump engine: NEW format ---------------------------------------------
 
+
 def test_dump_preset_new_happy_path():
     payload = bytes(range(60))
 
     def handler(frame):
         _, command, fpayload = m.parse_frame(frame)
-        if command == m.Command.PRESET_DUMP and fpayload and fpayload[0] == m.DumpSubCommand.NEW_DUMP_REQUEST:
-            header = m.NewDumpHeader(preset=5, total_bytes=len(payload), num_global_params=22,
-                                     num_link_params=0, num_voice_params=0, num_zone_params=0)
+        if (
+            command == m.Command.PRESET_DUMP
+            and fpayload
+            and fpayload[0] == m.DumpSubCommand.NEW_DUMP_REQUEST
+        ):
+            header = m.NewDumpHeader(
+                preset=5,
+                total_bytes=len(payload),
+                num_global_params=22,
+                num_link_params=0,
+                num_voice_params=0,
+                num_zone_params=0,
+            )
             return [
                 header.encode(),
                 m.NewDumpMessage(packet_number=1, data=payload).encode(),
@@ -1093,7 +1197,11 @@ def test_dump_preset_new_happy_path():
 def test_dump_preset_new_raises_on_nonexistent_preset():
     def handler(frame):
         _, command, fpayload = m.parse_frame(frame)
-        if command == m.Command.PRESET_DUMP and fpayload and fpayload[0] == m.DumpSubCommand.NEW_DUMP_REQUEST:
+        if (
+            command == m.Command.PRESET_DUMP
+            and fpayload
+            and fpayload[0] == m.DumpSubCommand.NEW_DUMP_REQUEST
+        ):
             return m.Cancel().encode()
         return None
 
@@ -1148,8 +1256,8 @@ def test_send_program_change_uses_cached_channel_and_sends_bank_select():
     channel_messages = [f for f in bridge.midi_out.sent if f[0] != 0xF0]
     # 3 per call (Bank MSB, Bank LSB, Program Change), on the reported channel
     assert len(channel_messages) == 6
-    assert channel_messages[0] == bytes([0xB0 | 2, 0, 0])     # MSB always 0 here
-    assert channel_messages[1] == bytes([0xB0 | 2, 32, 1])    # 200 // 128 == 1
+    assert channel_messages[0] == bytes([0xB0 | 2, 0, 0])  # MSB always 0 here
+    assert channel_messages[1] == bytes([0xB0 | 2, 32, 1])  # 200 // 128 == 1
     assert channel_messages[2] == bytes([0xC0 | 2, 200 % 128])
     # Only the first call needed to ask the device for the basic channel.
     assert len([f for f in bridge.midi_out.sent if f[0] == 0xF0]) == 1
@@ -1232,20 +1340,20 @@ def test_an_unparseable_config_is_left_alone_rather_than_overwritten(tmp_path, c
     """
     # The warning is once-per-run, so the warned set has to be cleared here
     # or this test passes or fails depending on what ran before it.
-    bridge_mod._warned_unreadable.clear()
+    eos_config.settings._warned = False
 
     path = tmp_path / "config.toml"
-    original = ('cache_depth = "full"\n'
-                "send_pc_on_preset_select = false\n"
-                "this line is [broken\n")
+    original = 'cache_depth = "full"\nsend_pc_on_preset_select = false\nthis line is [broken\n'
     path.write_text(original, encoding="utf-8")
 
     bridge_mod.save_compact_view(True, str(path))
 
-    assert path.read_text(encoding="utf-8") == original, \
+    assert path.read_text(encoding="utf-8") == original, (
         "an unreadable config must not be overwritten"
-    assert "could not be parsed" in capsys.readouterr().err, \
+    )
+    assert "could not be parsed" in capsys.readouterr().err, (
         "and the refusal must be visible, or it is its own silent failure"
+    )
 
 
 def test_a_missing_config_is_still_created_normally(tmp_path):
@@ -1270,23 +1378,32 @@ def test_unrelated_settings_still_survive_each_others_saves(tmp_path):
 
 
 def test_the_read_reports_why_it_returned_nothing(tmp_path):
-    """missing and unreadable must be distinguishable at the source."""
+    """missing and unreadable must be distinguishable at the source.
+
+    The status lives in vinsynlib.config.Settings.read now rather than in a
+    private helper here, and this test is what keeps the distinction from
+    quietly collapsing in the move -- a file that cannot be parsed must not
+    read the same as one that is not there, because only the first of those
+    is refused a save.
+    """
     missing = tmp_path / "nope.toml"
-    assert bridge_mod._read_config(str(missing)) == ({}, "missing")
+    assert eos_config.settings.read(str(missing)) == ({}, "ok")
 
     broken = tmp_path / "broken.toml"
     broken.write_text("this is not [valid toml", encoding="utf-8")
-    assert bridge_mod._read_config(str(broken))[1] == "unreadable"
+    assert eos_config.settings.read(str(broken)) == ({}, "unreadable")
 
     good = tmp_path / "good.toml"
-    good.write_text('compact_view = true\n', encoding="utf-8")
-    assert bridge_mod._read_config(str(good)) == ({"compact_view": True}, "ok")
+    good.write_text("compact_view = true\n", encoding="utf-8")
+    assert eos_config.settings.read(str(good)) == ({"compact_view": True}, "ok")
 
 
 # --- preset SEND: OLD format -------------------------------------------
 
+
 def _fake_device_acking_everything(seen):
     """A device that ACKs the header and every data packet it is sent."""
+
     def handler(frame):
         _, command, payload = m.parse_frame(frame)
         seen.append((command, bytes(payload)))
@@ -1296,6 +1413,7 @@ def _fake_device_acking_everything(seen):
             if payload[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE:
                 return [m.Ack(packet_number=payload[1]).encode()]
         return None
+
     return handler
 
 
@@ -1303,22 +1421,28 @@ def test_send_preset_old_refuses_without_allow_write():
     bridge = _bridge_with(lambda frame: None)
     with pytest.raises(PermissionError):
         bridge.send_preset_old(bytes(m.encode_u14(3)) + b"x" * 40)
-    assert bridge.midi_out.sent == []      # nothing reached the wire
+    assert bridge.midi_out.sent == []  # nothing reached the wire
 
 
 def test_send_preset_old_happy_path_and_packet_sequence():
     body = bytes(m.encode_u14(22)) + b"Test Preset     " + bytes(range(100)) * 6
-    assert len(body) > m.OldDumpMessage.MAX_DATA * 2   # forces three packets
+    assert len(body) > m.OldDumpMessage.MAX_DATA * 2  # forces three packets
     seen = []
     bridge = _bridge_with(_fake_device_acking_everything(seen))
 
     preset = bridge.send_preset_old(body, allow_write=True)
 
     assert preset == 22
-    header = [p for c, p in seen
-              if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_HEADER]
-    packets = [p for c, p in seen
-               if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
+    header = [
+        p
+        for c, p in seen
+        if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_HEADER
+    ]
+    packets = [
+        p
+        for c, p in seen
+        if c == m.Command.PRESET_DUMP and p[0] == m.DumpSubCommand.OLD_DUMP_MESSAGE
+    ]
     assert len(header) == 1
     assert m.decode_lsb_bytes(header[0][2:6]) == len(body)
     # packet numbers run from 1, and the data reassembles to exactly the input
@@ -1347,11 +1471,14 @@ def test_send_preset_old_resends_on_nak_then_succeeds():
     body = bytes(m.encode_u14(7)) + b"x" * 60
     bridge.send_preset_old(body, allow_write=True)
 
-    packets = [f for f in bridge.midi_out.sent
-               if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
-               and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
-    assert len(packets) == 2          # sent once, NAKed, sent again
-    assert packets[0] == packets[1]   # the resend is byte-identical
+    packets = [
+        f
+        for f in bridge.midi_out.sent
+        if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
+        and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE
+    ]
+    assert len(packets) == 2  # sent once, NAKed, sent again
+    assert packets[0] == packets[1]  # the resend is byte-identical
 
 
 def test_send_preset_old_gives_up_after_max_retries():
@@ -1365,8 +1492,7 @@ def test_send_preset_old_gives_up_after_max_retries():
 
     bridge = _bridge_with(handler)
     with pytest.raises(bridge_mod.DumpChecksumError):
-        bridge.send_preset_old(bytes(m.encode_u14(1)) + b"y" * 30,
-                               allow_write=True, max_retries=2)
+        bridge.send_preset_old(bytes(m.encode_u14(1)) + b"y" * 30, allow_write=True, max_retries=2)
 
 
 def test_send_preset_old_raises_when_device_cancels():
@@ -1400,10 +1526,13 @@ def test_send_preset_old_treats_wait_as_pause_not_failure():
     bridge = _bridge_with(handler)
     bridge.send_preset_old(bytes(m.encode_u14(4)) + b"w" * 30, allow_write=True)
     assert state["waited"]
-    packets = [f for f in bridge.midi_out.sent
-               if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
-               and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE]
-    assert len(packets) == 1          # WAIT must NOT have triggered a resend
+    packets = [
+        f
+        for f in bridge.midi_out.sent
+        if m.parse_frame(f)[1] == m.Command.PRESET_DUMP
+        and m.parse_frame(f)[2][0] == m.DumpSubCommand.OLD_DUMP_MESSAGE
+    ]
+    assert len(packets) == 1  # WAIT must NOT have triggered a resend
 
 
 def test_dump_target_and_retarget_round_trip():
@@ -1411,7 +1540,7 @@ def test_dump_target_and_retarget_round_trip():
     assert bridge_mod.EosBridge.dump_target(body) == 999
     moved = bridge_mod.EosBridge.retarget_dump(body, 22)
     assert bridge_mod.EosBridge.dump_target(moved) == 22
-    assert moved[2:] == body[2:]      # nothing but the destination changed
+    assert moved[2:] == body[2:]  # nothing but the destination changed
     assert len(moved) == len(body)
 
 

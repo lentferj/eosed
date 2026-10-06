@@ -111,8 +111,13 @@ def test_ports_lists_something(capsys):
     # no MIDI hardware.
     cli.main(["ports"])
     out = capsys.readouterr().out
-    assert "MIDI inputs:" in out
-    assert "MIDI outputs:" in out
+    # The headings are the family's now -- `inputs:` / `outputs:`, two spaces
+    # of indent -- because the listing goes through
+    # vinsynlib.midi.render_ports and reads the same in all nine programs.
+    # What is eosed's own is the note at the end.
+    assert "inputs:" in out
+    assert "outputs:" in out
+    assert "Bidirectional ports are the standard-rig candidates" in out
 
 
 def test_ports_survives_a_host_with_no_midi_backend(capsys, monkeypatch):
@@ -125,16 +130,18 @@ def test_ports_survives_a_host_with_no_midi_backend(capsys, monkeypatch):
     import rtmidi
 
     def no_backend(*args, **kwargs):
-        raise SystemError(
-            "MidiInAlsa::initialize: error creating ALSA sequencer client object.")
+        raise SystemError("MidiInAlsa::initialize: error creating ALSA sequencer client object.")
 
     monkeypatch.setattr(rtmidi, "MidiIn", no_backend)
     monkeypatch.setattr(rtmidi, "MidiOut", no_backend)
 
     cli.main(["ports"])  # must not raise
     captured = capsys.readouterr()
-    assert "MIDI inputs:" in captured.out
-    assert "MIDI outputs:" in captured.out
+    # Both sections present, and explicitly empty: "no ports" is a different
+    # answer from "no sequencer", and this is the shape that says the first.
+    assert "inputs:" in captured.out
+    assert "(none)" in captured.out
+    assert "outputs:" in captured.out
     # ... and must say the subsystem is missing, not imply nothing is plugged in.
     assert "no MIDI backend available" in captured.err
 
@@ -173,6 +180,7 @@ def test_help_does_not_raise(capsys):
 def test_demo_bridge_never_touches_rtmidi(monkeypatch):
     # Belt-and-braces: fail loudly if DemoBridge ever imports/uses rtmidi.
     import sys
+
     monkeypatch.setitem(sys.modules, "rtmidi", None)
     bridge = DemoBridge()
     assert bridge.inquire().model == "E4XT"
@@ -202,6 +210,7 @@ def test_demo_bridges_do_not_share_device_state():
 
 # --- send: the only whole-slot write, so the guard is the thing under test ---
 
+
 def test_send_without_allow_write_reports_target_and_refuses(tmp_path, capsys):
     blob = tmp_path / "p.bin"
     cli.main(["--demo", "dump", "0", str(blob)])
@@ -210,7 +219,7 @@ def test_send_without_allow_write_reports_target_and_refuses(tmp_path, capsys):
         cli.main(["--demo", "send", str(blob)])
     out = capsys.readouterr().out
     assert "will overwrite : preset 0" in out
-    assert "that slot now" in out          # it looked at the target first
+    assert "that slot now" in out  # it looked at the target first
 
 
 def test_send_reports_when_retargeted(tmp_path, capsys):

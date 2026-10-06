@@ -20,6 +20,8 @@ from eos import bridge as bridge_mod
 from eos import messages as m
 from eos import params as p
 from eosed.demo import DemoBridge
+from vinsynlib import midi as shared_midi
+from vinsynlib.cli import add_common_arguments, make_parser, validate_common
 
 #: Either bridge implementation: the live MIDI one or the canned --demo one.
 #: The cli commands only use the shared request/reply surface both provide.
@@ -41,10 +43,14 @@ def _build_bridge(args: argparse.Namespace) -> "bridge_mod.EosBridge":
         return bridge_mod.EosBridge.standard(
             args.port,
             device_id=(m.DEFAULT_DEVICE_ID if args.device_id is None else args.device_id),
-            timeout=args.timeout)
+            timeout=args.timeout,
+        )
     return bridge_mod.EosBridge.autodetect(
-        device_id=args.device_id, timeout=args.timeout, config_path=args.config,
-        on_try=lambda name: print(f"  trying {name} ...", file=sys.stderr))
+        device_id=args.device_id,
+        timeout=args.timeout,
+        config_path=args.config,
+        on_try=lambda name: print(f"  trying {name} ...", file=sys.stderr),
+    )
 
 
 def cmd_ports(args: argparse.Namespace) -> None:
@@ -53,21 +59,29 @@ def cmd_ports(args: argparse.Namespace) -> None:
     # MIDI subsystem at all -- but it says *which* of the two situations it
     # is, since "no ports" and "no ALSA sequencer" need very different
     # fixes.
+    #
+    # The listing is the family's (vinsynlib.midi.render_ports), so it reads
+    # the same as the other eight tools: inputs, outputs, two spaces of
+    # indent, and a bracketed mark on a port that can answer both ways. What
+    # is eosed's own is the note at the end, which is where its "these are
+    # the standard-rig candidates" advice now lives -- it used to be a third
+    # section with its own heading, and this tool's bidirectional list came
+    # from a SECOND rtmidi enumeration, so the two halves of one answer could
+    # in principle disagree about which ports exist.
     try:
         ins, outs = bridge_mod.list_ports()
-        both = bridge_mod.bidirectional_ports()
     except bridge_mod.MidiUnavailable as exc:
-        ins = outs = both = []
+        ins = outs = []
         print(f"warning: {exc}", file=sys.stderr)
-    print("MIDI inputs:")
-    for name in ins:
-        print(f"  {name}")
-    print("MIDI outputs:")
-    for name in outs:
-        print(f"  {name}")
-    print("\nBidirectional (standard-rig candidates):")
-    for name in both:
-        print(f"  {name}")
+    print(
+        shared_midi.render_ports(
+            ins,
+            outs,
+            note="Bidirectional ports are the standard-rig candidates: a device "
+            "that can be asked a question has both an input and an output. "
+            "`eoscli hardware` asks each one who is there.",
+        )
+    )
 
 
 def cmd_inquire(args: argparse.Namespace, bridge: BridgeLike) -> None:
@@ -103,8 +117,7 @@ def cmd_memory(args: argparse.Namespace, bridge: BridgeLike) -> None:
     preset_mem = bridge.preset_memory()
     sample_mem = bridge.sample_memory()
     print(f"Preset memory  : {preset_mem.free_kb} / {preset_mem.total_kb} kB free")
-    print(f"Sample memory  : {sample_mem.total_mb} MB total, "
-          f"~{sample_mem.free_10kb * 10} kB free")
+    print(f"Sample memory  : {sample_mem.total_mb} MB total, ~{sample_mem.free_10kb * 10} kB free")
 
 
 def cmd_catalog(args: argparse.Namespace, bridge: BridgeLike) -> None:
@@ -176,13 +189,16 @@ def cmd_send(args: argparse.Namespace, bridge: BridgeLike) -> None:
     try:
         print(f"  that slot now  : {bridge.get_preset_name(preset)!r}")
     except Exception as exc:
-        print(f"  that slot now  : unreadable ({exc.__class__.__name__}) -- "
-              f"proceed only if you know what is there")
+        print(
+            f"  that slot now  : unreadable ({exc.__class__.__name__}) -- "
+            f"proceed only if you know what is there"
+        )
 
     if not args.allow_write:
         raise SystemExit(
             "refusing: this overwrites the whole preset slot. Re-run with "
-            "--allow-write once you have checked the target above.")
+            "--allow-write once you have checked the target above."
+        )
     if not args.yes:
         typed = input(f"  type the preset number {preset} to confirm: ").strip()
         if typed != str(preset):
@@ -197,31 +213,59 @@ def cmd_send(args: argparse.Namespace, bridge: BridgeLike) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="eoscli", description=__doc__)
-    parser.add_argument("--port", help="MIDI port name (default: autodetect via Device Inquiry)")
-    parser.add_argument("--device-id", type=int, default=None,
-                        help="SysEx device id. With autodetect, selects WHICH device to "
-                             "use when several are connected; the EOS manual says each "
-                             "unit should have a different id. Default: whichever answers")
-    parser.add_argument("--timeout", type=float, default=bridge_mod.DEFAULT_TIMEOUT,
-                        help="seconds to wait for any one reply "
-                             "(default: %(default)s)")
-    parser.add_argument("--config", default=bridge_mod.DEFAULT_CONFIG_PATH, metavar="FILE",
-                        help="local settings file: caches the last successful autodetect port "
-                             "pair, and holds the view/cache-sweep/program-change "
-                             "preferences (default: config.toml; ignored if absent)")
-    parser.add_argument("--demo", action="store_true",
-                        help="use a canned in-memory device; never opens a MIDI port")
+    parser = make_parser("eoscli", __doc__ or "")
+    # Every shared option's help text is the family's, from vinsynlib.spec.
+    # This tool used to word four of them its own way and leave --port with
+    # no help at all, which is how "MIDI port name (default: autodetect via
+    # Device Inquiry)" ended up in one program and "MIDI port name (default:
+    # the one remembered in config.toml)" in the other eight.
+    #
+    # --channel is deliberately absent: this protocol selects with
+    # PRESET_SELECT, not a program change, so there is no channel to send one
+    # on, and a flag accepted and then ignored is worse than no flag.
+    #
+    # --yes and --allow-write are deliberately absent TOO, and they are the
+    # spec's editor flags. They already exist on the `send` subcommand, which
+    # is the only command that writes, and adding them globally would be a
+    # flag that lies: argparse gives the subparser's value to the shared
+    # namespace, so `eoscli --allow-write send f` would have its global True
+    # overwritten by the subparser's default False, and `send` would refuse
+    # an arm the user had given. The family's own guidance -- a flag that is
+    # accepted and then ignored is worse than no flag -- applies to a flag
+    # ignored in the other direction too.
+    add_common_arguments(
+        parser,
+        port=True,
+        channel=False,
+        device_id=True,
+        timeout=True,
+        config=True,
+        demo=True,
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("ports", help="list MIDI ports")
-    sub.add_parser("inquire", help="identify the connected EOS device")
+    # The spec makes `hardware` the canonical name for "ask the unit who it
+    # is", with `inquire` and `config` as the older spellings. `inquire` is
+    # kept as an alias and `config` is deliberately NOT made one: in THIS
+    # program `config` is a separate, different command -- installed options
+    # and RAM/ROM/Flash sizes -- so aliasing it would silently run the wrong
+    # one. The collision the rename was made to resolve exists here too,
+    # between this command and the --config flag, and the way this project
+    # resolves it is by naming the command `hardware` and leaving `config`
+    # alone.
+    sub.add_parser("hardware", aliases=["inquire"], help="identify the connected EOS device")
     sub.add_parser("config", help="installed options and RAM/ROM/Flash sizes")
     sub.add_parser("memory", help="Preset/Sample memory totals and free space")
 
     catalog = sub.add_parser("catalog", help="list preset names over a range")
-    catalog.add_argument("--range", dest="range", type=_parse_range, default=(0, 127),
-                         help="preset range LOW-HIGH (default: 0-127)")
+    catalog.add_argument(
+        "--range",
+        dest="range",
+        type=_parse_range,
+        default=(0, 127),
+        help="preset range LOW-HIGH (default: 0-127)",
+    )
     catalog.add_argument("--progress", action="store_true", help="show scan progress on stderr")
 
     get = sub.add_parser("get", help="read one parameter's current value")
@@ -234,17 +278,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     send = sub.add_parser("send", help="send a preset file to the device (OVERWRITES a slot)")
     send.add_argument("file", help="preset dump file, as written by `dump`")
-    send.add_argument("--preset", type=int, default=None,
-                      help="destination preset (default: the one the dump came from)")
-    send.add_argument("--allow-write", action="store_true",
-                      help="arm the write; without it the command only reports the target")
-    send.add_argument("--yes", action="store_true",
-                      help="skip the typed confirmation (for scripts that have already asked)")
+    send.add_argument(
+        "--preset",
+        type=int,
+        default=None,
+        help="destination preset (default: the one the dump came from)",
+    )
+    send.add_argument(
+        "--allow-write",
+        action="store_true",
+        help="arm the write; without it the command only reports the target",
+    )
+    send.add_argument(
+        "--yes",
+        action="store_true",
+        help="skip the typed confirmation (for scripts that have already asked)",
+    )
 
     return parser
 
 
 _COMMANDS = {
+    "hardware": cmd_inquire,
+    # The alias is listed as its own key rather than relying on argparse to
+    # canonicalise, because it does not: `parse_args(["inquire"])` puts the
+    # SPELLED name in args.command, so a single "hardware" entry would make
+    # every alias a KeyError at dispatch time. Adding an alias is then a
+    # two-line change in one dict rather than a lookup table elsewhere.
     "inquire": cmd_inquire,
     "config": cmd_config,
     "memory": cmd_memory,
@@ -255,13 +315,27 @@ _COMMANDS = {
 }
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
+    """Run one command. Returns the family's exit code.
+
+    Was `-> None`, and returned nothing: 0 for everything that worked and a
+    bare `return` out of the `ports` branch. docs/UX-SPEC.md section 2 gives
+    the family three codes -- 0 it worked, 1 it did not, 2 the command line
+    was wrong -- and a front door that cannot answer "did it work" is not
+    usable from a script, which is half of why it exists.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # The family's range check, before any port is opened. There is no
+    # --channel here (see build_parser), so this is about --device-id: a
+    # value outside 0-127 is not a device ID, and sending one is how a
+    # message goes to a machine that is not this one.
+    validate_common(args, channel_names=())
+
     if args.command == "ports":
         cmd_ports(args)
-        return
+        return 0
 
     try:
         bridge = DemoBridge() if args.demo else _build_bridge(args)
@@ -274,7 +348,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"error: {exc}")
     finally:
         bridge.close()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

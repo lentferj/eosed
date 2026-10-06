@@ -115,7 +115,9 @@ eos/bridge.py
     License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
   Both k2kremote and mpc2emu are sibling projects by the same author, also
   released under GPL-2.0-or-later. The rest of this file (EosBridge, the
-  config.toml read/write helpers) is original work.
+  autodetect strategy, the signed-parameter handling) is original work; the
+  config.toml read/write helpers moved to eos/config.py, which is listed
+  below.
 
 eos/params.py (LFO rate display)
   _LFO_UNITS1[] / _LFO_UNITS2[] are the EOS firmware's own lfounits1[] and
@@ -135,14 +137,34 @@ eos/params.py (LFO rate display)
   mpc2emu contributors, GPL-2.0-or-later). Its three measured anchors are what
   located the firmware tables and are retained as a test.
 
-eosed/app.py
-  Mostly original work, except: the key-hint legend's fold-to-terminal-width
-  algorithm (wrap_blocks) is ported from the sibling k2kremote project
-  (k2kremote/app.py's wrap_blocks), same author, released under
-  GPL-2.0-or-later.
+eos/config.py, eosed/app.py, eosed/cli.py
+  The settings store, the key-hint legend's fold-to-terminal-width algorithm
+  (wrap_blocks), the parser construction and the port listing are bindings of
+  vinsynlib, the shared base of this family of terminal instrument browsers --
+  see the README's Quick Start for how it is installed. wrap_blocks was
+  originally ported here from the sibling k2kremote, and that copy was then
+  copied into four more projects; vinsynlib is where it now lives once.
+  vinsynlib was itself assembled from the copies emorphed, ensqsqed, kwsed,
+  nanosyned, p2ked, rxved, s3ked and x5ded each carried, and is
+  GPL-2.0-or-later:
+    vinsynlib
+    Copyright (C) 2026  vinsynLib contributors
+    License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
 
-All other files (eos/__init__.py, eosed/__init__.py, eosed/cli.py,
-eosed/demo.py, tests/, tools/)
+  The settings store was THIS project's own file before that, and is where
+  the family got its bug: the writer emitted f'{key} = "{value}"' with no
+  escaping, so a double quote in an ALSA port name produced a file that was
+  not TOML -- and since the writer correctly refuses to overwrite a file it
+  cannot parse, that first bad write was also the last one, and the cache
+  never healed without somebody deleting the file by hand. Fixed in the
+  library; tests/test_config_paths.py is what keeps it fixed here.
+
+  The rest of eosed/app.py is original work, apart from the front-panel and
+  LCD emulation in eosed/panel.py and eos/lcd.py, which are also original.
+
+All other files (eos/__init__.py, eos/lcd.py, eos/messages.py,
+eos/panel.py, eos/params.py, eos/terms.py, eosed/__init__.py,
+eosed/demo.py, eosed/panel.py, tests/, tools/)
   Original work. Released under GPL-2.0-or-later.
 
 -------------------------------------------------------------------------------

@@ -213,9 +213,15 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 Install the dev dependencies and run the full check suite:
 
 ```sh
+.venv/bin/pip install --no-deps -e ../vinsynlib   # once; see Quick Start
 pip install -e ".[dev]"
 make check
 ```
+
+`make audit` runs pip-audit with `--skip-editable`, because eosed and
+vinsynlib are both installed editable from local checkouts and neither is a
+distribution on an index — there is nothing for it to resolve or report
+against.
 
 This runs, in order:
 
@@ -242,8 +248,10 @@ interface, no sampler, no sound hardware of any kind.
 git clone https://github.com/lentferj/eosed
 cd eosed
 python3 -m venv .venv
+# vinsynlib first -- see below. --no-deps because its deps are ours too.
+.venv/bin/pip install --no-deps -e ../vinsynlib
 .venv/bin/pip install -e .
-.venv/bin/eoscli --demo inquire
+.venv/bin/eoscli --demo hardware
 .venv/bin/eosed --demo
 ```
 
@@ -254,10 +262,36 @@ python3 -m venv .venv
 git clone https://github.com/lentferj/eosed
 cd eosed
 py -3 -m venv .venv
+.venv\Scripts\pip install --no-deps -e ../vinsynlib
 .venv\Scripts\pip install -e .
-.venv\Scripts\eoscli --demo inquire
+.venv\Scripts\eoscli --demo hardware
 .venv\Scripts\eosed --demo
 ```
+
+**vinsynlib is not on PyPI.** It is the shared base of this family of
+terminal instrument browsers and holds the settings cache, the keymap and
+legend, the command line and the port listing. It is a sibling checkout, so
+it is installed from the working tree and installed *first*, so the second
+command finds the requirement already satisfied. `uv` reads the path from
+`[tool.uv.sources]` in `pyproject.toml` instead of being told. The checkout
+therefore has to look like this:
+
+```
+git-repos/
+  eosed/            <- this one
+  vinsynlib/        <- the shared base
+  emorphed/  ensqsqed/  kwsed/  nanosyned/  p2ked/  rxved/  s3ked/  x5ded/
+```
+
+`pip install -e .` on its own fails on a machine set up from an older copy
+of this text, with `No matching distribution found for vinsynlib`.
+
+Note the `eoscli --demo hardware` above: the spec renamed `inquire` to
+`hardware` because in one program `config` meant "which ROMs are fitted"
+while the `--config` flag beside it meant the settings file. In *this*
+program `config` is a genuinely different command -- installed options and
+RAM/ROM/Flash sizes -- so it is deliberately not an alias, and `inquire`
+still works as one.
 
 To run the test suite as well, install the dev extra instead — `pip install -e
 ".[dev]"`. **Use double quotes.** Bare `.[dev]` is a glob in zsh (the default
@@ -470,13 +504,13 @@ touches local state).
 | **Inspect** | `v` Voices · `l` Links · `u` Find usage · `i` Integrity · `h` History |
 | **Cache** | `c` Cache structure · `C` Cache everything · `x` Clear usage cache |
 | **Edit** | `Enter` Edit value · `+` Value +1 · `-` Value -1 · `o` Rename · `z` Undo · `Z` Undo all · `w` Write mode |
-| **Other** | `e` Extended view · `m` Master · `k` Front panel · `q` Quit |
+| **Other** | `e` Extended view · `m` Master · `k` Front panel · `?` Help · `q` Quit |
 
 `PageUp`/`PageDown` page the Preset/Sample bank; inside the Parameters
 pane they scroll normally. Scrolling near the bottom of a bank loads more
 entries automatically. Every key above is also shown in the hint bar at the
-bottom of the screen, which is generated from the same binding table this
-list is — so the two cannot disagree.
+bottom of the screen, and `?` lists them again in full; both are generated
+from the same binding table this list is, so they cannot disagree.
 
 <p align="center">
   <img src="docs/screenshots/extended_view_voice.png" alt="eosed extended 4-pane view: Preset, Voice, Parameters (voice group), and Samples panes, with V2 of a three-voice preset selected" width="900">

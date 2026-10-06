@@ -35,7 +35,21 @@ classifiers = [
 dependencies = [
     "textual>=0.80",
     "python-rtmidi>=1.5",
+    # The shared base of this family of terminal instrument browsers: the
+    # settings cache, the keymap and legend, the parser, the port listing.
+    # eosed is an EDITOR and so has no favourites store -- see
+    # docs/UX-SPEC.md -- but it has everything else, and had its own copy of
+    # all of it. That copy is where this project's real bug lived: the
+    # settings writer emitted string values unescaped.
+    "vinsynlib",
 ]
+
+# vinsynlib is not on PyPI. It is the shared base of this family of terminal
+# instrument browsers and lives in a sibling checkout, so it is installed from
+# the working tree rather than from an index. Editable, because a change to
+# the library is a change here and should not need a reinstall to see.
+[tool.uv.sources]
+vinsynlib = { path = "../vinsynlib", editable = true }
 
 [project.urls]
 Homepage = "https://github.com/lentferj/eosed"
@@ -116,6 +130,14 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # assert is the point of tests
+
+[tool.ruff.lint.isort]
+# vinsynlib is listed as first-party rather than third-party because it is: a
+# sibling checkout of this same family, developed alongside eosed rather than
+# vendored from an index. Left out, ruff sorts its imports into a separate
+# third-party block and the family's own code ends up visually separated from
+# eosed's, which is the opposite of what it is.
+known-first-party = ["eos", "eosed", "vinsynlib"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

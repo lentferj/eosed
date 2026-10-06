@@ -50,16 +50,15 @@ docs/RESOLUTION_NOTES.md before relying on this against real hardware.
 from __future__ import annotations
 
 import contextlib
-import os
-import sys
 import time
-import tomllib
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 import rtmidi
 
+from eos import config as config_mod
 from eos import messages as m
 from eos import params as p
+from vinsynlib import midi
 
 # --- defaults ----------------------------------------------------------
 SEND_GAP = 0.05            # conservative; NOT reverse-engineered for EOS (see module docstring)
@@ -70,127 +69,37 @@ AUTODETECT_TIMEOUT = 1.0
 _MAX_INQUIRY_DRAIN = 64      # messages read from one port in one pass
 _MAX_INQUIRY_REPLIES = 32    # Device Inquiry replies kept per probe
 DEFAULT_DEVICE_ID = m.DEFAULT_DEVICE_ID
-DEFAULT_CONFIG_PATH = "config.toml"  # CWD-relative, matching k2kremote's BridgeConfig convention
+#: CWD-relative, on purpose: a disposable per-checkout cache of which port
+#: answered last, gitignored. Re-exported from eos.config, where the store
+#: now lives, so this module stays the one import site for it.
+DEFAULT_CONFIG_PATH = config_mod.DEFAULT_CONFIG_PATH
 
 
 # --- config.toml: a flat, local, gitignored key/value store -----------------
-# Shared by the port cache below and eosed.app's view-mode preference.
-# Read-modify-write (not a blind overwrite) so unrelated keys survive each
-# other's saves — this file holds more than one independent setting.
+# The store was this file's own, and so were five helpers behind it. Both are
+# now :mod:`eos.config`, which is a binding of vinsynlib.config.Settings:
+# read-modify-write, the refusal to overwrite a file it cannot parse, the
+# TOML escaping and the "only OSError is swallowed" policy are one
+# implementation for the whole family rather than eight.
+#
+# The escaping is the one that mattered here. This file's writer emitted
+# f'{key} = "{value}"' with no escaping at all, so a double quote in an ALSA
+# port name produced a file that was not TOML -- and because the refusal to
+# overwrite an unparseable file is itself correct, that first bad write was
+# also the last one: every later run read nothing and wrote nothing, and
+# said nothing, until somebody deleted the file by hand. It was gitignored,
+# so it never showed up in `git status` either.
 
-#: Paths already warned about, once per run. A set rather than a bool (which
-#: would need a `global` to reassign): membership is the whole state, and in
-#: practice there is one config file, so this warns exactly once per run.
-_warned_unreadable: set = set()
-
-
-def _read_config(path: str) -> Tuple[dict, str]:
-    """``(settings, status)`` where status is ok / missing / unreadable.
-
-    The distinction is the point. A file that cannot be parsed and a file
-    that does not exist both yield no settings, and collapsing them is what
-    made the Windows encoding bug invisible: `tomllib` refused the whole file,
-    the blanket ``except`` reported "no config", and the next save -- which is
-    read-modify-write -- rewrote the file from an empty dict and dropped every
-    hand-edited key.
-
-    Fixing the encoding removed one cause. It did not remove the mechanism,
-    which fires for any parse failure: a stray bracket typed by hand, a file
-    truncated by a crash, the next encoding surprise. So the status travels
-    with the data and :func:`_update_config` refuses to overwrite a file it
-    could not read.
-    """
-    if not os.path.exists(path):
-        return {}, "missing"
-    try:
-        with open(path, "rb") as handle:
-            raw = handle.read()
-    except OSError:
-        return {}, "unreadable"
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        # A config written by a pre-fix build on Windows. _write_config_dict
-        # used to open in text mode with no encoding=, which means the locale
-        # codec, and cp1252 renders the em dash in our own header comment as
-        # 0x97 — not valid UTF-8, so tomllib rejected the whole file and every
-        # setting silently read back as unset. Decode leniently so a user's
-        # hand-edited keys survive the upgrade; the next save rewrites the
-        # file as UTF-8 and it stays readable from then on.
-        text = raw.decode("cp1252", errors="replace")
-    try:
-        return tomllib.loads(text), "ok"
-    except tomllib.TOMLDecodeError:
-        return {}, "unreadable"
-
-
-def _read_config_dict(path: str) -> dict:
-    """Just the settings, for the many readers that cannot act on a failure."""
-    return _read_config(path)[0]
-
-
-def _update_config(path: str, **changes: object) -> None:
-    """Read-modify-write one or more settings, or leave the file alone.
-
-    **Refuses to write when the existing file could not be parsed.** The
-    alternative is what this code used to do: treat unreadable as empty and
-    overwrite, which turns one typo in a hand-edited config into the silent
-    loss of every setting in it. A preference that fails to persist is a
-    nuisance; a file quietly emptied is not recoverable by the user, who has
-    no reason to suspect it happened.
-    """
-    data, status = _read_config(path)
-    if status == "unreadable":
-        if path not in _warned_unreadable:
-            _warned_unreadable.add(path)
-            print(f"eosed: {path} could not be parsed, so settings are not "
-                  f"being saved. Fix or delete it; nothing has been "
-                  f"overwritten.", file=sys.stderr)
-        return
-    data.update(changes)
-    _write_config_dict(data, path)
-
-
-def _write_config_dict(data: dict, path: str) -> None:
-    lines = ["# eosed local config — gitignored, safe to delete."]
-    for key, value in data.items():
-        if isinstance(value, bool):
-            lines.append(f"{key} = {'true' if value else 'false'}")
-        elif isinstance(value, str):
-            lines.append(f'{key} = "{value}"')
-        else:
-            lines.append(f"{key} = {value}")
-    try:
-        # encoding= is not optional here: without it Python uses the locale
-        # codec, which on Windows is cp1252, and the em dash in the header
-        # line above then lands as a byte tomllib cannot read back. The file
-        # is written by this app and read by tomllib, which is UTF-8-only by
-        # specification, so both ends have to say so.
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write("\n".join(lines) + "\n")
-    except OSError:
-        pass  # the cache is a convenience, not required for correctness
-
-
-# --- last-known-good port cache ---------------------------------------------
-# A full autodetect sweep tries every output port (up to ~1s each while a
-# port doesn't answer) — on a host with two dozen MIDI ports that's tens of
-# seconds. Once a send/receive pair has answered, remember it and try it
-# first on the next connection, before falling back to the full sweep (which
-# still runs if the cached ports are gone or don't answer, e.g. after
-# replugging an interface).
 
 def load_last_ports(path: str = DEFAULT_CONFIG_PATH) -> Optional[Tuple[str, str]]:
-    data = _read_config_dict(path)
-    send_port = data.get("send_port")
-    recv_port = data.get("recv_port")
-    if isinstance(send_port, str) and isinstance(recv_port, str):
-        return send_port, recv_port
-    return None
+    """The send/receive pair that answered last time, if both are known."""
+    return config_mod.load_last_ports(path)
 
 
-def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_PATH) -> None:
-    _update_config(path, send_port=send_port, recv_port=recv_port)
+def save_last_ports(
+    send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_PATH
+) -> None:
+    config_mod.save_last_ports(send_port, recv_port, path)
 
 
 # --- remembered TUI view mode ------------------------------------------------
@@ -198,12 +107,11 @@ def save_last_ports(send_port: str, recv_port: str, path: str = DEFAULT_CONFIG_P
 # the choice survives a restart (see docs/RESOLUTION_NOTES.md).
 
 def load_compact_view(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
-    value = _read_config_dict(path).get("compact_view")
-    return value if isinstance(value, bool) else None
+    return config_mod.load_compact_view(path)
 
 
 def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
-    _update_config(path, compact_view=compact)
+    config_mod.settings.update(path, compact_view=bool(compact))
 
 
 # --- sample-usage reverse-lookup early-stop threshold ------------------------
@@ -212,61 +120,37 @@ def save_compact_view(compact: bool, path: str = DEFAULT_CONFIG_PATH) -> None:
 # no-voices presets, since a full 0-999 sweep can take several minutes.
 # User-edited in config.toml, not written by the app itself: either an int
 # (the threshold) or the literal string "fullscan" to disable early-stop
-# and always sweep the complete range.
+# and always sweep the complete range. See eos.config for why neither value
+# can express the other.
 
 def load_sample_usage_early_stop(path: str = DEFAULT_CONFIG_PATH) -> int | str | None:
     """Returns an int threshold, the string "fullscan", or None if unset/invalid."""
-    value = _read_config_dict(path).get("sample_usage_early_stop")
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, str) and value.strip().lower() == "fullscan":
-        return "fullscan"
-    return None
+    return config_mod.load_sample_usage_early_stop(path)
 
 
 # --- "cache all data" sweep (eosed.app's 'a' key / startup option) -------
 # A full bank sweep (same walk as the sample-usage lookup above, but keeping
 # everything it fetches instead of just the sample->preset mapping) is
-# expensive — several minutes on a fully-populated bank — so both how deep it
-# goes and whether it runs unattended at startup are user-edited, not
+# expensive -- several minutes on a fully-populated bank -- so both how deep
+# it goes and whether it runs unattended at startup are user-edited, not
 # app-written, same convention as sample_usage_early_stop above. Never
 # persisted to disk *by* the app: the cache itself is deliberately in-memory
-# only (see eosed.app.EosedApp's cache fields) since a front-panel
-# edit is invisible to us and a stale disk cache would confidently lie.
+# only (see eosed.app.EosedApp's cache fields) since a front-panel edit is
+# invisible to us and a stale disk cache would confidently lie.
 
 def load_cache_all_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
-    """Run a `cache_depth`-deep sweep on connect. Defaults to OFF.
-
-    At the default "full" depth this is measured at 1h 44m on a large
-    commercial bank (docs/RESOLUTION_NOTES.md §20) — far too much to do
-    unprompted, which is why `cache_structure_on_startup` below is the one
-    that defaults on.
-    """
-    value = _read_config_dict(path).get("cache_all_on_startup")
-    return value if isinstance(value, bool) else None
+    """Run a `cache_depth`-deep sweep on connect. Defaults to OFF."""
+    return config_mod.load_cache_all_on_startup(path)
 
 
 def load_cache_structure_on_startup(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
-    """Run a "structure"-depth sweep on connect. Defaults to OFF.
-
-    Opt-in like its `cache_all_on_startup` sibling: at 23 min on a large
-    bank it is far cheaper than "full" (1h 44m) but still much too long to
-    impose on someone who launched the app to look at one preset. Worth
-    turning on for a session you know will involve a lot of browsing —
-    afterwards preset selection, bank paging and `u` cost no MIDI at all.
-    Cancellable with `escape`, and it announces its estimate rather than
-    starting silently.
-    """
-    value = _read_config_dict(path).get("cache_structure_on_startup")
-    return value if isinstance(value, bool) else None
+    """Run a "structure"-deep sweep on connect. Defaults to OFF."""
+    return config_mod.load_cache_structure_on_startup(path)
 
 
 def load_cache_depth(path: str = DEFAULT_CONFIG_PATH) -> Optional[str]:
     """Returns "names", "structure", "full", or None if unset/invalid."""
-    value = _read_config_dict(path).get("cache_depth")
-    if isinstance(value, str) and value.strip().lower() in ("names", "structure", "full"):
-        return value.strip().lower()
-    return None
+    return config_mod.load_cache_depth(path)
 
 
 # --- signed parameter values -------------------------------------------------
@@ -313,8 +197,7 @@ def _signed_value(param_id: int, raw: int) -> int:
 # played on the hardware.
 
 def load_send_pc_on_preset_select(path: str = DEFAULT_CONFIG_PATH) -> Optional[bool]:
-    value = _read_config_dict(path).get("send_pc_on_preset_select")
-    return value if isinstance(value, bool) else None
+    return config_mod.load_send_pc_on_preset_select(path)
 
 
 def _try_port_pair(send_name: str, recv_name: str, timeout: float) -> Optional[bytes]:
@@ -429,15 +312,34 @@ def list_ports() -> Tuple[List[str], List[str]]:
     Raises ``MidiUnavailable`` if the host has no MIDI backend at all --
     deliberately not flattened to two empty lists, so a caller can tell
     "nothing is plugged in" from "this machine cannot do MIDI".
+
+    The enumeration is the family's (:func:`vinsynlib.midi.list_ports`), and
+    with it the leak-free client handling the comment above describes. What
+    stays here is the translation of a *missing backend*: rtmidi raises out
+    of its constructor when there is no ``/dev/snd/seq`` at all, and both
+    callers of this function -- ``eoscli ports`` and the autodetect sweep --
+    catch :class:`MidiUnavailable` and say something useful. Without the
+    translation they get a raw SystemError, which is how CI found the
+    distinction in the first place.
     """
-    return _enum_in(), _enum_out()
+    try:
+        return midi.list_ports()
+    except midi.MidiUnavailable:
+        raise
+    except (RuntimeError, SystemError, OSError, ValueError) as exc:
+        raise MidiUnavailable(
+            f"no MIDI backend available on this host: {exc}") from exc
 
 
 def bidirectional_ports() -> List[str]:
     """Names present as both an input and an output (candidate standard ports)."""
-    ins, outs = list_ports()
-    in_set = set(ins)
-    return [name for name in outs if name in in_set]
+    try:
+        return midi.bidirectional_ports()
+    except midi.MidiUnavailable:
+        raise
+    except (RuntimeError, SystemError, OSError, ValueError) as exc:
+        raise MidiUnavailable(
+            f"no MIDI backend available on this host: {exc}") from exc
 
 
 def _open_out(port_name: str) -> rtmidi.MidiOut:

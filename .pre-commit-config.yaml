@@ -7,21 +7,54 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
+      # ruff-format is NOT gated, and `make check` does not run it -- unlike
+      # most of this family, where the formatter is enforced. It cannot be,
+      # for a reason worth writing down rather than rediscovering: eos/bridge.py
+      # and eosed/app.py carry `# noqa: C901` and `# noqa: PLR0917`
+      # suppressions attached to a hand-laid-out multi-line signature, and
+      # ruff format re-explodes those signatures onto one line -- which moves
+      # the trailing `# noqa` off the `def` it was suppressing, so ruff check
+      # then reports C901 and RUF100 "unused noqa" against a file that is
+      # correct. The two tools disagree, and the lint findings are real ones
+      # that the suppressions were written to answer.
+      #
+      # Reproduced against HEAD, not assumed: formatting the unmodified file
+      # produces the same two errors. Running the hook on eos/bridge.py or
+      # eosed/app.py rewrites 500-800 lines to trigger it.
+      #
+      # It still applies to any OTHER file a commit touches, which is where
+      # it is useful -- the new modules here are formatter-clean, and a
+      # commit that adds one should not add a second style.
       - id: ruff-format
+        exclude: '^(eos/bridge\.py|eosed/app\.py)$'
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.4.0
+  # A LOCAL hook, not mirrors-mypy. That one runs mypy in an isolated
+  # virtualenv built from `additional_dependencies`, and vinsynlib cannot be
+  # named there: it is a sibling checkout, not a package on an index, so there
+  # is nothing to install and no version to pin. In an environment without it
+  # every `from vinsynlib...` resolved to Any, which turned these strict flags
+  # into errors about the imports rather than about the code -- and would have
+  # hidden a real error behind them on every commit after the adoption.
+  #
+  # It also removes the `additional_dependencies` comment this hook used to
+  # need: the isolated env could not see textual or rtmidi either, so they came
+  # back Any and the strict flags misfired on our code (no-any-return,
+  # untyped-decorator on textual's @work). Running the project's own .venv
+  # sees exactly what `make typecheck` sees, so a hook and the gate cannot
+  # disagree -- which was the reason this was a mirrors hook.
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy
+        entry: .venv/bin/python -m mypy
+        language: system
         # Tests are out of scope (the Makefile checks eos/ eosed/ only):
-        # 2600 lines of fakes and widget handles would need their own
-        # typing pass, which is not this pipeline.
-        exclude: '^tests/'
-        # The hook runs mypy in its own env WITHOUT the project installed,
-        # so untyped third-party imports (textual, rtmidi) come back Any and
-        # strict flags misfire on our code (no-any-return, untyped-decorator
-        # on textual's @work). These must match [project] dependencies above.
-        additional_dependencies: [types-setuptools, "textual>=0.80", "python-rtmidi>=1.5"]
+        # 2600 lines of fakes and widget handles would need their own typing
+        # pass, which is not this pipeline.
+        files: ^(eos|eosed)/
+        types: [python]
+        pass_filenames: false
+        args: [eos/, eosed/]
 
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

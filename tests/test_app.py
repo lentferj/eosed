@@ -20,6 +20,7 @@ from eosed.app import (
     _VOICE_PARAM_IDS,
     BROWSER_EXTEND_CHUNK,
     BROWSER_RESIZE_SETTLE,
+    PRESS_NAMES,
     SAMPLE_USAGE_SCAN_RANGE,
     ChoiceScreen,
     ConfirmSweepScreen,
@@ -417,13 +418,15 @@ async def test_sample_usage_early_stop_configurable_via_config_toml(tmp_path):
     # demo=False (with a DemoBridge standing in for a real one) exercises the
     # actual config-reading wiring, matching the pattern used for the view-
     # toggle persistence tests -- --demo itself never reads config.toml.
-    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                       connect_kwargs={"config_path": config_path})
+    app = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app._sample_usage_early_stop_gap == 3
 
     (tmp_path / "config.toml").write_text('sample_usage_early_stop = "fullscan"\n')
-    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app2 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app2._sample_usage_early_stop_gap is None
 
 
@@ -498,7 +501,9 @@ async def test_cache_all_names_depth_fills_only_the_name_catalogs():
             return self._SAMPLES[sample]
 
     app = EosedApp(FakeBridge(), allow_write=True, demo=True)
-    app._sample_usage_early_stop_gap = None  # "names" depth ignores this anyway -- explicit for clarity
+    app._sample_usage_early_stop_gap = (
+        None  # "names" depth ignores this anyway -- explicit for clarity
+    )
     async with app.run_test() as pilot:
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
@@ -648,11 +653,13 @@ async def test_cache_all_structure_depth_skips_globals_but_reuses_on_select():  
         table = app.query_one("#presets")
         await _wait_for(pilot, lambda: table.row_count)
 
-        await pilot.press("c")   # 'c' is fixed at "structure" depth
+        await pilot.press("c")  # 'c' is fixed at "structure" depth
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
 
         assert 0 in app._preset_overviews
-        voice_count, _zone_counts, global_ids, global_values, _sample_rows = app._preset_overviews[0]
+        voice_count, _zone_counts, global_ids, global_values, _sample_rows = app._preset_overviews[
+            0
+        ]
         assert voice_count == 1
         assert global_values is None  # "structure" depth deliberately skips GLOBAL values
         # The real GLOBAL id list must still be cached even though the values
@@ -778,9 +785,10 @@ async def test_cancelling_cache_all_promotes_nothing():
 
 async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
     config_path = str(tmp_path / "config.toml")
-    (tmp_path / "config.toml").write_text("cache_all_on_startup = true\ncache_depth = \"names\"\n")
-    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                       connect_kwargs={"config_path": config_path})
+    (tmp_path / "config.toml").write_text('cache_all_on_startup = true\ncache_depth = "names"\n')
+    app = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app._cache_all_on_startup is True
     assert app._cache_depth == "names"
     async with app.run_test() as pilot:
@@ -789,11 +797,15 @@ async def test_cache_all_on_startup_configurable_via_config_toml(tmp_path):
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         # DemoBridge's own presets (0, 1, 5) got picked up by the startup sweep.
         assert app._catalog_cache["preset"] == {
-            0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
+            0: "Demo Grand Piano",
+            1: "Demo Warm Pad",
+            5: "Demo Bass",
+        }
 
     (tmp_path / "config.toml").write_text("")  # unset -- must default to off
-    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app2 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app2._cache_all_on_startup is False
     assert app2._cache_depth == "full"  # the documented default
 
@@ -807,11 +819,13 @@ def test_readme_key_table_lists_every_binding():
     confidently lists the wrong keys is worse than one that lists none.
     """
     import re
+
     # encoding= is required: the README is UTF-8 (em dashes, arrows, the ⚠),
     # and read_text() without it uses the locale codec — cp1252 on Windows,
     # where this raised UnicodeDecodeError instead of checking anything.
     readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text(
-        encoding="utf-8")
+        encoding="utf-8"
+    )
     section = readme.split("### Keys", 1)[1].split("###", 1)[0]
     # Only the table rows: the surrounding prose mentions config.toml keys in
     # backticks too, and matching those would let a binding pass by accident.
@@ -821,11 +835,14 @@ def test_readme_key_table_lists_every_binding():
     for binding in EosedApp.BINDINGS:
         if not binding.show:
             continue
-        app = EosedApp.__new__(EosedApp)
-        key = EosedApp._legend_key(app, binding.key)
+        # PRESS_NAMES, not the removed _legend_key helper: the key a user
+        # types is now looked up by the same table the legend uses, so the
+        # README check and the legend cannot disagree about what "=" prints
+        # as.
+        key = PRESS_NAMES.get(binding.key, binding.key)
         assert key in documented, (
-            f"key {key!r} ({binding.description}) is bound but missing from "
-            f"the README's Keys table")
+            f"key {key!r} ({binding.description}) is bound but missing from the README's Keys table"
+        )
 
 
 def test_legend_shows_typed_keys_not_textual_key_names():
@@ -852,19 +869,18 @@ async def test_c_and_C_sweep_at_their_own_depths():
     """'c' must not fetch GLOBAL values; 'C' must."""
     for key, expect_globals in (("c", False), ("C", True)):
         app = EosedApp(DemoBridge(), allow_write=True, demo=True)
-        app._cache_depth = "names"       # deliberately NOT what the keys use
+        app._cache_depth = "names"  # deliberately NOT what the keys use
         app._sample_usage_early_stop_gap = None
         async with app.run_test() as pilot:
             table = app.query_one("#presets")
             await _wait_for(pilot, lambda: table.row_count)
             await pilot.press(key)
-            assert await _wait_for(pilot, lambda: not app._scan_active,
-                                   tries=800, step=0.02)
+            assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
             assert app._preset_overviews, f"{key} should walk structure"
             _vc, _zc, _gids, global_values, _rows = app._preset_overviews[0]
             assert (global_values is not None) is expect_globals, (
-                f"{key}: globals present={global_values is not None}, "
-                f"expected {expect_globals}")
+                f"{key}: globals present={global_values is not None}, expected {expect_globals}"
+            )
 
 
 def test_no_sweep_runs_on_startup_unless_asked(tmp_path):
@@ -896,9 +912,11 @@ def test_sweep_estimate_scales_with_used_ram_not_preset_count():
     assert _estimate_sweep_seconds("full", 2013) > 3000
     # Depth ordering must hold for any bank.
     for used in (50, 500, 2013):
-        assert (_estimate_sweep_seconds("names", used)
-                < _estimate_sweep_seconds("structure", used)
-                < _estimate_sweep_seconds("full", used))
+        assert (
+            _estimate_sweep_seconds("names", used)
+            < _estimate_sweep_seconds("structure", used)
+            < _estimate_sweep_seconds("full", used)
+        )
     # Unknown/absent sizing must never fabricate a number.
     assert _estimate_sweep_seconds("full", None) is None
     assert _estimate_sweep_seconds("full", 0) is None
@@ -907,6 +925,7 @@ def test_sweep_estimate_scales_with_used_ram_not_preset_count():
 
 def test_humanize_seconds_reads_naturally():
     from eosed.app import _humanize_seconds
+
     assert _humanize_seconds(20) == "20 seconds"
     assert _humanize_seconds(600) == "10 minutes"
     assert _humanize_seconds(5400) == "1.5 hours"
@@ -921,18 +940,21 @@ async def test_small_bank_sweeps_without_asking():
         await _wait_for(pilot, lambda: table.row_count)
         await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
-        assert app._catalog_cache["preset"]        # it really ran
+        assert app._catalog_cache["preset"]  # it really ran
         assert not isinstance(app.screen, ConfirmSweepScreen)
 
 
 async def test_big_bank_asks_first_and_no_means_no():
     """A bank whose used RAM implies a long sweep must ask, and answering no
     must leave every cache untouched."""
+
     class BigBank(DemoBridge):
         def preset_memory(self, *, timeout=None):
             from eos import messages as msgs
-            return msgs.PresetMemoryResponse(total_kb=8192, free_kb=8192 - 2013,
-                                             device_id=self.device_id)
+
+            return msgs.PresetMemoryResponse(
+                total_kb=8192, free_kb=8192 - 2013, device_id=self.device_id
+            )
 
     app = EosedApp(BigBank(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -952,8 +974,10 @@ async def test_big_bank_yes_runs_the_sweep():
     class BigBank(DemoBridge):
         def preset_memory(self, *, timeout=None):
             from eos import messages as msgs
-            return msgs.PresetMemoryResponse(total_kb=8192, free_kb=8192 - 2013,
-                                             device_id=self.device_id)
+
+            return msgs.PresetMemoryResponse(
+                total_kb=8192, free_kb=8192 - 2013, device_id=self.device_id
+            )
 
     app = EosedApp(BigBank(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -979,7 +1003,10 @@ async def test_a_key_still_works_in_demo_with_no_startup_config():
         await pilot.press("C")
         assert await _wait_for(pilot, lambda: not app._scan_active, tries=800, step=0.02)
         assert app._catalog_cache["preset"] == {
-            0: "Demo Grand Piano", 1: "Demo Warm Pad", 5: "Demo Bass"}
+            0: "Demo Grand Piano",
+            1: "Demo Warm Pad",
+            5: "Demo Bass",
+        }
 
 
 async def test_selecting_preset_loads_voices_global_params_and_samples():
@@ -1214,8 +1241,8 @@ async def test_master_menu_delete_preset_requires_arm_then_fire():
 
         await pilot.press("m")
         await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
-        await pilot.press("1")       # arm delete_preset
-        await pilot.press("enter")   # fire
+        await pilot.press("1")  # arm delete_preset
+        await pilot.press("enter")  # fire
         assert await _wait_for(pilot, lambda: "fired: delete_preset" in app.last_status)
         assert 0 not in app.bridge.preset_names
 
@@ -1229,8 +1256,8 @@ async def test_master_menu_erase_all_presets():
 
         await pilot.press("m")
         assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
-        await pilot.press("3")       # arm erase_all_presets
-        await pilot.press("enter")   # fire
+        await pilot.press("3")  # arm erase_all_presets
+        await pilot.press("enter")  # fire
         assert await _wait_for(pilot, lambda: "fired: erase_all_presets" in app.last_status)
         assert app.bridge.preset_names == {}
 
@@ -1244,7 +1271,7 @@ async def test_master_menu_delete_preset_unavailable_without_selection():
 
         await pilot.press("m")
         assert await _wait_for(pilot, lambda: len(app.screen_stack) > 1)
-        await pilot.press("1")       # try to arm delete_preset with nothing selected
+        await pilot.press("1")  # try to arm delete_preset with nothing selected
         await pilot.press("enter")
         await pilot.pause(0.1)
         # must still be showing the modal (armed stayed None), not have fired
@@ -1347,18 +1374,21 @@ async def test_send_pc_on_preset_select_configurable_via_config_toml(tmp_path):
     # demo=False (with a DemoBridge standing in for a real one) exercises
     # the actual config-reading wiring, matching the pattern used for the
     # other config-backed settings -- --demo itself never reads config.toml.
-    app = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                       connect_kwargs={"config_path": config_path})
+    app = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app._send_pc_on_preset_select is False
 
     (tmp_path / "config.toml").write_text("send_pc_on_preset_select = true\n")
-    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app2 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app2._send_pc_on_preset_select is True
 
     (tmp_path / "config.toml").write_text("")  # unset -- must default to on
-    app3 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app3 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     assert app3._send_pc_on_preset_select is True
 
 
@@ -1371,6 +1401,7 @@ async def test_demo_mode_does_not_touch_config_toml_for_send_pc_setting(monkeypa
 
     def _boom(*a, **k):
         raise AssertionError("--demo must never read config.toml")
+
     monkeypatch.setattr(bridge_mod, "load_send_pc_on_preset_select", _boom)
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     assert app._send_pc_on_preset_select is True
@@ -1403,8 +1434,12 @@ async def test_goto_preset_jumps_window_and_highlights_the_right_row():
 
         await _goto(pilot, app, "125")
         assert await _wait_for(pilot, lambda: app.current_preset == 125)
-        assert await _wait_for(pilot, lambda: app._bank_state("preset").window_start == expected_start)
-        assert await _wait_for(pilot, lambda: presets.get_row_at(presets.cursor_row) == ["P125", ""])
+        assert await _wait_for(
+            pilot, lambda: app._bank_state("preset").window_start == expected_start
+        )
+        assert await _wait_for(
+            pilot, lambda: presets.get_row_at(presets.cursor_row) == ["P125", ""]
+        )
         assert presets.cursor_row == 125 - expected_start
 
 
@@ -1624,16 +1659,18 @@ def test_voice_walk_reaches_a_deep_drum_kit():
     class DeepKit(DemoBridge):
         def get_parameter(self, param_id, *, timeout=None):
             from eos import params as p
+
             if param_id != p.lookup("E4_GEN_SAMPLE").id:
                 return 0
             voice = getattr(self, "_voice", 0)
             zone = getattr(self, "_zone", None)
             if zone is not None:
-                return 0                      # single-sample voices here
+                return 0  # single-sample voices here
             return -2 if voice >= deepest else 100 + voice
 
         def set_parameter(self, param_id, value):
             from eos import params as p
+
             if param_id == p.lookup("VOICE_SELECT").id:
                 self._voice, self._zone = value, None
             elif param_id == p.lookup("SAMPLE_ZONE_SELECT").id:
@@ -1648,7 +1685,7 @@ def test_voice_walk_reaches_a_deep_drum_kit():
         walked.append(info[1][0])
 
     assert len(walked) == deepest
-    assert walked[-1] == 100 + deepest - 1     # the last voice really was read
+    assert walked[-1] == 100 + deepest - 1  # the last voice really was read
 
 
 def test_zone_walk_reaches_a_62_zone_voice():
@@ -1659,15 +1696,17 @@ def test_zone_walk_reaches_a_62_zone_voice():
     class WideVoice(DemoBridge):
         def get_parameter(self, param_id, *, timeout=None):
             from eos import params as p
+
             if param_id != p.lookup("E4_GEN_SAMPLE").id:
                 return 0
             zone = getattr(self, "_zone", None)
             if zone is None:
-                return -1                     # multisample at voice level
+                return -1  # multisample at voice level
             return 0 if zone >= zones else 200 + zone
 
         def set_parameter(self, param_id, value):
             from eos import params as p
+
             if param_id == p.lookup("VOICE_SELECT").id:
                 self._voice, self._zone = value, None
             elif param_id == p.lookup("SAMPLE_ZONE_SELECT").id:
@@ -1691,6 +1730,7 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
     class FakeBridge(DemoBridge):
         def get_parameter(self, param_id, *, timeout=None):
             from eos import params as p
+
             if param_id != p.lookup("E4_GEN_SAMPLE").id:
                 return 0
             voice = getattr(self, "_voice", None)
@@ -1705,6 +1745,7 @@ async def test_samples_pane_aggregates_across_voices_and_dedups():
 
         def set_parameter(self, param_id, value):
             from eos import params as p
+
             if param_id == p.lookup("VOICE_SELECT").id:
                 self._voice = value
                 self._zone = None
@@ -1740,8 +1781,7 @@ def test_dangling_sample_refs_flags_only_the_erased_slots():
     # a real, well-formed reply, not a blank or an error (RESOLUTION_NOTES
     # §13), which is exactly what makes it usable as the signal here.
     overviews = {
-        4: _overview([(7, "Deep Kick", "V1"),
-                      (9, _EMPTY_SAMPLE_NAME, "V1,V3")]),
+        4: _overview([(7, "Deep Kick", "V1"), (9, _EMPTY_SAMPLE_NAME, "V1,V3")]),
         6: _overview([(7, "Deep Kick", "V2")]),
     }
     assert _dangling_sample_refs(overviews) == [(4, 9, "V1,V3")]
@@ -1765,12 +1805,10 @@ def test_dangling_sample_refs_does_not_flag_a_failed_name_fetch():
 
 def test_dangling_sample_refs_are_sorted_by_preset_then_sample():
     overviews = {
-        9: _overview([(30, _EMPTY_SAMPLE_NAME, "V1"),
-                      (12, _EMPTY_SAMPLE_NAME, "V2")]),
+        9: _overview([(30, _EMPTY_SAMPLE_NAME, "V1"), (12, _EMPTY_SAMPLE_NAME, "V2")]),
         2: _overview([(44, _EMPTY_SAMPLE_NAME, "V1")]),
     }
-    assert _dangling_sample_refs(overviews) == [
-        (2, 44, "V1"), (9, 12, "V2"), (9, 30, "V1")]
+    assert _dangling_sample_refs(overviews) == [(2, 44, "V1"), (9, 12, "V2"), (9, 30, "V1")]
 
 
 class _ErasedSampleBridge(DemoBridge):
@@ -2018,7 +2056,7 @@ async def test_a_pane_missing_while_running_still_raises():
             app._resize_timer = None
         await app.workers.wait_for_complete()
         await pilot.pause()
-        await app.workers.wait_for_complete()   # anything the pause started
+        await app.workers.wait_for_complete()  # anything the pause started
 
         # `remove()` returns an awaitable; awaiting it settles the removal
         # without a general pause, which is what previously gave an unrelated
@@ -2035,8 +2073,9 @@ async def test_view_preference_persists_across_restarts(tmp_path):
     # demo=False (with a DemoBridge instance standing in for a real one)
     # exercises the actual persistence wiring in isolation, without needing
     # real hardware — demo=True deliberately skips it (see next test).
-    app1 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app1 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     async with app1.run_test() as pilot:
         await pilot.pause()
         assert app1.compact_view is True  # nothing stored yet -> default
@@ -2044,8 +2083,9 @@ async def test_view_preference_persists_across_restarts(tmp_path):
         await pilot.pause()
         assert app1.compact_view is False
 
-    app2 = EosedApp(DemoBridge(), allow_write=True, demo=False,
-                        connect_kwargs={"config_path": config_path})
+    app2 = EosedApp(
+        DemoBridge(), allow_write=True, demo=False, connect_kwargs={"config_path": config_path}
+    )
     async with app2.run_test() as pilot:
         await pilot.pause()
         assert app2.compact_view is False  # remembered from app1
@@ -2058,10 +2098,8 @@ async def test_demo_mode_does_not_touch_config_toml_for_view_preference(monkeypa
     from eos import bridge as bridge_mod
 
     calls = []
-    monkeypatch.setattr(bridge_mod, "load_compact_view",
-                        lambda *a, **k: calls.append("load"))
-    monkeypatch.setattr(bridge_mod, "save_compact_view",
-                        lambda *a, **k: calls.append("save"))
+    monkeypatch.setattr(bridge_mod, "load_compact_view", lambda *a, **k: calls.append("load"))
+    monkeypatch.setattr(bridge_mod, "save_compact_view", lambda *a, **k: calls.append("save"))
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -2156,6 +2194,7 @@ async def test_browse_links_with_several_prompts_for_which_one():
 
 async def test_demo_never_touches_rtmidi(monkeypatch):
     import sys
+
     monkeypatch.setitem(sys.modules, "rtmidi", None)
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
@@ -2164,6 +2203,7 @@ async def test_demo_never_touches_rtmidi(monkeypatch):
 
 
 # --- undo log / change history ------------------------------------------------
+
 
 async def _edit_param(pilot, app, row: int, new_value: str) -> None:
     """Drive the Parameters pane's edit flow for the parameter at ``row``."""
@@ -2187,7 +2227,7 @@ async def test_edit_records_a_change_and_shows_the_counter():
         await _select_preset(pilot, app)
         assert app._changes == []
 
-        await _edit_param(pilot, app, 0, "5")   # id 0 = E4_PRESET_TRANSPOSE
+        await _edit_param(pilot, app, 0, "5")  # id 0 = E4_PRESET_TRANSPOSE
         assert await _wait_for(pilot, lambda: len(app._changes) == 1)
         change = app._changes[0]
         assert (change.param_id, change.old, change.new) == (0, 0, 5)
@@ -2322,7 +2362,7 @@ async def test_undo_is_gated_behind_write_mode():
         await pilot.press("w")  # disarm writes
         await pilot.press("z")
         assert await _wait_for(pilot, lambda: "writes disabled" in app.last_status)
-        assert len(app._changes) == 1        # nothing undone
+        assert len(app._changes) == 1  # nothing undone
         assert app.bridge.get_parameter(0) == 5
 
 
@@ -2363,11 +2403,11 @@ async def test_history_shows_the_scope_each_change_was_made_under():
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test(size=(120, 32)) as pilot:
         await _select_preset(pilot, app)
-        await _edit_param(pilot, app, 0, "5")           # global scope
+        await _edit_param(pilot, app, 0, "5")  # global scope
         await _wait_for(pilot, lambda: len(app._changes) == 1)
         await _select_voice(pilot, app)
         assert await _wait_for(pilot, lambda: app.current_voice == 0)
-        await _edit_param(pilot, app, 0, "3")           # voice scope
+        await _edit_param(pilot, app, 0, "3")  # voice scope
         await _wait_for(pilot, lambda: len(app._changes) == 2)
 
         await pilot.press("h")
@@ -2377,6 +2417,7 @@ async def test_history_shows_the_scope_each_change_was_made_under():
 
 
 # --- +/- nudge and in-dialog stepping -----------------------------------------
+
 
 async def test_plus_and_minus_nudge_the_highlighted_parameter():
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
@@ -2529,9 +2570,7 @@ def test_zero_voice_note_counts_presets_the_walk_found_empty():
         "sample_stopped_early": False,
         "sample_stopped_at": 0,
         # entry[0] is the voice count; the rest of the tuple is irrelevant here
-        "overviews": {0: (2, {}, [], None, []),
-                      1: (0, {}, [], None, []),
-                      2: (0, {}, [], None, [])},
+        "overviews": {0: (2, {}, [], None, []), 1: (0, {}, [], None, []), 2: (0, {}, [], None, [])},
     }
     assert app._zero_voice_note(result) == "; 2 of 3 scanned preset(s) reported 0 voices"
     assert app._zero_voice_note(result) in app._sweep_note(result)
@@ -2542,9 +2581,15 @@ def test_zero_voice_note_reports_zero_rather_than_going_quiet():
     there is something to report cannot distinguish "checked, none" from
     "never checked" -- which is the whole failure this guards against."""
     app = EosedApp.__new__(EosedApp)
-    result = {"depth": "full", "stopped_early": False, "stopped_at": 1,
-              "gap": None, "sample_stopped_early": False, "sample_stopped_at": 0,
-              "overviews": {0: (4, {}, [], None, [])}}
+    result = {
+        "depth": "full",
+        "stopped_early": False,
+        "stopped_at": 1,
+        "gap": None,
+        "sample_stopped_early": False,
+        "sample_stopped_at": 0,
+        "overviews": {0: (4, {}, [], None, [])},
+    }
     assert app._zero_voice_note(result) == "; 0 of 1 scanned preset(s) reported 0 voices"
 
 
@@ -2552,14 +2597,21 @@ def test_zero_voice_note_silent_when_voices_were_never_walked():
     """A "names" sweep does not walk voices, so it has nothing to count and
     must not imply it checked."""
     app = EosedApp.__new__(EosedApp)
-    result = {"depth": "names", "stopped_early": False, "stopped_at": 9,
-              "gap": None, "sample_stopped_early": False, "sample_stopped_at": 0,
-              "overviews": {}}
+    result = {
+        "depth": "names",
+        "stopped_early": False,
+        "stopped_at": 9,
+        "gap": None,
+        "sample_stopped_early": False,
+        "sample_stopped_at": 0,
+        "overviews": {},
+    }
     assert app._zero_voice_note(result) == ""
     assert "0 voices" not in app._sweep_note(result)
 
 
 # --- the enumerated-value picker --------------------------------------------
+
 
 def test_value_choices_offers_tables_only_for_value_enumerations():
     """A field label is not a list of choices.
@@ -2567,11 +2619,20 @@ def test_value_choices_offers_tables_only_for_value_enumerations():
     id 7 is "Decay Time" whatever it holds, so offering FX_A_PARM_NAMES as its
     choices would invite picking "HF Damping" as the VALUE of "Decay Time".
     """
-    for name in ("E4_PRESET_FX_A_ALGORITHM", "MASTER_FX_A_ALGORITHM",
-                 "E4_PRESET_FX_B_ALGORITHM", "E4_VOICE_FTYPE"):
+    for name in (
+        "E4_PRESET_FX_A_ALGORITHM",
+        "MASTER_FX_A_ALGORITHM",
+        "E4_PRESET_FX_B_ALGORITHM",
+        "E4_VOICE_FTYPE",
+    ):
         assert p.value_choices(p.PARAMETERS_BY_NAME[name]), name
-    for name in ("E4_PRESET_FX_A_PARM_0", "E4_PRESET_FX_A_PARM_1",
-                 "E4_PRESET_FX_A_AMT_0", "PRESET_SELECT", "E4_PRESET_VOLUME"):
+    for name in (
+        "E4_PRESET_FX_A_PARM_0",
+        "E4_PRESET_FX_A_PARM_1",
+        "E4_PRESET_FX_A_AMT_0",
+        "PRESET_SELECT",
+        "E4_PRESET_VOLUME",
+    ):
         assert p.value_choices(p.PARAMETERS_BY_NAME[name]) is None, name
 
 
@@ -2583,15 +2644,17 @@ async def test_choice_screen_lists_every_value_in_the_device_range():
     names we know would rebuild that failure, so unnamed values still get a row.
     """
     param = p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"]
-    screen = ChoiceScreen(param, current=25, minimum=0, maximum=46,
-                          choices=p.FX_A_ALGORITHM_NAMES)
+    screen = ChoiceScreen(param, current=25, minimum=0, maximum=46, choices=p.FX_A_ALGORITHM_NAMES)
     assert screen._values == list(range(0, 47))
     app = EosedApp(DemoBridge(), allow_write=True, demo=True)
     async with app.run_test() as pilot:
         await app.push_screen(screen)
         await pilot.pause()
-        options = screen.query_one("#choices").options if hasattr(
-            screen.query_one("#choices"), "options") else None
+        options = (
+            screen.query_one("#choices").options
+            if hasattr(screen.query_one("#choices"), "options")
+            else None
+        )
         labels = [str(o.prompt) for o in (options or [])]
         assert any("Cavern" in t for t in labels)
         # 45 and 46 are past the table; they must still be selectable.
@@ -2602,8 +2665,7 @@ async def test_choice_screen_honours_the_device_minimum_not_the_table():
     """MASTER_FX_A_ALGORITHM starts at 1: 0 means "inherit the master" and the
     master cannot inherit from itself (RESOLUTION_NOTES §150 addendum)."""
     param = p.PARAMETERS_BY_NAME["MASTER_FX_A_ALGORITHM"]
-    screen = ChoiceScreen(param, current=14, minimum=1, maximum=44,
-                          choices=p.FX_A_ALGORITHM_NAMES)
+    screen = ChoiceScreen(param, current=14, minimum=1, maximum=44, choices=p.FX_A_ALGORITHM_NAMES)
     assert 0 not in screen._values
     assert screen._values[0] == 1
 
@@ -2614,8 +2676,10 @@ async def test_algorithm_edit_opens_the_picker_and_plain_values_do_not():
         await _select_preset(pilot, app)
         params = app.query_one("#params")
         await _wait_for(pilot, lambda: params.row_count)
-        ids = [p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"].id,
-               p.PARAMETERS_BY_NAME["E4_PRESET_TRANSPOSE"].id]
+        ids = [
+            p.PARAMETERS_BY_NAME["E4_PRESET_FX_A_ALGORITHM"].id,
+            p.PARAMETERS_BY_NAME["E4_PRESET_TRANSPOSE"].id,
+        ]
         want = {}
         for row in range(params.row_count):
             cell = str(params.get_row_at(row)[0]).strip()
