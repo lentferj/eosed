@@ -59,7 +59,7 @@ TERMS = Terminology(
     app_name="eosed",
     sound="preset",
     container="bank",
-    device="Ensoniq E4XT",
+    device="E-mu E4XT",
     own={
         # The other two things this protocol addresses, and the three panes
         # are exactly them. See the module docstring.
