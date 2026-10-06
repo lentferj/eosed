@@ -247,6 +247,7 @@ interface, no sampler, no sound hardware of any kind.
 ```sh
 git clone https://github.com/lentferj/eosed
 cd eosed
+git clone https://github.com/lentferj/vinsynlib.git ../vinsynlib
 python3 -m venv .venv
 # vinsynlib first -- see below. --no-deps because its deps are ours too.
 .venv/bin/pip install --no-deps -e ../vinsynlib
@@ -261,6 +262,7 @@ python3 -m venv .venv
 ```powershell
 git clone https://github.com/lentferj/eosed
 cd eosed
+git clone https://github.com/lentferj/vinsynlib.git ../vinsynlib
 py -3 -m venv .venv
 .venv\Scripts\pip install --no-deps -e ../vinsynlib
 .venv\Scripts\pip install -e .
