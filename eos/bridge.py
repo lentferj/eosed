@@ -324,8 +324,8 @@ def list_ports() -> Tuple[List[str], List[str]]:
     """
     try:
         return midi.list_ports()
-    except midi.MidiUnavailable:
-        raise
+    except midi.MidiUnavailable as exc:
+        raise MidiUnavailable(str(exc)) from exc
     except (RuntimeError, SystemError, OSError, ValueError) as exc:
         raise MidiUnavailable(
             f"no MIDI backend available on this host: {exc}") from exc
@@ -335,8 +335,8 @@ def bidirectional_ports() -> List[str]:
     """Names present as both an input and an output (candidate standard ports)."""
     try:
         return midi.bidirectional_ports()
-    except midi.MidiUnavailable:
-        raise
+    except midi.MidiUnavailable as exc:
+        raise MidiUnavailable(str(exc)) from exc
     except (RuntimeError, SystemError, OSError, ValueError) as exc:
         raise MidiUnavailable(
             f"no MIDI backend available on this host: {exc}") from exc

@@ -1339,8 +1339,9 @@ def test_an_unparseable_config_is_left_alone_rather_than_overwritten(tmp_path, c
     file, or the next encoding surprise all still reach it.
     """
     # The warning is once-per-run, so the warned set has to be cleared here
-    # or this test passes or fails depending on what ran before it.
-    eos_config.settings._warned = False
+    # or this test passes or fails depending on what ran before it. (It is a
+    # set of reasons, not a bool: the library grew from one refusal to three.)
+    eos_config.settings._warned = set()
 
     path = tmp_path / "config.toml"
     original = 'cache_depth = "full"\nsend_pc_on_preset_select = false\nthis line is [broken\n'
