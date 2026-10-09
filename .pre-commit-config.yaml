@@ -29,12 +29,9 @@ repos:
         exclude: '^(eos/bridge\.py|eosed/app\.py)$'
 
   # A LOCAL hook, not mirrors-mypy. That one runs mypy in an isolated
-  # virtualenv built from `additional_dependencies`, and vinsynlib cannot be
-  # named there: it is a sibling checkout, not a package on an index, so there
-  # is nothing to install and no version to pin. In an environment without it
-  # every `from vinsynlib...` resolved to Any, which turned these strict flags
-  # into errors about the imports rather than about the code -- and would have
-  # hidden a real error behind them on every commit after the adoption.
+  # virtualenv built from `additional_dependencies`; vinsynlib is on PyPI now
+  # and could be pinned there, but that env would still not see textual or
+  # rtmidi, and the paragraph below is why that matters.
   #
   # It also removes the `additional_dependencies` comment this hook used to
   # need: the isolated env could not see textual or rtmidi either, so they came

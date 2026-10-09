@@ -22,13 +22,11 @@ test:
 	$(PYTHON) -m pytest
 
 audit:
-	# --skip-editable for eosed and for vinsynlib: both are installed editable
-	# from local checkouts -- vinsynlib from the sibling directory, see
-	# [tool.uv.sources] in pyproject.toml -- so neither is a distribution on an
-	# index and there is nothing for pip-audit to resolve or report against.
-	# Left in, both appear in the skip table on every run, which trains the
-	# reader to ignore that table. vinsynlib is this family's own source and is
-	# reviewed where it lives.
+	# --skip-editable for eosed: it is installed editable from the local
+	# checkout, so it is not a distribution on an index and there is nothing
+	# for pip-audit to resolve. vinsynlib is a normal index dependency now (it
+	# is on PyPI) and is audited with the rest; it used to be skipped here for
+	# the same reason as eosed, when it was a sibling checkout.
 	$(PYTHON) -m pip_audit --skip-editable || true
 	$(PYTHON) -m vulture eos/ eosed/ --min-confidence 80 || true
 	$(PYTHON) -m deptry .

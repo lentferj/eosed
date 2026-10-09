@@ -41,7 +41,7 @@ dependencies = [
     # docs/UX-SPEC.md -- but it has everything else, and had its own copy of
     # all of it. That copy is where this project's real bug lived: the
     # settings writer emitted string values unescaped.
-    "vinsynlib>=0.1.0",
+    "vinsynlib>=0.2.0",
 ]
 
 # NO committed `[tool.uv.sources]` override, deliberately.

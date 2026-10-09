@@ -213,15 +213,14 @@ that shaped this project, in [DISCLAIMER.md](DISCLAIMER.md).
 Install the dev dependencies and run the full check suite:
 
 ```sh
-.venv/bin/pip install --no-deps -e ../vinsynlib   # once; see Quick Start
 pip install -e ".[dev]"
 make check
 ```
 
-`make audit` runs pip-audit with `--skip-editable`, because eosed and
-vinsynlib are both installed editable from local checkouts and neither is a
-distribution on an index — there is nothing for it to resolve or report
-against.
+`make audit` runs pip-audit with `--skip-editable`, because eosed itself is
+installed editable from the local checkout and so is not a distribution on an
+index; there is nothing for it to resolve. `vinsynlib` comes from PyPI now and
+is audited with the rest.
 
 This runs, in order:
 
@@ -247,10 +246,7 @@ interface, no sampler, no sound hardware of any kind.
 ```sh
 git clone https://github.com/lentferj/eosed
 cd eosed
-git clone https://github.com/lentferj/vinsynlib.git ../vinsynlib
 python3 -m venv .venv
-# vinsynlib first -- see below. --no-deps because its deps are ours too.
-.venv/bin/pip install --no-deps -e ../vinsynlib
 .venv/bin/pip install -e .
 .venv/bin/eoscli --demo hardware
 .venv/bin/eosed --demo
@@ -262,31 +258,22 @@ python3 -m venv .venv
 ```powershell
 git clone https://github.com/lentferj/eosed
 cd eosed
-git clone https://github.com/lentferj/vinsynlib.git ../vinsynlib
 py -3 -m venv .venv
-.venv\Scripts\pip install --no-deps -e ../vinsynlib
 .venv\Scripts\pip install -e .
 .venv\Scripts\eoscli --demo hardware
 .venv\Scripts\eosed --demo
 ```
 
-**vinsynlib is not on PyPI.** It is the shared base of this family of
-terminal instrument browsers and holds the settings cache, the keymap and
-legend, the command line and the port listing. It is a sibling checkout, so
-it is installed from the working tree and installed *first*, so the second
-command finds the requirement already satisfied. `uv` reads the path from
-`[tool.uv.sources]` in `pyproject.toml` instead of being told. The checkout
-therefore has to look like this:
+**vinsynlib** is the shared base of this family of terminal instrument
+browsers and holds the settings cache, the keymap and legend, the command line
+and the port listing. It comes from PyPI like the rest, so the install above is
+the whole of it. To develop against a *working copy* of it instead of the
+published one, install that alongside — it shadows the published version in
+this environment only:
 
+```sh
+.venv/bin/pip install --no-deps -e ../vinsynlib
 ```
-git-repos/
-  eosed/            <- this one
-  vinsynlib/        <- the shared base
-  emorphed/  ensqsqed/  kwsed/  nanosyned/  p2ked/  rxved/  s3ked/  x5ded/
-```
-
-`pip install -e .` on its own fails on a machine set up from an older copy
-of this text, with `No matching distribution found for vinsynlib`.
 
 Note the `eoscli --demo hardware` above: the spec renamed `inquire` to
 `hardware` because in one program `config` meant "which ROMs are fitted"
