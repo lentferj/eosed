@@ -39,14 +39,17 @@ import sys
 
 #: The minimum that has the API this project was written against.
 #:
-#: ``0.2.0`` is the version that added ``midi.open_remembered_or_swept``'s
+#: ``0.4.4`` is the version that capped the shared legend and added
+#: ``ui.hints.MORE``, whose pointer text this app's footer uses. Earlier
+#: floors (``0.2.0`` added ``midi.open_remembered_or_swept``'s
 #: ``on_fallback`` hook, the per-file ownership guard in the settings cache,
-#: and the ``__version__`` whose absence used to be undetectable.
-MINIMUM = (0, 2, 0)
+#: and the ``__version__`` whose absence used to be undetectable) are still
+#: satisfied by it.
+MINIMUM = (0, 4, 4)
 
 #: Where to get it; on PyPI since 0.2.0. Kept in one place because it
 #: appears in the message twice and must not drift.
-SOURCE = "vinsynlib>=0.2.0"
+SOURCE = "vinsynlib>=0.4.4"
 
 
 def _release_parts(version: str, width: int) -> tuple[int, ...] | None:

@@ -84,6 +84,7 @@ from eosed.panel import PanelScreen
 from vinsynlib.cli import add_common_arguments, make_parser, validate_common
 from vinsynlib.keys import legend_from_bindings
 from vinsynlib.keys import wrap_blocks as _wrap_blocks
+from vinsynlib.ui.hints import MORE as _LEGEND_MORE
 
 # The preset page size is not a fixed constant: it's recomputed from how many
 # rows the presets pane can actually show, so a taller terminal displays more
@@ -865,6 +866,36 @@ class _BankBrowserTable(_FillWidthDataTable):
         cast("EosedApp", self.app).action_next_page()
 
 
+def _cap_legend_lines(
+    folded: str, width: int, max_lines: int, more: str
+) -> Tuple[List[str], str]:
+    """Cut wrapped legend text to ``max_lines``, with a pointer on the last.
+
+    Mirrors :meth:`vinsynlib.ui.hints.KeyHints._render_hints`: keep the
+    first ``max_lines - 1`` lines, truncate the next so ``more`` fits, cut
+    back to the last complete hint and append the pointer. Returns the lines
+    to render and the pointer to append to the last one (``""`` when nothing
+    was dropped, so a legend that already fits is left untouched).
+
+    A pure helper rather than logic inside the widget so the truncation can
+    be tested without a mounted app and a terminal width.
+    """
+    lines = folded.split("\n")
+    max_lines = max(max_lines, 1)
+    if len(lines) <= max_lines:
+        return lines, ""
+    kept = lines[: max_lines - 1]
+    head = lines[max_lines - 1][: max(width - len(more) - 1, 0)]
+    # Never show a partial hint. With no separator to cut back to (a single
+    # hint wider than the line) keep the width-based slice, as the library
+    # does.
+    pos = head.rfind(_LEGEND_SEP)
+    if pos != -1:
+        head = head[:pos]
+    kept.append(head)
+    return kept, (" " + more)[: max(width - len(head), 0)]
+
+
 class KeyHints(Static):
     """The persistent, multi-line key-binding legend at the bottom of the
     screen.
@@ -875,8 +906,10 @@ class KeyHints(Static):
     wrapping, so bindings started getting clipped/scrolled off once this
     app's binding count grew past what one line comfortably holds. This
     folds itself to the terminal's actual width instead (via wrap_blocks),
-    onto as many lines as that width actually needs — 1 on a wide terminal,
-    more on a narrow one — rather than a fixed line count.
+    and is then capped at ``MAX_LINES`` lines. On a wide terminal the whole
+    legend fits; on a narrow one the first lines are kept and the last ends
+    with a pointer (``MORE``) to the full list on ``?``. The cut lands on
+    hint boundaries, so no hint is ever shown half-written.
 
     ``Footer`` also colored its key/description halves distinctly (its own
     ``footer-key--key``/``footer-key--description`` component classes) —
@@ -885,7 +918,8 @@ class KeyHints(Static):
     and description (recovered from the folded plain text — every binding
     here is a single space-free token, so splitting on the first space is
     unambiguous) and re-styled: the key in the theme's accent red, the
-    description in its muted secondary tone.
+    description in its muted secondary tone. The truncation pointer is
+    muted too, so it is not mistaken for a key.
 
     **Renamed from ``_KeyHints``, and now built on the family's widget.**
     The class was private, which was this project's own business; the CSS
@@ -896,6 +930,16 @@ class KeyHints(Static):
     the muted secondary come from this instrument's own front panel, and the
     family has no opinion about what colour a key hint is.
     """
+
+    #: Cap on rendered lines, the same knob as the library widget's. The
+    #: library defaults to 2; this legend is exactly four lines at 100
+    #: columns (98 usable), and the footer can afford that, so it is cut at
+    #: four rather than two.
+    MAX_LINES = 4
+
+    #: Pointer to the full list, from the family's widget so the text is not
+    #: a second copy.
+    MORE = _LEGEND_MORE
 
     DEFAULT_CSS = "KeyHints { height: auto; }"
 
@@ -910,9 +954,12 @@ class KeyHints(Static):
         self._render_hints()
 
     def _render_hints(self) -> None:
-        folded = wrap_blocks(self._blocks, self.size.width)
+        width = self.size.width
+        lines, pointer = _cap_legend_lines(
+            wrap_blocks(self._blocks, width), width, self.MAX_LINES, self.MORE
+        )
         text = Text(no_wrap=True)
-        for line_num, line in enumerate(folded.split("\n")):
+        for line_num, line in enumerate(lines):
             if line_num:
                 text.append("\n")
             for block_num, block in enumerate(line.split(_LEGEND_SEP)):
@@ -921,6 +968,8 @@ class KeyHints(Static):
                 key, _, description = block.partition(" ")
                 text.append(key, style=f"bold {E4XT_THEME.accent}")
                 text.append(" " + description, style=E4XT_THEME.secondary)
+        if pointer:
+            text.append(pointer, style=E4XT_THEME.secondary)
         self.update(text)
 
 

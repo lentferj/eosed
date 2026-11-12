@@ -15,6 +15,7 @@ from textual.widgets import Header
 from eos import params as p
 from eosed.app import (
     _EMPTY_SAMPLE_NAME,
+    _LEGEND_SEP,
     _MAX_VOICE_SCAN,
     _MAX_ZONE_SCAN,
     _VOICE_PARAM_IDS,
@@ -26,8 +27,10 @@ from eosed.app import (
     ConfirmSweepScreen,
     EditValueScreen,
     EosedApp,
+    KeyHints,
     _dangling_sample_refs,
     _voice_sample_info,
+    wrap_blocks,
 )
 from eosed.demo import DemoBridge
 
@@ -853,6 +856,53 @@ def test_legend_shows_typed_keys_not_textual_key_names():
     assert "+ Value +1" in blocks
     assert "- Value -1" in blocks
     assert not any("," in b or "equals_sign" in b for b in blocks), blocks
+
+
+async def test_the_legend_fits_four_lines_without_a_pointer():
+    """The cap is 4, and this legend is exactly 4 lines at 98 columns.
+
+    The library's own default is 2; eosed chose 4 because that is what the
+    whole legend takes on a 100-column terminal, so the cap costs nothing
+    there. If the bindings grow past it, `MAX_LINES` is the number to check
+    first -- the cap then starts truncating this test's premise.
+    """
+    assert KeyHints.MAX_LINES == 4
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    blocks = app._legend_blocks()
+    async with app.run_test(size=(98, 30)) as pilot:
+        await pilot.pause()
+        hints = app.query_one("#keyhints", KeyHints)
+        assert hints.size.width == 98
+        rendered = str(hints.content)
+        assert rendered == wrap_blocks(blocks, 98)
+        assert len(rendered.split("\n")) <= KeyHints.MAX_LINES
+        assert KeyHints.MORE not in rendered
+
+
+async def test_the_legend_is_cut_on_a_hint_boundary_when_narrow():
+    """At 40 columns the cap bites: four lines, last one pointing at `?`.
+
+    The cut must land between hints, never mid-hint. The pointer itself is
+    not a hint -- it is styled muted in `_render_hints` -- but it must be
+    there so a dropped key is never dropped silently.
+    """
+    app = EosedApp(DemoBridge(), allow_write=True, demo=True)
+    blocks = app._legend_blocks()
+    async with app.run_test(size=(40, 30)) as pilot:
+        await pilot.pause()
+        hints = app.query_one("#keyhints", KeyHints)
+        assert hints.size.width == 40
+        lines = str(hints.content).split("\n")
+        assert len(lines) <= KeyHints.MAX_LINES
+        assert lines[-1].endswith(KeyHints.MORE)
+        # Everything before the pointer is a complete block from the legend.
+        head = lines[-1][: -len(KeyHints.MORE)].rstrip()
+        assert head in blocks
+        # No partial hint survived on any kept line.
+        for line in lines:
+            body = line[: -len(KeyHints.MORE)].rstrip() if line.endswith(KeyHints.MORE) else line
+            for block in body.split(_LEGEND_SEP):
+                assert block in blocks, f"partial hint {block!r} in {line!r}"
 
 
 def test_cache_keys_are_fixed_depths_not_the_configured_one():
