@@ -513,12 +513,20 @@ class EosBridge:
     """
 
     def __init__(self, midi_out: Any, midi_in: Any, description: str, *,
-                 device_id: int = DEFAULT_DEVICE_ID, timeout: float = DEFAULT_TIMEOUT):
+                 device_id: int = DEFAULT_DEVICE_ID,
+                 timeout: Optional[float] = DEFAULT_TIMEOUT):
         self.midi_out = midi_out
         self.midi_in = midi_in
         self.description = description
         self.device_id = device_id
-        self.timeout = timeout
+        # None is "no explicit override", which is what the shared --timeout
+        # flag passes when the user did not give one (vinsynlib's parsers
+        # leave it unset rather than defaulting it). Every receive path adds
+        # this to time.time(), so letting None through is an immediate
+        # TypeError -- and because it surfaces during autodetect it is
+        # reported as "connection failed: unsupported operand type(s) for +:
+        # 'float' and 'NoneType'", which names neither the flag nor us.
+        self.timeout = DEFAULT_TIMEOUT if timeout is None else timeout
         self.inquiry: Optional[m.DeviceInquiryReply] = None
         # Lazily-read MIDIGLO_BASIC_CHANNEL (id 198) — see basic_channel().
         self._basic_channel: Optional[int] = None
@@ -532,7 +540,7 @@ class EosBridge:
     def standard(cls, port_name: str, *, gap: float = SEND_GAP,
                  write_gap: Optional[float] = None,
                  device_id: int = DEFAULT_DEVICE_ID,
-                 timeout: float = DEFAULT_TIMEOUT) -> "EosBridge":
+                 timeout: Optional[float] = DEFAULT_TIMEOUT) -> "EosBridge":
         """Connect over a single bidirectional port (the portable default).
 
         ``write_gap`` defaults to ``gap``; see :class:`ThrottledOut` for why
@@ -544,7 +552,7 @@ class EosBridge:
     @classmethod
     def autodetect(cls, *, gap: float = SEND_GAP, write_gap: Optional[float] = None,  # noqa: C901 -- port-sweep state machine; the refuse-to-guess multi-device logic must stay in one reviewable place
                    device_id: Optional[int] = None,
-                   timeout: float = AUTODETECT_TIMEOUT,
+                   timeout: Optional[float] = AUTODETECT_TIMEOUT,
                    on_try: Optional[Callable[[str], None]] = None,
                    config_path: Optional[str] = DEFAULT_CONFIG_PATH) -> "EosBridge":
         """Find an EOS device on any accessible MIDI port via Device Inquiry.
@@ -578,6 +586,13 @@ class EosBridge:
         than returning at the first reply, so a second device on the same wire
         is actually heard. Costs one extra ``timeout`` on a cold cache.
         """
+        # The autodetect default differs from the connected-bridge default,
+        # so normalise here rather than relying on EosBridge.__init__ (which
+        # is only reached once a device has answered): the reply windows below
+        # add this to time.time() before any bridge exists.
+        if timeout is None:
+            timeout = AUTODETECT_TIMEOUT
+
         if config_path is not None:
             cached = load_last_ports(config_path)
             if cached is not None:

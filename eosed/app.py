@@ -1454,16 +1454,22 @@ class EosedApp(App):
     @work(thread=True)
     def _connect(self) -> None:
         kwargs = self._connect_kwargs
+        # get(), not []: connect_kwargs is a partial mapping at its call sites
+        # that only override what they need, and a missing timeout must mean
+        # "the bridge's default", not KeyError -- the same reason a None
+        # timeout is accepted there.
+        timeout = kwargs.get("timeout")
+        device_id = kwargs.get("device_id")
         try:
             if kwargs.get("port"):
                 bridge = bridge_mod.EosBridge.standard(
                     kwargs["port"],
-                    device_id=(m.DEFAULT_DEVICE_ID if kwargs["device_id"] is None
-                               else kwargs["device_id"]),
-                    timeout=kwargs["timeout"])
+                    device_id=(m.DEFAULT_DEVICE_ID if device_id is None
+                               else device_id),
+                    timeout=timeout)
             else:
                 bridge = bridge_mod.EosBridge.autodetect(
-                    device_id=kwargs["device_id"], timeout=kwargs["timeout"],
+                    device_id=device_id, timeout=timeout,
                     config_path=kwargs.get("config_path", bridge_mod.DEFAULT_CONFIG_PATH),
                     on_try=lambda name: self.call_from_thread(self.set_status, f"trying {name} ..."))
         except Exception as exc:

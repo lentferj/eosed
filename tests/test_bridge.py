@@ -357,6 +357,31 @@ def test_autodetect_reports_nothing_found_for_an_absent_device_id(monkeypatch):
     assert not isinstance(excinfo.value, bridge_mod.AmbiguousDevice)
 
 
+def test_autodetect_treats_a_none_timeout_as_its_default(monkeypatch):
+    """`--timeout` unset arrives as None, not as the flag's default.
+
+    vinsynlib's parsers leave the value None unless the user typed one, and
+    the reply window below adds it to time.time(). Unnormalised that is the
+    "unsupported operand type(s) for +: 'float' and 'NoneType'" the editor
+    reported as a connection failure before any device could answer.
+    """
+    _TwoMachinePort._unread = set()
+    monkeypatch.setattr(bridge_mod, "rtmidi", _TwoMachineRtmidi)
+    monkeypatch.setattr(bridge_mod, "AUTODETECT_TIMEOUT", 0.05)
+    with pytest.raises(RuntimeError) as excinfo:
+        EosBridge.autodetect(timeout=None, device_id=9, config_path=None)
+    # The runtime error is a real sweep result, not the TypeError that used
+    # to escape from the deadline arithmetic.
+    assert not isinstance(excinfo.value, TypeError)
+    assert "no EOS device answered" in str(excinfo.value)
+
+
+def test_standard_treats_a_none_timeout_as_its_default(monkeypatch):
+    _fake_rtmidi(monkeypatch)
+    bridge = EosBridge.standard("EOS Device", timeout=None)
+    assert bridge.timeout == bridge_mod.DEFAULT_TIMEOUT
+
+
 def test_autodetect_one_device_on_two_input_ports_is_not_ambiguous(monkeypatch):
     """A single machine heard on two inputs (merged/THRU'd interface) answers
     twice with the SAME id -- that is one device, not an ambiguity."""
